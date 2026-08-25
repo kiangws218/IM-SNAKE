@@ -903,9 +903,14 @@ addEventListener("keyup",ev=>{
 addEventListener("blur",()=>{heldKeys.clear();firing=false;});
 document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
-  if(gameState==="victory"){SFX_UI();showMenu();return;}
-  if(playMode==="campaign"){SFX_UI();startLevel();return;}
-  if(playMode==="tutorial")startTutorial();else startGame();
+  if(gameState==="victory"){showMenu();return;}
+  if(gameState==="dead"){
+    if(playMode==="campaign")startLevel();
+    else if(playMode==="tutorial")startTutorial();
+    else startGame();
+    return;
+  }
+  startCampaign();
 };
 document.getElementById("ovBtn2").onclick=()=>startTutorial();
 document.getElementById("ovBtn3").onclick=()=>startGame();
@@ -1126,6 +1131,14 @@ function render(){
   }
 }
 
+function goalText(){
+  const g=curGoal;if(!g)return"";
+  const t=gameTime-levelStartT;
+  if(g.type==="kills")return"目标 击杀 "+Math.min(kills,g.count)+"/"+g.count;
+  if(g.type==="prisonKills")return"目标 监狱处决 "+Math.min(prisonKills,g.count)+"/"+g.count;
+  if(g.type==="survive")return"目标 存活 "+Math.max(0,Math.ceil(g.time-t))+"s"+(g.kills?" · 击杀 "+kills+"/"+g.kills:"");
+  return"";
+}
 function updateHud(){
   document.getElementById("hearts").textContent="❤".repeat(Math.max(0,hearts));
   document.getElementById("len").textContent=snake.len;
@@ -1135,6 +1148,7 @@ function updateHud(){
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
   document.getElementById("stat").textContent=
+    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":"")+
     "击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 
