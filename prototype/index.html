@@ -150,6 +150,7 @@ let firing=false, fireT=0;
 let segPos=[], occSet=new Set();
 let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats;
 let flyingBeans=[];
+let danger=null, hurtFlash=0;
 let gameState="menu", playMode="sandbox", tutStep=-1;
 let levelIdx=0, curGoal=null, curCaps, curBeanTarget, levelStartT=0, bannerTimer=null;
 let carry={len:4,charges:1};
@@ -261,6 +262,7 @@ function reset(forTutorial){
   snake={fx:6.5,fy:sy+.5,len:CFG.initLen,path:[],pathLen:0};
   for(let i=1;i<=CFG.initLen+3;i++)snake.path.push({x:6.5-i,y:sy+.5});
   hearts=RUN.maxHearts;invuln=0;cutCd=0;alive=true;paused=false;shake=0;biteAcc=0;
+  danger=null;hurtFlash=0;
   firing=false;fireT=0;
   segPos=[];occSet=new Set();
   mapNodes=[];charges=1;
@@ -380,29 +382,40 @@ function applyDirQueue(){
 
 function updateMovement(dt){
   applyDirQueue();
-  if(!firing){
-    const spd=CFG.snakeSpeed*(heldKeys.size>0?CFG.speedBoost:1);
-    snake.fx+=dir.x*spd*dt;
-    snake.fy+=dir.y*spd*dt;
-    distMoved+=spd*dt;
-    if(hitWall(snake.fx,snake.fy,.34)){die("撞上了墙");return;}
-    const last=path0();
-    const d=Math.hypot(snake.fx-last.x,snake.fy-last.y);
-    if(d>0.02){snake.path.unshift({x:snake.fx,y:snake.fy});}
-    computeSegs();
-    checkSelfBite();
-    pickUps();
+  if(danger){
+    danger.timer-=dt;
+    if(danger.timer<=0){die(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");return;}
+    const nx=snake.fx+dir.x*.14,ny=snake.fy+dir.y*.14;
+    if(!hitWall(nx,ny,.34)&&!selfBiteProbe(nx,ny))danger=null;
+    return;
   }
+  if(firing)return;
+  const spd=CFG.snakeSpeed*(heldKeys.size>0?CFG.speedBoost:1);
+  snake.fx+=dir.x*spd*dt;
+  snake.fy+=dir.y*spd*dt;
+  distMoved+=spd*dt;
+  if(hitWall(snake.fx,snake.fy,.34)){enterDanger("wall");computeSegs();pickUps();return;}
+  const last=path0();
+  const d=Math.hypot(snake.fx-last.x,snake.fy-last.y);
+  if(d>0.02){snake.path.unshift({x:snake.fx,y:snake.fy});}
+  computeSegs();
+  if(selfBiteProbe(snake.fx,snake.fy)){enterDanger("self");return;}
+  pickUps();
 }
-function path0(){return snake.path.length?snake.path[0]:{x:snake.fx,y:snake.fy};}
-
-function checkSelfBite(){
+function enterDanger(type){
+  danger={type,timer:.5};
+  shake=Math.max(shake,.18);
+}
+function selfBiteProbe(px,py){
   for(let i=2;i<segPos.length;i++){
     const s=segPos[i];
     if(nearNode(s.x,s.y))continue;
-    if(Math.hypot(snake.fx-s.x,snake.fy-s.y)<.62){die("咬到了自己的尾巴");return;}
+    if(Math.hypot(px-s.x,py-s.y)<.62)return true;
   }
+  return false;
 }
+function path0(){return snake.path.length?snake.path[0]:{x:snake.fx,y:snake.fy};}
+
 function nearNode(x,y){
   for(const n of mapNodes)
     if(Math.hypot(x-(n.x+.5),y-(n.y+.5))<CFG.nodePassR)return true;
@@ -556,6 +569,7 @@ function updateSeeds(dt){
 function hurtPlayer(reason){
   if(invuln>0||!alive)return;
   hearts--;invuln=CFG.iframe;shake=.3;
+  hurtFlash=.28;
   ftext(snake.fx,snake.fy-.8,"-1❤","#ff5d5d");
   if(hearts<=0)die(reason);
 }
@@ -1088,7 +1102,7 @@ function render(){
 
   for(const e of enemies){
     const px=e.x*T,py=e.y*T;
-    if(e.flash>0){ctx.save();ctx.filter="brightness(2.2)";}
+    if(e.flash>0){ctx.save();ctx.filter="brightness(1.45)";ctx.translate((Math.random()-.5)*5,(Math.random()-.5)*5);}
     if(prisonMask&&prisonMask[K(Math.floor(e.x),Math.floor(e.y))]>=0&&e.type!=="flower"){
       ctx.fillStyle="rgba(255,90,90,.25)";
       ctx.beginPath();ctx.arc(px,py,T*.6,0,7);ctx.fill();
@@ -1134,18 +1148,26 @@ function render(){
     }
   }
 
+  const hurtBlink=hurtFlash>0&&Math.floor(gameTime*28)%2===0;
   for(let i=segPos.length-1;i>=0;i--){
     const s=segPos[i];
     const x=s.x*T,y=s.y*T;
     if(i===0){
-      ctx.fillStyle=invuln>0&&Math.sin(gameTime*30)>0?"#ffffff":"#8fe36b";
+      let headCol=invuln>0&&Math.sin(gameTime*30)>0?"#ffffff":"#8fe36b";
+      if(danger&&Math.sin(gameTime*40)>0)headCol="#ff5d5d";
+      ctx.fillStyle=headCol;
       roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
+      if(danger){
+        ctx.fillStyle="#ff5d5d";
+        ctx.font="bold 16px Consolas";ctx.textAlign="center";
+        ctx.fillText("!",x,y-T*.9);
+      }
       ctx.fillStyle="#1a1023";
       const ex=dir.x*4,ey=dir.y*4;
       ctx.fillRect(x-6+ex,y-6+ey,4,5);ctx.fillRect(x+2+ex,y-6+ey,4,5);
     }else{
       const shade=0.75+0.25*(1-i/segPos.length);
-      ctx.fillStyle=rgb(60,180-shade*40,90);
+      ctx.fillStyle=hurtBlink?"#ff6b7a":rgb(60,180-shade*40,90);
       roundRect(x-T/2+2.5,y-T/2+2.5,T-5,T-5,5);ctx.fill();
     }
   }
@@ -1218,6 +1240,7 @@ function loop(now){
   if(gameState==="play"&&alive&&!paused){
     gameTime+=dt;
     invuln=Math.max(0,invuln-dt);
+    hurtFlash=Math.max(0,hurtFlash-dt);
     cutCd=Math.max(0,cutCd-dt);
     shake=Math.max(0,shake-dt);
     updateMovement(dt);
