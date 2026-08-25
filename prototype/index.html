@@ -384,10 +384,15 @@ function updateMovement(dt){
   applyDirQueue();
   if(danger){
     danger.timer-=dt;
-    if(danger.timer<=0){die(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");return;}
-    const nx=snake.fx+dir.x*.14,ny=snake.fy+dir.y*.14;
-    if(!hitWall(nx,ny,.34)&&!selfBiteProbe(nx,ny))danger=null;
-    return;
+    const spd=CFG.snakeSpeed*(heldKeys.size>0&&!firing?CFG.speedBoost:1);
+    const step=Math.max(spd*dt,.05);
+    const nx=snake.fx+dir.x*step,ny=snake.fy+dir.y*step;
+    if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)){
+      danger=null;
+    }else{
+      if(danger.timer<=0)die(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");
+      return;
+    }
   }
   if(firing)return;
   const spd=CFG.snakeSpeed*(heldKeys.size>0?CFG.speedBoost:1);
@@ -406,11 +411,12 @@ function enterDanger(type){
   danger={type,timer:.5};
   shake=Math.max(shake,.18);
 }
-function selfBiteProbe(px,py){
+function selfBiteProbe(px,py,r){
+  r=r||.62;
   for(let i=2;i<segPos.length;i++){
     const s=segPos[i];
     if(nearNode(s.x,s.y))continue;
-    if(Math.hypot(px-s.x,py-s.y)<.62)return true;
+    if(Math.hypot(px-s.x,py-s.y)<r)return true;
   }
   return false;
 }
@@ -1148,13 +1154,15 @@ function render(){
     }
   }
 
-  const hurtBlink=hurtFlash>0&&Math.floor(gameTime*28)%2===0;
+  const hurtAll=hurtFlash>0;
   for(let i=segPos.length-1;i>=0;i--){
     const s=segPos[i];
     const x=s.x*T,y=s.y*T;
     if(i===0){
-      let headCol=invuln>0&&Math.sin(gameTime*30)>0?"#ffffff":"#8fe36b";
-      if(danger&&Math.sin(gameTime*40)>0)headCol="#ff5d5d";
+      let headCol="#8fe36b";
+      if(hurtAll)headCol="#ff5d5d";
+      else if(danger&&Math.sin(gameTime*40)>0)headCol="#ff5d5d";
+      else if(invuln>0&&Math.sin(gameTime*30)>0)headCol="#ffffff";
       ctx.fillStyle=headCol;
       roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
       if(danger){
@@ -1167,7 +1175,7 @@ function render(){
       ctx.fillRect(x-6+ex,y-6+ey,4,5);ctx.fillRect(x+2+ex,y-6+ey,4,5);
     }else{
       const shade=0.75+0.25*(1-i/segPos.length);
-      ctx.fillStyle=hurtBlink?"#ff6b7a":rgb(60,180-shade*40,90);
+      ctx.fillStyle=hurtAll?"#ff6b7a":rgb(60,180-shade*40,90);
       roundRect(x-T/2+2.5,y-T/2+2.5,T-5,T-5,5);ctx.fill();
     }
   }
