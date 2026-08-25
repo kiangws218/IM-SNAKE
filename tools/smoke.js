@@ -8,9 +8,12 @@ const html=fs.readFileSync(htmlPath,"utf8");
 let code="";
 const re=/<script src="([^"]+)"><\/script>/g;let m;
 while((m=re.exec(html))){
-  code+=fs.readFileSync(path.join(path.dirname(htmlPath),m[1]),"utf8")+"\n;\n";
+  const p=path.join(path.dirname(htmlPath),m[1]);
+  if(!fs.existsSync(p)){console.log("[skip missing] "+m[1]);continue;}
+  code+=fs.readFileSync(p,"utf8")+"\n;\n";
 }
-code+=html.slice(html.indexOf("<script>")+8,html.lastIndexOf("</script>"));
+const inlineMatch=html.match(/<script>([\s\S]*?)<\/script>/);
+code+=inlineMatch?inlineMatch[1]:"";
 
 function mkEl(id){
   return {

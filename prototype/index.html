@@ -137,12 +137,62 @@ const cam={x:0,y:0};
 const RUN_DEFAULTS={
   spitRateMult:1, dmgBonus:0, maxHearts:6, nodeHpBonus:0,
   prisonDps:5, prisonBonus:2, cutCd:10, pickupR:.6, greedy:0,
+  speedMult:1, contactDmg:0
 };
 let RUN=Object.assign({},RUN_DEFAULTS);
 function resetRun(){RUN=Object.assign({},RUN_DEFAULTS);}
 const api={
   heal(n){hearts=Math.min(RUN.maxHearts,(hearts||0)+n);}
 };
+
+/* ===== 扩展系统：虚拟输入 / 地形区域 / 机关 / 开场（v0.16） ===== */
+const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
+let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
+let intro=null,introSeen=false,fireKey=false;
+function introScene(){
+  try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
+  catch(e){return{};}
+}
+function inZone(px,py,z){return px>=z.x&&px<z.x+z.w&&py>=z.y&&py<z.y+z.h;}
+function zoneAt(px,py){for(const z of ZONES)if(inZone(px,py,z))return z;return null;}
+function grantReward(r){
+  if(!r)return;
+  if(r.type==="beans"){burstBeans(Math.floor(snake.fx),Math.floor(snake.fy),r.n||5);ftext(snake.fx,snake.fy-1,"+"+(r.n||5)+" 豆","#d95763");}
+  else if(r.type==="heal"){api.heal(r.n||1);ftext(snake.fx,snake.fy-1,"+"+(r.n||1)+"❤","#8fe36b");}
+  else if(r.type==="shockwave"){
+    let killed=0;
+    for(let i=enemies.length-1;i>=0;i--){
+      const e=enemies[i];
+      if(Math.hypot(e.x-snake.fx,e.y-snake.fy)<(r.r||7)){
+        kills++;if(e.type==="flower")flowersKilled++;
+        burstBeans(Math.floor(e.x),Math.floor(e.y),2);enemies.splice(i,1);killed++;
+      }
+    }
+    shake=.5;
+    for(let i=0;i<26;i++){
+      const a=i/26*Math.PI*2;
+      particles.push({x:snake.fx,y:snake.fy,vx:Math.cos(a)*9,vy:Math.sin(a)*9,t:.5,col:"#ffd76e"});
+    }
+    ftext(snake.fx,snake.fy-1,"冲击波！击倒 "+killed,"#ffd76e");
+  }
+  else if(r.type==="buff"){TEMPBUFF.mult=r.mult||2;TEMPBUFF.t=r.dur||10;ftext(snake.fx,snake.fy-1,(r.name||"狂暴")+" "+TEMPBUFF.t+"s","#ff8f5e");}
+  else if(r.type==="seedClear"){seeds.length=0;ftext(snake.fx,snake.fy-1,"弹幕清除！","#7fd1e8");}
+}
+function updateMechs(dt){
+  for(const m of MECHS){
+    if(m.done||m.kind!=="pillar")continue;
+    const enc=prisonMask[K(m.x,m.y)]>=0&&activePrisons>0;
+    if(enc)m.prog+=dt;
+    else m.prog=Math.max(0,m.prog-dt*.5);
+    if(m.prog>=m.charge){
+      m.done=true;
+      grantReward(m.reward);
+      ftext(m.x+.5,m.y-.6,"机关启动！","#ffd76e");
+      puff(m.x+.5,m.y+.5,"#ffd76e");
+      computeEnclosure();
+    }
+  }
+}
 
 let snake={fx:0,fy:0,len:4,path:[],pathLen:0};
 let dir={x:1,y:0}, dirQueue=[];
@@ -253,7 +303,10 @@ function updateFlyingBeans(dt){
 }
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
-function beanDamage(){return 1+Math.floor(snake.len/5)+RUN.dmgBonus;}
+function beanDamage(){
+  const base=1+Math.floor(snake.len/5)+RUN.dmgBonus;
+  return Math.max(1,Math.round(base*(TEMPBUFF.t>0?TEMPBUFF.mult:1)));
+}
 
 function reset(forTutorial){
   buildObstacles();
@@ -369,6 +422,16 @@ function computeEnclosure(){
 }
 
 function applyDirQueue(){
+  if(VInput.active){
+    const l=Math.hypot(VInput.ax,VInput.ay);
+    if(l>.25){
+      const nx=VInput.ax/l,ny=VInput.ay/l;
+      const dot=nx*dir.x+ny*dir.y;
+      if(dot>-0.999&&(Math.abs(nx-dir.x)>.02||Math.abs(ny-dir.y)>.02))dir={x:nx,y:ny};
+      dirQueue.length=0;
+      return;
+    }
+  }
   while(dirQueue.length){
     const d=dirQueue.shift();
     const l1=Math.hypot(d.x,d.y)||1;
@@ -395,7 +458,14 @@ function updateMovement(dt){
     }
   }
   if(firing)return;
-  const spd=CFG.snakeSpeed*(heldKeys.size>0?CFG.speedBoost:1);
+  let spd=CFG.snakeSpeed*(heldKeys.size>0?CFG.speedBoost:1)*RUN.speedMult;
+  const zn=zoneAt(snake.fx,snake.fy);
+  if(zn&&zn.kind==="slope"){
+    const zl=Math.hypot(zn.dx||0,zn.dy||0)||1;
+    const d=(dir.x*(zn.dx||0)+dir.y*(zn.dy||0))/zl;
+    if(d>.3)spd*=zn.up!=null?zn.up:.6;
+    else if(d<-.3)spd*=zn.down!=null?zn.down:1.45;
+  }
   snake.fx+=dir.x*spd*dt;
   snake.fy+=dir.y*spd*dt;
   distMoved+=spd*dt;
@@ -435,6 +505,19 @@ function pickUps(){
       if(b.fromProj)projRecycled++;
       groundBeans.splice(i,1);
       snake.len++;beansEaten++;
+      for(const m of MECHS){
+        if(m.done||m.kind!=="gate")continue;
+        if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
+          m.prog++;
+          ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
+          if(m.prog>=m.need){
+            m.done=true;
+            for(const idx of m.cellIdx)obstacles.delete(idx);
+            grantReward(m.reward);computeEnclosure();
+            ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
+          }
+        }
+      }
       if(Math.random()<RUN.greedy){snake.len++;ftext(b.x+.5,b.y,"贪食 +1","#ffd76e");}
       ftext(b.x+.5,b.y+.3,"+1","#8fe36b");puff(b.x+.5,b.y+.5,"#8fe36b");
     }
@@ -513,7 +596,10 @@ function updateProjs(dt){
     p.life-=dt;p.grace-=dt;
     p.trail.push({x:p.x,y:p.y});if(p.trail.length>6)p.trail.shift();
     let sp=Math.hypot(p.vx,p.vy);
-    const drag=p.bounced?CFG.beanDrag:CFG.beanDragInit;
+    const zn=zoneAt(p.x,p.y);
+    let drag=p.bounced?CFG.beanDrag:CFG.beanDragInit;
+    if(zn&&zn.kind==="slope"&&zn.dragMult)drag*=zn.dragMult;
+    if(zn&&zn.kind==="wind"){p.vx+=(zn.fx||0)*dt*3;p.vy+=(zn.fy||0)*dt*3;}
     if(sp>0){
       const ns=Math.max(0,sp-drag*dt);
       p.vx*=ns/sp;p.vy*=ns/sp;sp=ns;
@@ -625,6 +711,16 @@ function updateEnemies(dt){
     if(inPrison&&alive){
       e.hp-=dps*dt;
       if(Math.random()<dt*2)puff(e.x,e.y,"#ff8f5e");
+    }
+    if(RUN.contactDmg>0&&e.hitT<=0){
+      for(let si=2;si<segPos.length;si++){
+        const s=segPos[si];
+        if(Math.hypot(e.x-s.x,e.y-s.y)<e.r+.4){
+          e.hp-=RUN.contactDmg*dt;e.hitT=.25;
+          if(Math.random()<dt*3)ftext(e.x,e.y-.7,"-"+RUN.contactDmg,"#ffb3c1");
+          break;
+        }
+      }
     }
     if(e.type==="slime"){
       e.wanderT-=dt;
@@ -749,6 +845,15 @@ function buildFromLevel(L){
     const[rx,ry,rw,rh]=r;
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   }
+  ZONES=(L.zones||[]).map(z=>Object.assign({},z));
+  MECHS=(L.mechs||[]).map(m=>Object.assign({prog:0,done:false},m));
+  for(const m of MECHS){
+    if(m.kind==="gate"){
+      m.cellIdx=[];
+      for(let x=m.x;x<m.x+m.w;x++)for(let y=m.y;y<m.y+m.h;y++)
+        if(inB(x,y)){obstacles.add(K(x,y));m.cellIdx.push(K(x,y));}
+    }
+  }
   computeEnclosure();
   (L.waves||[]).forEach(w=>{for(let i=0;i<w.count;i++)spawnEnemy(w.type);});
   for(let i=0;i<(L.beans||8);i++)spawnBean();
@@ -757,11 +862,82 @@ function buildFromLevel(L){
   curGoal=L.goal;levelStartT=gameTime;
 }
 function startCampaign(){
+  if(!introSeen){
+    introSeen=true;
+    startIntro();
+    return;
+  }
   playMode="campaign";
   resetRun();
   carry={len:CFG.initLen,charges:1};
   levelIdx=0;
   startLevel();
+}
+function introScene(){
+  try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
+  catch(e){return{};}
+}
+function startIntro(){
+  const sc=introScene();
+  playMode="intro";
+  resetRun();
+  reset(true);
+  buildFromLevel({obstacles:sc.corridorRects||[[10,22],[40,23]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0});
+  snake.len=5;
+  coilPath();
+  computeSegs();
+  intro={t:0,line:0,arrived:false};
+  gameState="intro";paused=false;firing=false;fireKey=false;
+  heldKeys.clear();dirQueue.length=0;
+  document.getElementById("overlay").classList.remove("show");
+  document.getElementById("tut").classList.remove("show");
+}
+function introLines(){return introScene().lines||["这里是哪里？我怎么睡着了","……不管了，先往前走吧"];}
+function advanceIntro(){
+  if(!intro)return;
+  intro.line++;
+  if(intro.line>=introLines().length)endIntro();
+}
+function endIntro(){
+  intro=null;
+  startCampaign();
+}
+function updateIntro(dt){
+  const sc=introScene();
+  intro.t+=dt;
+  const fade=sc.fadeIn||1.4;
+  if(intro.t>fade&&!intro.arrived){
+    const endX=sc.walkEndX||26;
+    dir={x:1,y:0};
+    if(snake.fx<endX){
+      const spd=CFG.snakeSpeed*.75;
+      snake.fx+=spd*dt;
+      distMoved+=spd*dt;
+      const last=path0();
+      const d=Math.hypot(snake.fx-last.x,snake.fy-last.y);
+      if(d>0.02)snake.path.unshift({x:snake.fx,y:snake.fy});
+      computeSegs();
+    }else intro.arrived=true;
+  }
+}
+function drawIntroOverlay(){
+  const sc=introScene();
+  const T=CFG.tile,W=cv.width,H=cv.height;
+  const alpha=Math.max(0,1-intro.t/(sc.fadeIn||1.4));
+  if(alpha>0){ctx.fillStyle="rgba(5,5,12,"+alpha+")";ctx.fillRect(0,0,W,H);}
+  const lines=introLines();
+  const txt=lines[Math.min(intro.line,lines.length-1)];
+  ctx.font="13px Consolas";
+  const w=Math.max(160,ctx.measureText(txt).width+30);
+  const hx=Math.min(Math.max(snake.fx*T,10),W-10);
+  const bx=Math.min(Math.max(hx-w/2,6),W-w-6),by=Math.max(8,snake.fy*T-T*2.2);
+  ctx.fillStyle="rgba(20,21,36,.92)";
+  roundRect(bx,by,w,34,8);ctx.fill();
+  ctx.strokeStyle="#ffd76e";ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(hx-6,by+34);ctx.lineTo(hx+6,by+34);ctx.lineTo(hx,by+44);ctx.closePath();
+  ctx.fillStyle="rgba(20,21,36,.92)";ctx.fill();ctx.strokeStyle="#ffd76e";ctx.stroke();
+  ctx.fillStyle="#ffe9b3";ctx.textAlign="center";
+  ctx.fillText(txt,bx+w/2,by+22);
 }
 function coilPath(){
   snake.path=[];
@@ -941,19 +1117,20 @@ addEventListener("keydown",ev=>{
   const k=ev.key.toLowerCase();
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))ev.preventDefault();
   if(k==="r"){
-    SFX_UI();
+    if(playMode==="intro"){endIntro();return;}
     if(playMode==="tutorial")startTutorial();
     else if(playMode==="campaign"&&gameState!=="victory"&&levelIdx<LEVELS.length)startLevel();
     else startGame();
     return;
   }
-  if(gameState!=="play")return;
+  if(gameState!=="play"&&gameState!=="intro")return;
   if(MOVE_KEYS[k]){
     heldKeys.add(k);
     if(!ev.repeat)pushCombo();
   }
   else if(k==="j"||k===" "){
-    if(!firing&&alive&&!paused){firing=true;stanceShot();fireT=1/(CFG.snakeSpeed*RUN.spitRateMult);}
+    if(gameState==="intro"){advanceIntro();return;}
+    fireKey=true;
   }
   else if(k==="k"||k==="shift")cutTail();
   else if(k==="f")placeNode();
@@ -962,10 +1139,13 @@ addEventListener("keydown",ev=>{
 addEventListener("keyup",ev=>{
   const k=ev.key.toLowerCase();
   heldKeys.delete(k);
-  if(k==="j"||k===" ")firing=false;
+  if(k==="j"||k===" ")fireKey=false;
   if(MOVE_KEYS[k])pushCombo();
 });
-addEventListener("blur",()=>{heldKeys.clear();firing=false;});
+addEventListener("blur",()=>{heldKeys.clear();firing=false;fireKey=false;});
+addEventListener("pointerdown",()=>{
+  if(gameState==="intro")advanceIntro();
+});
 document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   if(gameState==="victory"){showMenu();return;}
@@ -1245,6 +1425,11 @@ function updateHud(){
 let last=performance.now();
 function loop(now){
   const dt=Math.min((now-last)/1000,.05);last=now;
+  if(gameState==="intro"&&intro){
+    gameTime+=dt;
+    updateIntro(dt);
+    updateCamera(dt);
+  }
   if(gameState==="play"&&alive&&!paused){
     gameTime+=dt;
     invuln=Math.max(0,invuln-dt);
@@ -1252,6 +1437,9 @@ function loop(now){
     cutCd=Math.max(0,cutCd-dt);
     shake=Math.max(0,shake-dt);
     updateMovement(dt);
+    const wantFire=(fireKey||VInput.fire)&&alive&&!paused;
+    if(wantFire&&!firing){firing=true;stanceShot();fireT=1/(CFG.snakeSpeed*RUN.spitRateMult);}
+    if(!wantFire)firing=false;
     if(firing){
       fireT-=dt;
       const shotInt=1/(CFG.snakeSpeed*RUN.spitRateMult);
@@ -1259,9 +1447,11 @@ function loop(now){
         stanceShot();
         fireT+=shotInt;
       }
-    }else fireT=0;
+    }
     updateMapNodes(dt);
     updateFlyingBeans(dt);
+    updateMechs(dt);
+    if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
     if(playMode!=="tutorial")updateSpawner(dt);
     computeEnclosure();
@@ -1284,5 +1474,7 @@ function loop(now){
 
 buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
 </script>
+<script src="mobile.js"></script>
+<script src="intro.js"></script>
 </body>
 </html>
