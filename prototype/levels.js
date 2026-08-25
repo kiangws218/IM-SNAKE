@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 /* ============================================================
  * 我蛇了 IM SNAKE — 关卡数据层（agent 领地：只改这个文件）
  * ------------------------------------------------------------
@@ -18,8 +18,8 @@ const LEVELS=[
     hint:"吃豆变长，长按J站桩射击——清掉 6 只怪",
     obstacles:[],
     spawn:{x:6,y:24,dir:[1,0]},
-    waves:[{type:"slime",count:2},{type:"rat",count:1}],
-    caps:{slime:2,rat:1,flower:0},
+    waves:[{type:"slime",count:3},{type:"rat",count:1}],
+    caps:{slime:3,rat:2,flower:0},
     beans:12,
     goal:{type:"kills",count:6},
   },
@@ -28,8 +28,8 @@ const LEVELS=[
     hint:"毕业考：按 F 放节点，用身体把史莱姆围进窒息监狱 ×2",
     obstacles:[[20,18,2,2],[34,26,2,2],[46,16,3,1],[14,32,2,2],[52,28,2,2]],
     spawn:{x:6,y:24,dir:[1,0]},
-    waves:[{type:"slime",count:2}],
-    caps:{slime:3,rat:1,flower:0},
+    waves:[{type:"slime",count:3}],
+    caps:{slime:4,rat:2,flower:0},
     beans:10,
     goal:{type:"prisonKills",count:2},
   },
@@ -39,7 +39,7 @@ const LEVELS=[
     obstacles:[[16,12,3,2],[30,20,2,2],[44,14,3,2],[22,34,3,2],[38,36,2,2],[56,22,2,3]],
     spawn:{x:6,y:24,dir:[1,0]},
     waves:[{type:"flower",count:2},{type:"slime",count:1}],
-    caps:{slime:2,rat:1,flower:2},
+    caps:{slime:3,rat:2,flower:2},
     beans:10,
     goal:{type:"survive",time:45,kills:6},
   },
