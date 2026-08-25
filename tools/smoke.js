@@ -27,7 +27,7 @@ function mkEl(id){
   };
 }
 const ctx2d=new Proxy({canvas:null},{
-  get(t,p){ if(p in t)return t[p]; return (...a)=>undefined; },
+  get(t,p){ if(p in t)return t[p];     return (...a)=>({width:0,height:0}); },
   set(t,p,v){t[p]=v;return true;}
 });
 const els={};

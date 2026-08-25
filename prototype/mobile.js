@@ -1,186 +1,182 @@
+"use strict";
 /* ============================================================
- * IM SNAKE · mobile.js v0.1 —— 移动端触屏控件轨道
- * 归属：AGENTS.md「文件领地」mobile.js 轨道；不改任何现有文件。
- *
- * 引擎契约：
- *   - 写全局 VInput{ax,ay,active,boost,fire}（index.html 内联脚本定义）
- *     · 左侧动态摇杆 → ax/ay(-1~1) + active；行程>70% → boost(2倍速)
- *     · 右下开火钮 → fire（站桩连射）
- *   - 「断尾」「节点」小钮 → 合成键盘事件 keydown+keyup 'k' / 'f'
- *
- * 安全性：桌面端（无触屏）本脚本零 DOM、零事件、零样式注入；
- *        所有初始化包在 boot() 内，仅检测到触屏才执行（冒烟测试安全）。
+ * 我蛇了 IM SNAKE — 移动端触屏控件（v0.18 重做）
+ * 领地：仅本文件。对接引擎：VInput 全局 + 合成键盘事件 + touchMode 标志
  * ============================================================ */
 (function(){
-function hasTouch(){
-  try{
-    if(typeof window==="undefined")return false;          /* 无头环境（冒烟测试）直接退出 */
-    if("ontouchstart" in window)return true;
-    if(typeof navigator!=="undefined"&&navigator.maxTouchPoints>0)return true;
-  }catch(e){}
-  return false;
-}
+  if(typeof window==="undefined")return;
+  const hasTouch=("ontouchstart" in window)||(navigator.maxTouchPoints>0);
 
-function boot(){
-  if(typeof VInput==="undefined"){                        /* 引擎契约缺失时静默降级 */
-    if(window.console&&console.warn)console.warn("[mobile] VInput 未定义，触屏控件停用");
-    return;
+  let saved=null;
+  try{saved=localStorage.getItem("imsnake_input");}catch(e){}
+
+  /* ---------- 画布自适应（横竖屏通用） ---------- */
+  function fitCanvas(){
+    const cv=document.getElementById("cv");
+    if(!cv)return;
+    const reserveH=(touchMode===true)?0.66:0.85;
+    const s=Math.min((innerWidth*0.98)/cv.width,(innerHeight*reserveH)/cv.height,1.15);
+    cv.style.width=Math.round(cv.width*s)+"px";
+    cv.style.height=Math.round(cv.height*s)+"px";
+  }
+  addEventListener("resize",fitCanvas);
+  addEventListener("orientationchange",()=>setTimeout(fitCanvas,250));
+
+  /* ---------- 选择窗口 ---------- */
+  function buildChooser(){
+    const wrap=document.createElement("div");
+    wrap.style.cssText="position:fixed;inset:0;z-index:50;background:rgba(8,8,16,.92);"+
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;"+
+      "font-family:Consolas,monospace;color:#e8e6f0;";
+    const t=document.createElement("div");
+    t.textContent="请选择操作方式";
+    t.style.cssText="font-size:20px;letter-spacing:4px;color:#ffd76e;";
+    wrap.appendChild(t);
+    const mk=(label,sub,m)=>{
+      const b=document.createElement("button");
+      b.innerHTML="<div style='font-size:17px;font-weight:bold'>"+label+"</div>"+
+        "<div style='font-size:11px;opacity:.6;margin-top:4px'>"+sub+"</div>";
+      b.style.cssText="width:230px;padding:14px 10px;background:#23243a;border:1px solid #3a3b5c;"+
+        "border-radius:10px;color:#e8e6f0;font-family:inherit;cursor:pointer;text-align:center;";
+      b.onpointerup=ev=>{ev.preventDefault();choose(m);};
+      return b;
+    };
+    wrap.appendChild(mk("手机触屏","虚拟方向键 + 操作钮"));
+    wrap.appendChild(mk("键盘鼠标","WASD / J / K / F"));
+    document.body.appendChild(wrap);
+    return wrap;
   }
 
-  /* ---------- 运行时注入视口 meta 与样式（不动 index.html） ---------- */
-  try{
-    var vp=document.createElement("meta");
-    vp.name="viewport";
-    vp.content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover";
-    document.head.appendChild(vp);
-  }catch(e){}
+  function choose(m){
+    mode=m;
+    try{localStorage.setItem("imsnake_input",m);}catch(e){}
+    if(chooser&&chooser.parentNode)chooser.parentNode.removeChild(chooser);
+    if(m==="touch")buildTouchUI();
+    fitCanvas();
+  }
 
-  var css=""
-    +"html,body{overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}"
-    +"#cv,#tut{touch-action:none;}"
-    +"#msRoot{position:fixed;left:0;top:0;right:0;bottom:0;z-index:5;pointer-events:none;"
-    +"font-family:'Courier New',monospace;}"
-    +"#msRoot *{box-sizing:border-box;}"
-    +"#msZone{position:absolute;left:0;top:0;width:45%;height:100%;pointer-events:auto;touch-action:none;}"
-    +"#msBase,#msCap{position:absolute;display:none;border-radius:50%;pointer-events:none;"
-    +"transform:translate(-50%,-50%);will-change:left,top;}"
-    +"#msBase{width:116px;height:116px;background:rgba(10,12,18,.40);"
-    +"border:2px solid rgba(255,215,110,.55);box-shadow:inset 0 0 22px rgba(255,215,110,.12);}"
-    +"#msCap{width:52px;height:52px;background:rgba(255,215,110,.25);border:2px solid #ffd76e;}"
-    +"#msCap.msBoost{background:rgba(255,143,94,.35);border-color:#ff8f5e;}"
-    +".msBtn{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;"
-    +"gap:3px;pointer-events:auto;touch-action:none;border-radius:50%;background:rgba(10,12,18,.45);"
-    +"border:2px solid rgba(255,215,110,.65);color:#ffd76e;text-align:center;line-height:1;}"
-    +".msBtn b{font-weight:normal;font-size:14px;letter-spacing:2px;}"
-    +".msBtn i{font-style:normal;font-size:10px;opacity:.55;}"
-    +".msBtn.msOn{background:rgba(255,215,110,.30);border-color:#ffd76e;color:#fff3cf;}"
-    +"#msFire{right:20px;bottom:calc(26px + env(safe-area-inset-bottom,0px));width:96px;height:96px;}"
-    +"#msFire b{font-size:17px;letter-spacing:4px;text-indent:4px;}"
-    +"#msCut{right:130px;bottom:calc(120px + env(safe-area-inset-bottom,0px));width:62px;height:62px;}"
-    +"#msNode{right:32px;bottom:calc(146px + env(safe-area-inset-bottom,0px));width:62px;height:62px;}";
-  var style=document.createElement("style");
-  style.textContent=css;
-  document.head.appendChild(style);
+  let chooser=null,mode=saved;
 
-  var root=document.createElement("div");
-  root.id="msRoot";
-  root.innerHTML='<div id="msZone"></div>'
-    +'<div id="msBase"></div><div id="msCap"></div>'
-    +'<div class="msBtn" id="msCut"><b>断尾</b><i>K</i></div>'
-    +'<div class="msBtn" id="msNode"><b>节点</b><i>F</i></div>'
-    +'<div class="msBtn" id="msFire"><b>吐豆</b></div>';
-  document.body.appendChild(root);
+  /* ---------- 触屏 UI ---------- */
+  function el(txt,css){
+    const d=document.createElement("div");
+    d.textContent=txt;
+    d.style.cssText=css+"user-select:none;-webkit-user-select:none;touch-action:none;"+
+      "display:flex;align-items:center;justify-content:center;font-family:Consolas,monospace;";
+    return d;
+  }
+  const BTN="position:fixed;z-index:6;border-radius:50%;background:rgba(35,36,58,.55);"+
+    "border:2px solid rgba(255,215,110,.5);color:#ffd76e;font-weight:bold;";
 
-  var zone=document.getElementById("msZone"),
-      base=document.getElementById("msBase"),
-      cap =document.getElementById("msCap"),
-      fire=document.getElementById("msFire"),
-      cut =document.getElementById("msCut"),
-      node=document.getElementById("msNode");
+  function bindHold(node,keyDown,keyUp){
+    const down=ev=>{ev.preventDefault();keyDown();};
+    const up=ev=>{ev.preventDefault();if(keyUp)keyUp();};
+    node.addEventListener("touchstart",down,{passive:false});
+    node.addEventListener("touchend",up,{passive:false});
+    node.addEventListener("touchcancel",up,{passive:false});
+    node.addEventListener("mousedown",down);
+    node.addEventListener("mouseup",up);
+    node.addEventListener("mouseleave",up);
+  }
+  function key(name,down){ 
+    window.dispatchEvent(new KeyboardEvent(down?"keydown":"keyup",{key:name}));
+  }
 
-  /* ---------- 左手动态摇杆：按下处为中心，拖动偏移 → VInput ---------- */
-  var MAXR=56, joyId=null, cx=0, cy=0;
-  function calcR(){
-    var m=Math.min(window.innerWidth,window.innerHeight);
-    MAXR=Math.max(44,Math.min(76,m*0.11));
-  }
-  function showBase(){
-    base.style.left=cx+"px"; base.style.top=cy+"px"; base.style.display="block";
-  }
-  function setStick(tx,ty){
-    var dx=tx-cx, dy=ty-cy, d=Math.hypot(dx,dy)||1;
-    var cl=Math.min(d,MAXR), ux=dx/d, uy=dy/d;
-    cap.style.left=(cx+ux*cl)+"px";
-    cap.style.top =(cy+uy*cl)+"px";
-    cap.style.display="block";
-    VInput.ax=Math.max(-1,Math.min(1,dx/MAXR));           /* 模拟量 -1 ~ 1 */
-    VInput.ay=Math.max(-1,Math.min(1,dy/MAXR));
-    VInput.active=true;
-    VInput.boost=d>MAXR*0.7;                              /* 满行程 70% 即冲刺 */
-    if(VInput.boost)cap.classList.add("msBoost");else cap.classList.remove("msBoost");
-  }
-  function releaseJoy(){
-    joyId=null;
-    base.style.display="none"; cap.style.display="none";
-    cap.classList.remove("msBoost");
-    VInput.active=false; VInput.boost=false;
-    VInput.ax=0; VInput.ay=-1;                            /* 复位为引擎初值 */
-  }
-  function findTouch(list,id){
-    for(var i=0;i<list.length;i++)if(list[i].identifier===id)return list[i];
-    return null;
-  }
-  zone.addEventListener("touchstart",function(e){
-    e.preventDefault();
-    if(joyId!==null)return;
-    var t=e.changedTouches[0];
-    joyId=t.identifier; cx=t.clientX; cy=t.clientY;
-    calcR(); showBase(); setStick(t.clientX,t.clientY);
-  },{passive:false});
-  zone.addEventListener("touchmove",function(e){
-    e.preventDefault();
-    if(joyId===null)return;
-    var t=findTouch(e.changedTouches,joyId);
-    if(t)setStick(t.clientX,t.clientY);
-  },{passive:false});
-  function joyEnd(e){
-    if(joyId===null)return;
-    if(findTouch(e.changedTouches,joyId))releaseJoy();
-  }
-  zone.addEventListener("touchend",joyEnd,{passive:false});
-  zone.addEventListener("touchcancel",joyEnd,{passive:false});
+  function buildTouchUI(){
+    touchMode=true;
+    document.documentElement.style.cssText+="overscroll-behavior:none;";
+    document.body.style.cssText+="touch-action:none;-webkit-user-select:none;user-select:none;";
 
-  /* ---------- 右手开火钮：按住 fire=true，松开 false ---------- */
-  function press(el,on){if(on)el.classList.add("msOn");else el.classList.remove("msOn");}
-  fire.addEventListener("touchstart",function(e){
-    e.preventDefault(); VInput.fire=true; press(fire,true);
-  },{passive:false});
-  function fireEnd(e){e.preventDefault();VInput.fire=false;press(fire,false);}
-  fire.addEventListener("touchend",fireEnd,{passive:false});
-  fire.addEventListener("touchcancel",fireEnd,{passive:false});
+    /* 十字方向键（左下） */
+    const U=44,G=6,BASE=210;
+    const cx=U+G,cy=innerHeight-U*1.5-G-90;
+    const pad=el("", "position:fixed;z-index:6;");
+    const dirs=[
+      ["w","▲",cx+U+G,cy],
+      ["a","◀",cx,cy+U+G],
+      ["d","▶",cx+2*(U+G),cy+U+G],
+      ["s","▼",cx+U+G,cy+2*(U+G)],
+    ];
+    for(const[keyName,glyph,bx,by]of dirs){
+      const b=el(glyph,BTN+"width:"+U+"px;height:"+U+"px;left:"+bx+"px;top:"+by+"px;"+
+        "background:rgba(35,36,58,.7);");
+      bindHold(b,()=>{key(keyName,true);heldKeysAdd(keyName);},()=>{key(keyName,false);heldKeysDel(keyName);});
+      pad.appendChild(b);
+    }
+    document.body.appendChild(pad);
 
-  /* ---------- 小钮：合成键盘事件触发引擎逻辑 ---------- */
-  function tapKey(key){
-    window.dispatchEvent(new KeyboardEvent("keydown",{key:key}));
-    window.dispatchEvent(new KeyboardEvent("keyup",{key:key}));
-  }
-  function bindTap(el,key){
-    el.addEventListener("touchstart",function(e){
-      e.preventDefault(); press(el,true); tapKey(key);
-      setTimeout(function(){press(el,false);},130);
+    /* 右侧动作钮 */
+    const R=76;
+    const fire=el("吐豆",BTN+"width:"+R+"px;height:"+R+"px;right:"+(G+8)+"px;bottom:"+(G*3+150)+"px;"+
+      "font-size:16px;background:rgba(217,87,99,.55);border-color:rgba(255,120,130,.7);color:#fff;");
+    bindHold(fire,()=>{VInput.fire=true;},()=>{VInput.fire=false;});
+    document.body.appendChild(fire);
+
+    const cut=el("断尾",BTN.replace("50%","12px")+"width:60px;height:60px;right:"+(G+16+R)+"px;bottom:"+(G*3+160)+"px;font-size:13px;");
+    bindHold(cut,()=>key("k",true),()=>key("k",false));
+    document.body.appendChild(cut);
+
+    const node=el("节点",BTN.replace("50%","12px")+"width:60px;height:60px;right:"+(G+8)+"px;bottom:"+(G*3+70)+"px;font-size:13px;");
+    bindHold(node,()=>key("f",true),()=>key("f",false));
+    document.body.appendChild(node);
+
+    const sprint=el("冲刺",BTN.replace("50%","12px")+"width:60px;height:60px;right:"+(G+16+R)+"px;bottom:"+(G*3+80)+"px;font-size:13px;border-color:#63c74d;color:#63c74d;");
+    bindHold(sprint,()=>{VInput.boost=true;sprint.style.background="rgba(99,199,77,.5)";},
+      ()=>{VInput.boost=false;sprint.style.background="rgba(35,36,58,.55)";});
+    document.body.appendChild(sprint);
+
+    /* 暂停 + 全屏（顶部小钮） */
+    const pause=el("Ⅱ",BTN.replace("50%","10px")+"width:40px;height:40px;top:8px;right:52px;font-size:15px;");
+    bindHold(pause,()=>key("p",true),()=>key("p",false));
+    document.body.appendChild(pause);
+
+    const fs=el("⛶",BTN.replace("50%","10px")+"width:40px;height:40px;top:8px;right:6px;font-size:16px;");
+    fs.addEventListener("touchend",ev=>{ev.preventDefault();
+      try{
+        if(document.fullscreenElement)document.exitFullscreen();
+        else{
+          (document.documentElement.requestFullscreen||function(){}).call(document.documentElement);
+          if(screen.orientation&&screen.orientation.lock)screen.orientation.lock("landscape").catch(()=>{});
+        }
+      }catch(err){}
+      setTimeout(fitCanvas,400);
     },{passive:false});
-    function end(e){e.preventDefault();press(el,false);}
-    el.addEventListener("touchend",end,{passive:false});
-    el.addEventListener("touchcancel",end,{passive:false});
-  }
-  bindTap(cut,"k");                                       /* 断尾 */
-  bindTap(node,"f");                                      /* 节点 */
+    document.body.appendChild(fs);
 
-  /* ---------- 全局防滚动/缩放 & 状态自愈 ---------- */
-  document.addEventListener("touchmove",function(e){
-    var t=e.target;
-    if(t&&t.closest&&t.closest("#overlay"))return;        /* 菜单/选卡界面允许滚动 */
-    e.preventDefault();
-  },{passive:false});
-  document.addEventListener("gesturestart",function(e){e.preventDefault();});
-  root.addEventListener("contextmenu",function(e){e.preventDefault();});
-
-  function hardReset(){                                   /* 失焦/切后台时清空输入，防止粘键 */
-    releaseJoy();
-    VInput.fire=false;
-    press(fire,false); press(cut,false); press(node,false);
+    fitCanvas();
+    portraitHint();
   }
-  window.addEventListener("blur",hardReset);
-  document.addEventListener("visibilitychange",function(){
-    if(document.visibilityState==="hidden")hardReset();
+
+  let hintT=null;
+  function portraitHint(){
+    if(innerHeight>innerWidth&&mode==="touch"){
+      let h=document.getElementById("imsRotate");
+      if(!h){
+        h=document.createElement("div");h.id="imsRotate";
+        h.style.cssText="position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:20;"+
+          "background:rgba(255,215,110,.9);color:#1a1023;padding:6px 14px;border-radius:6px;"+
+          "font:12px Consolas;pointer-events:none;";
+        document.body.appendChild(h);
+      }
+      h.textContent="建议横屏体验 ⤺";
+      h.style.display="block";
+      clearTimeout(hintT);
+      hintT=setTimeout(()=>{h.style.display="none";},3000);
+    }
+  }
+  addEventListener("resize",portraitHint);
+
+  /* 兼容引擎 heldKeys（十字键通过合成键盘事件已可驱动，
+     但引擎冲刺判定读 heldKeys.size，这里同步维护以保持语义一致） */
+  function heldKeysAdd(k){try{heldKeys.add(k);}catch(e){}}
+  function heldKeysDel(k){try{heldKeys.delete(k);}catch(e){}}
+
+  addEventListener("blur",()=>{
+    VInput.fire=false;VInput.boost=false;VInput.active=false;
   });
-}
 
-if(hasTouch()){
-  if(document.readyState==="loading"){
-    document.addEventListener("DOMContentLoaded",boot);
-  }else{
-    boot();
-  }
-}
+  /* ---------- 启动 ---------- */
+  fitCanvas();
+  if(mode==="touch")buildTouchUI();
+  else if(mode!=="kb")chooser=buildChooser();
 })();

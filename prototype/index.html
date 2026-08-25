@@ -147,6 +147,7 @@ const api={
 
 /* ===== 扩展系统：虚拟输入 / 地形区域 / 机关 / 开场（v0.16） ===== */
 const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
+let touchMode=false;
 let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false;
 function introScene(){
@@ -208,6 +209,7 @@ let hearts, invuln, cutCd, alive, paused, shake, biteAcc;
 let kills, beansEaten, prisonFormed, gameTime, spawnT, beanT;
 let distMoved, spitHits, projRecycled, cutUsed, nodesPlaced, prisonKills, flowersKilled;
 let obstacles, reachMask, prisonMask, prisonRegions, activePrisons, prevPrisons;
+let prisonRegionNode=[], activeNodePrisons=0;
 
 const K=(x,y)=>y*CFG.cols+x;
 const inB=(x,y)=>x>=0&&y>=0&&x<CFG.cols&&y<CFG.rows;
@@ -414,8 +416,24 @@ function computeEnclosure(){
     prisonRegions.push(cells);
   }
   activePrisons=0;
+  activeNodePrisons=0;
+  const nodeKeys=new Set(mapNodes.map(n=>K(n.x,n.y)));
+  prisonRegionNode=new Array(prisonRegions.length).fill(false);
   for(let id=0;id<prisonRegions.length;id++){
-    if(enemies.some(e=>prisonMask[K(Math.floor(e.x),Math.floor(e.y))]===id))activePrisons++;
+    for(const i of prisonRegions[id]){
+      const x=i%CFG.cols,y=(i/CFG.cols)|0;
+      let isNode=false;
+      for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
+        if(nodeKeys.has(K(x+dx,y+dy))){isNode=true;break;}
+      }
+      if(isNode){prisonRegionNode[id]=true;break;}
+    }
+  }
+  for(let id=0;id<prisonRegions.length;id++){
+    if(enemies.some(e=>prisonMask[K(Math.floor(e.x),Math.floor(e.y))]===id)){
+      activePrisons++;
+      if(prisonRegionNode[id])activeNodePrisons++;
+    }
   }
   if(activePrisons>0&&prevPrisons===0){prisonFormed++;ftext(snake.fx,snake.fy-1,"监狱成立！","#ff8f5e");}
   prevPrisons=activePrisons;
@@ -458,7 +476,7 @@ function updateMovement(dt){
     }
   }
   if(firing)return;
-  let spd=CFG.snakeSpeed*((heldKeys.size>0||VInput.boost)?CFG.speedBoost:1)*RUN.speedMult;
+  let spd=CFG.snakeSpeed*((heldKeys.size>0&&!touchMode)||VInput.boost?CFG.speedBoost:1)*RUN.speedMult;
   const zn=zoneAt(snake.fx,snake.fy);
   if(zn&&zn.kind==="slope"){
     const zl=Math.hypot(zn.dx||0,zn.dy||0)||1;
@@ -722,12 +740,16 @@ function spawnEnemy(type,ax,ay){
 }
 
 function updateEnemies(dt){
-  const dps=activePrisons>0?RUN.prisonDps+RUN.prisonBonus*(activePrisons-1):0;
   for(let i=enemies.length-1;i>=0;i--){
     const e=enemies[i];
     e.flash-=dt;e.hitT-=dt;
-    const inPrison=dps>0&&prisonMask[K(Math.floor(e.x),Math.floor(e.y))]>=0;
-    if(inPrison&&alive){
+    const rid=prisonMask[K(Math.floor(e.x),Math.floor(e.y))];
+    const inPrison=rid>=0&&activePrisons>0;
+    let dps=0;
+    if(inPrison){
+      dps=prisonRegionNode[rid]
+        ?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1)
+        :1;
       e.hp-=dps*dt;
       if(Math.random()<dt*2)puff(e.x,e.y,"#ff8f5e");
     }
@@ -1250,10 +1272,13 @@ function render(){
 
   if(prisonRegions){
     const pulse=.10+.06*Math.sin(gameTime*5);
-    ctx.fillStyle="rgba(255,80,80,"+pulse+")";
-    for(const region of prisonRegions)for(const i of region){
-      const px=i%CFG.cols,py=(i/CFG.cols)|0;
-      if(px>=x0&&px<x1&&py>=y0&&py<y1)ctx.fillRect(px*T,py*T,T,T);
+    for(let id=0;id<prisonRegions.length;id++){
+      const node=prisonRegionNode[id];
+      ctx.fillStyle=node?"rgba(255,215,110,"+pulse+")":"rgba(255,80,80,"+pulse+")";
+      for(const i of prisonRegions[id]){
+        const px=i%CFG.cols,py=(i/CFG.cols)|0;
+        if(px>=x0&&px<x1&&py>=y0&&py<y1)ctx.fillRect(px*T,py*T,T,T);
+      }
     }
   }
 
@@ -1348,7 +1373,8 @@ function render(){
     const px=e.x*T,py=e.y*T;
     if(e.flash>0){ctx.save();ctx.filter="brightness(1.45)";ctx.translate((Math.random()-.5)*5,(Math.random()-.5)*5);}
     if(prisonMask&&prisonMask[K(Math.floor(e.x),Math.floor(e.y))]>=0&&e.type!=="flower"){
-      ctx.fillStyle="rgba(255,90,90,.25)";
+      const rid2=prisonMask[K(Math.floor(e.x),Math.floor(e.y))];
+      ctx.fillStyle=prisonRegionNode[rid2]?"rgba(255,215,110,.3)":"rgba(255,90,90,.25)";
       ctx.beginPath();ctx.arc(px,py,T*.6,0,7);ctx.fill();
     }
     if(e.type==="slime"){
@@ -1527,6 +1553,7 @@ function loop(now){
     }
   }
   render();updateHud();
+  if(gameState==="intro"&&intro)drawIntroOverlay();
   requestAnimationFrame(loop);
 }
 
