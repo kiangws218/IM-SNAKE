@@ -1,6 +1,6 @@
 # 《我蛇了》（IM SNAKE）游戏设计文档
 
-> 版本 v0.11 ｜ 原型迭代版（网页原型 prototype/index.html 验证中）｜ 平台：PC / 主机（像素风格 2D）
+> 版本 v0.12 ｜ 原型迭代版（网页原型 prototype/ 验证中）｜ 平台：PC / 主机（像素风格 2D）
 >
 > 正式定名：《我蛇了》（IM SNAKE）
 
@@ -272,3 +272,21 @@
 - [ ] 暴食之神全套数值
 - [ ] 关卡间成长强化形式（建议：三选一 roguelite 强化——吐豆频率 / 心容器上限 / 节点耐久 / 豆子磁吸半径等）
 - [x] 游戏正式命名：《我蛇了》（IM SNAKE）
+
+---
+
+## 11. 开发架构（v0.12 数据驱动拆分）
+
+引擎与内容分离，内容全部为纯数据文件，支持多轨道并行开发：
+
+```
+prototype/
+├── index.html    引擎+规则层（主线维护，数据轨道不碰）
+├── levels.js     关卡数据领地：地形/刷怪/通关条件
+└── upgrades.js   强化卡池领地：{id,name,desc,apply(RUN,api)}
+```
+
+- **RUN 运行时状态**：spitRateMult / dmgBonus / maxHearts / nodeHpBonus / prisonDps / cutCd / pickupR / greedy —— 强化卡本质是这些参数的修改器，加卡不加引擎代码
+- **关卡流程**：菜单 → LEVELS 顺序闯关 → 过关三选一强化 → 末关胜利结算；死亡重试本关、保留强化
+- **goal 类型**：kills / prisonKills / survive(+kills)
+- **双击即玩保持**：普通 script 标签加载，无构建工具
