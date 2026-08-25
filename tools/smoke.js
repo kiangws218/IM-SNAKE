@@ -34,6 +34,7 @@ const els={};
 global.document={
   getElementById(id){if(!els[id])els[id]=mkEl(id);return els[id];},
   createElement(tag){return mkEl("<"+tag+">");},
+  body:mkEl("body"),
 };
 const listeners={};
 global.addEventListener=(ev,fn)=>{(listeners[ev]=listeners[ev]||[]).push(fn)};

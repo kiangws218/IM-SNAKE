@@ -103,7 +103,7 @@
   <summary>▶ 数值调参面板（改完立即生效，用于玩法验证）</summary>
   <div class="grid" id="tune"></div>
 </details>
-<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button></div><div id="pickList"></div></div>
+<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button></div><div id="pickList"></div></div>
 
 <script src="levels.js"></script>
 <script src="upgrades.js"></script>
@@ -932,6 +932,13 @@ function startIntro(){
   heldKeys.clear();dirQueue.length=0;
   document.getElementById("overlay").classList.remove("show");
   document.getElementById("tut").classList.remove("show");
+  const sk=document.createElement("button");
+  sk.id="introSkip";sk.textContent="跳过 »";
+  sk.style.cssText="position:fixed;top:10px;right:12px;z-index:30;padding:8px 16px;"+
+    "background:rgba(35,36,58,.85);border:1px solid #3a3b5c;border-radius:8px;"+
+    "color:#e8e6f0;font:bold 13px Consolas;cursor:pointer;";
+  sk.onclick=()=>endIntro();
+  document.body.appendChild(sk);
 }
 function introLines(){return introScene().lines||["这里是哪里？我怎么睡着了","……不管了，先往前走吧"];}
 function advanceIntro(){
@@ -941,6 +948,7 @@ function advanceIntro(){
 }
 function endIntro(){
   intro=null;
+  const sk=document.getElementById("introSkip");if(sk)sk.remove();
   startCampaign();
 }
 function updateIntro(dt){
@@ -970,8 +978,9 @@ function drawIntroOverlay(){
   const txt=lines[Math.min(intro.line,lines.length-1)];
   ctx.font="13px Consolas";
   const w=Math.max(160,ctx.measureText(txt).width+30);
-  const hx=Math.min(Math.max(snake.fx*T,10),W-10);
-  const bx=Math.min(Math.max(hx-w/2,6),W-w-6),by=Math.max(8,snake.fy*T-T*2.2);
+  const hx=Math.min(Math.max((snake.fx-cam.x)*T,10),W-10);
+  const hy=(snake.fy-cam.y)*T;
+  const bx=Math.min(Math.max(hx-w/2,6),W-w-6),by=Math.max(8,Math.min(hy-T*2.2,H-50));
   ctx.fillStyle="rgba(20,21,36,.92)";
   roundRect(bx,by,w,34,8);ctx.fill();
   ctx.strokeStyle="#ffd76e";ctx.lineWidth=2;ctx.stroke();
@@ -1033,7 +1042,7 @@ function victory(){
     "你征服了全部 "+LEVELS.length+" 个关卡<br>击杀 "+kills+" ｜ 用时 "+gameTime.toFixed(0)+"s ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent="回到主菜单";
   document.getElementById("ovBtn2").style.display="none";
-  document.getElementById("ovBtn3").style.display="none";
+  document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
   document.getElementById("overlay").classList.add("show");
 }
 function banner(txt){
@@ -1108,6 +1117,7 @@ function finishTutorial(){
     "你已掌握全部核心能力：<br>移动冲刺 · 进食成长 · 站桩吐豆 · 弹药回收 · 断尾保命 · 布点围困 · 弹幕应对<br><br>去沙盒自由测试吧！";
   document.getElementById("ovBtn").textContent="进入沙盒";
   document.getElementById("ovBtn2").style.display="";
+  document.getElementById("ovBtn3").style.display="none";
   document.getElementById("overlay").classList.add("show");
 }
 
@@ -1196,6 +1206,38 @@ document.getElementById("ovBtn").onclick=()=>{
 };
 document.getElementById("ovBtn2").onclick=()=>startTutorial();
 document.getElementById("ovBtn3").onclick=()=>startGame();
+document.getElementById("ovBtn4").onclick=()=>{
+  if(gameState==="play"||gameState==="between")return;
+  showLevelSelect();
+};
+function showLevelSelect(){
+  gameState="menu";
+  document.getElementById("ovTitle").textContent="选择关卡";
+  document.getElementById("ovText").innerHTML="点击任意关卡直接开始挑战（继承默认初始状态）";
+  document.getElementById("ovBtns").style.display="none";
+  const box=document.getElementById("pickList");box.innerHTML="";
+  LEVELS.forEach((L,i)=>{
+    const b=document.createElement("button");
+    b.className="pick-btn";
+    b.innerHTML="<b>第 "+(i+1)+" 关 · "+L.name+"</b><span>"+L.hint+"</span>";
+    b.onclick=()=>{
+      playMode="campaign";
+      resetRun();
+      carry={len:CFG.initLen,charges:1};
+      levelIdx=i;
+      box.innerHTML="";
+      document.getElementById("ovBtns").style.display="";
+      startLevel();
+    };
+    box.appendChild(b);
+  });
+  const back=document.createElement("button");
+  back.className="pick-btn";
+  back.innerHTML="<b>← 返回主菜单</b>";
+  back.onclick=()=>{box.innerHTML="";document.getElementById("ovBtns").style.display="";showMenu();};
+  box.appendChild(back);
+  document.getElementById("overlay").classList.add("show");
+}
 function SFX_UI(){}
 
 function die(reason){
@@ -1211,7 +1253,7 @@ function die(reason){
   document.getElementById("ovBtn").textContent=
     playMode==="tutorial"?"重试教学":playMode==="campaign"?"重试本关":"再来一局";
   document.getElementById("ovBtn2").style.display="none";
-  document.getElementById("ovBtn3").style.display="none";
+  document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
@@ -1227,6 +1269,8 @@ function showMenu(){
   document.getElementById("ovBtn2").textContent="教学关卡";
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="";
+  document.getElementById("ovBtn4").textContent="选关挑战";
+  document.getElementById("ovBtn4").style.display="";
   document.getElementById("pickList").innerHTML="";
   document.getElementById("tut").classList.remove("show");
   document.getElementById("overlay").classList.add("show");
