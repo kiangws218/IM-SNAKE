@@ -123,6 +123,7 @@ const CFG={
   caps:{slime:4,rat:2,flower:2}, spawnEvery:5,
   beanTarget:14, beanRespawn:3,
   nodeDropChance:0.16,
+  flyDrag:3.5, flyStop:.6,
   beanDrag:7, beanStop:0.35, beanBounceKeep:0.78, beanDragInit:1.5,
   nodePassR:1.15,
   seedLife:10,
@@ -148,6 +149,7 @@ let dir={x:1,y:0}, dirQueue=[];
 let firing=false, fireT=0;
 let segPos=[], occSet=new Set();
 let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats;
+let flyingBeans=[];
 let gameState="menu", playMode="sandbox", tutStep=-1;
 let levelIdx=0, curGoal=null, curCaps, curBeanTarget, levelStartT=0, bannerTimer=null;
 let carry={len:4,charges:1};
@@ -216,19 +218,36 @@ function findFreeNear(cx,cy,r){
     }
   return null;
 }
-function scatterBeans(cx,cy,n,r){
+function burstBeans(cx,cy,n,dx,dy,spread){
   for(let i=0;i<n;i++){
-    const p=findFreeNear(cx+rnd(2*r+1)-r,cy+rnd(2*r+1)-r,2);
-    if(p){groundBeans.push({x:p.x,y:p.y});puff(p.x+.5,p.y+.5,"#d95763");}
+    let a,spd;
+    if(dx!==undefined){
+      a=Math.atan2(dy,dx)+(Math.random()-.5)*2*(spread||.55);
+      spd=3.5+Math.random()*2.5;
+    }else{
+      a=Math.random()*Math.PI*2;
+      spd=1.8+Math.random()*2;
+    }
+    flyingBeans.push({x:cx+.5,y:cy+.5,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,t:.9});
   }
 }
-function scatterBeansDir(cx,cy,n,dx,dy){
-  const base=Math.atan2(dy,dx),spread=.9;
-  for(let i=0;i<n;i++){
-    const a=base+(Math.random()-.5)*2*spread;
-    const d=1+Math.random()*2;
-    const p=findFreeNear(Math.round(cx+Math.cos(a)*d),Math.round(cy+Math.sin(a)*d),1);
-    if(p){groundBeans.push({x:p.x,y:p.y});puff(p.x+.5,p.y+.5,"#d95763");}
+function scatterBeans(cx,cy,n,r){burstBeans(cx,cy,n);}
+function updateFlyingBeans(dt){
+  for(let i=flyingBeans.length-1;i>=0;i--){
+    const f=flyingBeans[i];
+    f.t-=dt;
+    const damp=Math.exp(-CFG.flyDrag*dt);
+    f.vx*=damp;f.vy*=damp;
+    f.x+=f.vx*dt;f.y+=f.vy*dt;
+    if(f.x<.5){f.x=.5;f.vx=Math.abs(f.vx)*.5;}
+    if(f.y<.5){f.y=.5;f.vy=Math.abs(f.vy)*.5;}
+    if(f.x>CFG.cols-.5){f.x=CFG.cols-.5;f.vx=-Math.abs(f.vx)*.5;}
+    if(f.y>CFG.rows-.5){f.y=CFG.rows-.5;f.vy=-Math.abs(f.vy)*.5;}
+    if(f.t<=0||Math.hypot(f.vx,f.vy)<CFG.flyStop){
+      const c=findFreeNear(Math.floor(f.x),Math.floor(f.y),1);
+      if(c){groundBeans.push({x:c.x,y:c.y});puff(c.x+.5,c.y+.5,"#d95763");}
+      flyingBeans.splice(i,1);
+    }
   }
 }
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
@@ -246,6 +265,7 @@ function reset(forTutorial){
   segPos=[];occSet=new Set();
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
+  flyingBeans=[];
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
@@ -642,10 +662,7 @@ function updateEnemies(dt){
       if(activePrisons>0&&prisonMask[K(Math.floor(e.x),Math.floor(e.y))]>=0)prisonKills++;
       if(e.type==="flower")flowersKilled++;
       const drop=e.type==="rat"?e.carried+1:2;
-      if(drop>0){
-        if(e.hitDir)scatterBeansDir(Math.floor(e.x),Math.floor(e.y),drop,e.hitDir.x,e.hitDir.y);
-        else scatterBeans(Math.floor(e.x),Math.floor(e.y),drop,1);
-      }
+      if(drop>0)burstBeans(Math.floor(e.x),Math.floor(e.y),drop,e.hitDir?e.hitDir.x:undefined,e.hitDir?e.hitDir.y:undefined,.5);
       if(Math.random()<CFG.nodeDropChance&&charges<CFG.nodeMax){
         const np=findFreeNear(Math.floor(e.x),Math.floor(e.y),1);
         if(np){pickups.push({x:np.x,y:np.y});ftext(np.x+.5,np.y,"节点掉落！","#ffd76e");}
@@ -1054,6 +1071,21 @@ function render(){
     ctx.beginPath();ctx.arc(px-T*.09,py-T*.1,T*.1,0,7);ctx.fill();
   }
 
+  for(const f of flyingBeans){
+    const px=f.x*T,py=f.y*T;
+    const sp=Math.hypot(f.vx,f.vy);
+    if(sp>.5){
+      ctx.strokeStyle="rgba(217,87,99,.45)";ctx.lineWidth=T*.14;
+      ctx.beginPath();
+      ctx.moveTo(px-f.vx/sp*T*.4,py-f.vy/sp*T*.4);
+      ctx.lineTo(px,py);ctx.stroke();
+    }
+    ctx.fillStyle="#d95763";
+    ctx.beginPath();ctx.arc(px,py,T*.28,0,7);ctx.fill();
+    ctx.fillStyle="#ff9e9e";
+    ctx.beginPath();ctx.arc(px-T*.07,py-T*.08,T*.08,0,7);ctx.fill();
+  }
+
   for(const e of enemies){
     const px=e.x*T,py=e.y*T;
     if(e.flash>0){ctx.save();ctx.filter="brightness(2.2)";}
@@ -1198,6 +1230,7 @@ function loop(now){
       }
     }else fireT=0;
     updateMapNodes(dt);
+    updateFlyingBeans(dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
     if(playMode!=="tutorial")updateSpawner(dt);
     computeEnclosure();
