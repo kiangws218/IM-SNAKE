@@ -2549,13 +2549,16 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
 <script>
 "use strict";
 /* ============================================================
- * 我蛇了 IM SNAKE — 移动端触屏控件（v0.23 重做）
+ * 我蛇了 IM SNAKE — 移动端触屏控件（v0.23 响应式布局版）
  * 对接引擎：VInput / 合成键盘事件 / touchMode 标志
  * ============================================================ */
 (function(){
   if(typeof window==="undefined")return;
 
-  /* ---------- 尽早注入 viewport，锁定手机布局 ---------- */
+  let hintT=null;
+  const ui={};
+
+  /* ---------- 尽早注入 viewport ---------- */
   (function(){
     if(!document.querySelector('meta[name="viewport"]')){
       const mv=document.createElement("meta");
@@ -2567,7 +2570,6 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
 
   const hasTouch=("ontouchstart" in window)||(navigator.maxTouchPoints>0);
 
-  /* ---------- 工具 ---------- */
   function fatal(msg){
     const b=document.createElement("div");
     b.style.cssText="position:fixed;top:0;left:0;right:0;z-index:999;background:#7a1020;color:#fff;"+
@@ -2599,7 +2601,7 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
   function gear(){
     const g=document.createElement("div");
     g.textContent="操作⚙";
-    g.style.cssText="position:fixed;top:4px;right:4px;z-index:45;pointer-events:auto;cursor:pointer;"+
+    g.style.cssText="position:fixed;top:6px;right:6px;z-index:45;pointer-events:auto;cursor:pointer;"+
       "font:10px Consolas;color:#ffd76e;background:rgba(10,10,20,.55);padding:3px 8px;border-radius:4px;"+
       "border:1px solid #3a3b5c;";
     g.addEventListener("pointerup",ev=>{
@@ -2612,8 +2614,8 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
 
   function main(){
     fitCanvas();
-    addEventListener("resize",fitCanvas);
-    addEventListener("orientationchange",()=>setTimeout(fitCanvas,300));
+    addEventListener("resize",()=>{fitCanvas();layout();});
+    addEventListener("orientationchange",()=>setTimeout(()=>{fitCanvas();layout();},300));
     statusChip();
     if(hasTouch&&mode!=="kb")gear();
     if(mode==="touch")buildTouch();
@@ -2662,10 +2664,9 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
     try{localStorage.setItem(STORE_KEY,m);}catch(e){}
     const c=document.getElementById("imsChooser");
     if(c)c.remove();
-    const g=document.querySelector('div[style*="cursor:pointer"][style*="操作"]');
     statusChip();
     if(m==="touch")buildTouch();
-    fitCanvas();portraitHint();
+    fitCanvas();layout();portraitHint();
   }
 
   /* ---------- 触屏模式 ---------- */
@@ -2673,81 +2674,34 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
     touchMode=true;
     lockPage();
 
-    const T=58,G=8;
-    function btn(glyph,x,y,w,h,accent){
+    const mk=(txt,accent)=>{
       const d=document.createElement("div");
-      d.textContent=glyph;
+      d.textContent=txt;
       d.style.cssText="position:fixed;z-index:6;display:flex;align-items:center;justify-content:center;"+
-        "left:"+x+"px;top:"+y+"px;width:"+w+"px;height:"+h+"px;"+
-        "border-radius:"+(w===h?"50%":"14px")+";"+
+        "user-select:none;-webkit-user-select:none;touch-action:none;"+
         "background:rgba(35,36,58,.62);border:2px solid "+(accent||"rgba(255,215,110,.55)")+";"+
-        "color:"+ (accent&&accent.indexOf("217,87")>=0?"#fff":"#ffd76e") +";"+
-        "font:bold "+Math.floor(h*.32)+"px Consolas;user-select:none;-webkit-user-select:none;touch-action:none;";
+        "color:#ffd76e;font:bold 14px Consolas;"+
+        "border-radius:"+(accent&&accent.indexOf("217,87")>=0?"50%":"16px")+";";
       return d;
-    }
-    function hold(node,down,up){
-      const dn=ev=>{ev.preventDefault();node.style.background="rgba(99,199,77,.45)";down();};
-      const up2=ev=>{ev.preventDefault();node.style.background="rgba(35,36,58,.62)";if(up)up();};
-      node.addEventListener("touchstart",dn,{passive:false});
-      node.addEventListener("touchend",up2,{passive:false});
-      node.addEventListener("touchcancel",up2,{passive:false});
-      node.addEventListener("mousedown",dn);
-      node.addEventListener("mouseup",up2);
-      node.addEventListener("mouseleave",()=>{if(up&&!VInput.fire)up2({preventDefault(){}});});
-    }
-    function fireHold(node,down,up){
-      const dn=ev=>{ev.preventDefault();node.style.background="rgba(255,93,93,.55)";down();};
-      const up2=ev=>{ev.preventDefault();node.style.background="rgba(217,87,99,.5)";if(up)up();};
-      node.addEventListener("touchstart",dn,{passive:false});
-      node.addEventListener("touchend",up2,{passive:false});
-      node.addEventListener("touchcancel",up2,{passive:false});
-      node.addEventListener("mousedown",dn);
-      node.addEventListener("mouseup",up2);
-    }
+    };
+    ui.up=mk("▲");ui.down=mk("▼");ui.left=mk("◀");ui.right=mk("▶");
+    ui.fire=mk("吐豆","rgba(217,87,99,.75)");
+    ui.cut=mk("断尾","rgba(232,106,138,.6)");
+    ui.node=mk("节点","rgba(122,79,163,.7)");
+    ui.sprint=mk("冲刺","rgba(99,199,77,.65)");
+    ui.pause=mk("Ⅱ");ui.fs=mk("⛶");
+    for(const k of["up","down","left","right","fire","cut","node","sprint","pause","fs"])
+      document.body.appendChild(ui[k]);
 
-    /* 十字方向键（左下） */
-    const S=64,Gp=6;
-    const ox=Math.max(14,innerWidth*.06), oy=innerHeight-S*3-Gp*2-24;
-    const cross=[
-      ["w","▲",ox+S+Gp,oy],
-      ["a","◀",ox,oy+S+Gp],
-      ["d","▶",ox+2*(S+Gp),oy+S+Gp],
-      ["s","▼",ox+S+Gp,oy+2*(S+Gp)],
-    ];
-    for(const[k,g,x,y]of cross){
-      const b=btn(g,x,y,S,S);
-      hold(b,()=>key(k,true),()=>key(k,false));
-      document.body.appendChild(b);
-    }
-
-    /* 右下动作簇 */
-    const FR=86;
-    const fb=btn("吐豆",innerWidth-FR-18,innerHeight-FR-18,FR,FR,"rgba(217,87,99,.75)");
-    fb.style.fontSize="17px";
-    fireHold(fb,()=>{VInput.fire=true;},()=>{VInput.fire=false;});
-    document.body.appendChild(fb);
-
-    const cut=btn("断尾",innerWidth-FR-26-70,innerHeight-FR-14,70,58,"rgba(232,106,138,.6)");
-    cut.style.fontSize="14px";
-    hold(cut,()=>key("k",true),()=>key("k",false));
-    document.body.appendChild(cut);
-
-    const nd=btn("节点",innerWidth-FR-18,innerHeight-FR*2-Gp*3-6,70,52,"rgba(122,79,163,.7)");
-    nd.style.fontSize="14px";
-    hold(nd,()=>key("f",true),()=>key("f",false));
-    document.body.appendChild(nd);
-
-    const sp=btn("冲刺",innerWidth-FR-26-70,innerHeight-FR*2-Gp*3+2,70,52,"rgba(99,199,77,.65)");
-    sp.style.fontSize="14px";
-    hold(sp,()=>{VInput.boost=true;},()=>{VInput.boost=false;});
-    document.body.appendChild(sp);
-
-    /* 顶部小钮：暂停 / 全屏 */
-    const ps=btn("Ⅱ",innerWidth-104,12,42,42);
-    hold(ps,()=>key("p",true),()=>key("p",false));
-    document.body.appendChild(ps);
-    const fsb=btn("⛶",innerWidth-56,12,42,42);
-    fsb.addEventListener("touchend",ev=>{
+    const cross={up:["w"],left:["a"],right:["d"],down:["s"]};
+    for(const[elName,keys]of Object.entries(cross))
+      hold(ui[elName],()=>keys.forEach(k=>key(k,true)),()=>keys.forEach(k=>key(k,false)));
+    hold(ui.fire,()=>{VInput.fire=true;},()=>{VInput.fire=false;});
+    hold(ui.cut,()=>key("k",true),()=>key("k",false));
+    hold(ui.node,()=>key("f",true),()=>key("f",false));
+    hold(ui.sprint,()=>{VInput.boost=true;},()=>{VInput.boost=false;});
+    hold(ui.pause,()=>key("p",true),()=>key("p",false));
+    ui.fs.addEventListener("touchend",ev=>{
       ev.preventDefault();
       try{
         if(document.fullscreenElement)document.exitFullscreen();
@@ -2757,11 +2711,50 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
             screen.orientation.lock("landscape").catch(()=>{});
         }
       }catch(err){}
-      setTimeout(fitCanvas,400);
+      setTimeout(()=>{fitCanvas();layout();},400);
     },{passive:false});
-    document.body.appendChild(fsb);
 
-    fitCanvas();portraitHint();
+    layout();fitCanvas();portraitHint();
+  }
+
+  function hold(node,down,up){
+    const dn=ev=>{ev.preventDefault();node.style.filter="brightness(1.5)";down();};
+    const up2=ev=>{ev.preventDefault();node.style.filter="";if(up)up();};
+    node.addEventListener("touchstart",dn,{passive:false});
+    node.addEventListener("touchend",up2,{passive:false});
+    node.addEventListener("touchcancel",up2,{passive:false});
+    node.addEventListener("mousedown",dn);
+    node.addEventListener("mouseup",up2);
+  }
+
+  /* ---------- 响应式布局：全部锚定屏幕边，横竖屏各自排布 ---------- */
+  function layout(){
+    if(mode!=="touch"||!ui.fire)return;
+    const iw=innerWidth,ih=innerHeight,land=iw>=ih;
+    const S=Math.round(Math.max(46,Math.min(64,land?ih*.17:iw*.16)));
+    const G=Math.round(S*.12);
+    const M=Math.round(Math.max(10,S*.2));
+    const FR=Math.round(Math.min(S*1.4,ih*.3,96));
+    const side=Math.round(FR*.72);
+    const pos=(el2,l,t,w,h)=>{
+      el2.style.left=l+"px";el2.style.top=t+"px";
+      el2.style.width=w+"px";el2.style.height=h+"px";
+      el2.style.fontSize=Math.round(h*.3)+"px";
+    };
+    /* 十字键：左下角，底部锚定 */
+    const bx=M,byB=ih-M;
+    pos(ui.left,bx,byB-S,S,S);
+    pos(ui.right,bx+2*(S+G),byB-S,S,S);
+    pos(ui.down,bx+S+G,byB-S,S,S);
+    pos(ui.up,bx+S+G,byB-2*S-G,S,S);
+    /* 动作簇：右下角，底部锚定 */
+    pos(ui.fire,iw-M-FR,byB-FR,FR,FR);
+    pos(ui.cut,iw-M-FR-G-side,byB-side,side,side);
+    pos(ui.sprint,iw-M-FR-G-side,byB-2*side-G-Math.round((FR-side)/2),side,side);
+    pos(ui.node,iw-M-FR,byB-FR-G-side,side,side);
+    /* 顶部小钮：右上，顶部锚定 */
+    pos(ui.fs,iw-M-46,M,42,42);
+    pos(ui.pause,iw-M-46-46-G,M,42,42);
   }
 
   function lockPage(){
@@ -2787,7 +2780,6 @@ buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
   }
 
   /* ---------- 竖屏提示 ---------- */
-  let hintT=null;
   function portraitHint(){
     if(mode!=="touch")return;
     if(innerHeight>innerWidth){
