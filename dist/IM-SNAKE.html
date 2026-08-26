@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（IM SNAKE）· 玩法原型 v0.24</title>
+<title>我蛇了（IM SNAKE）· 玩法原型 v0.25</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -104,7 +104,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.24（NPC时停）</span></h1>
+<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.25（商人交易制）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -652,10 +652,9 @@ const SANDBOX_CAPS={
 const CFG={
   cols:72, rows:48, tile:24,
   snakeSpeed:4, initLen:4, minLen:3,
-  hearts:6, iframe:1.0,
-  spitInterval:1.0, spitSpeed:13, beanLife:6,
-  prisonDps:9, prisonBonus:3,
-  nodeHp:10, nodeMax:3, nodePickupEvery:25, speedBoost:2,
+  iframe:1.0,
+  spitSpeed:13,   beanLife:6,
+  nodeHp:10, nodeMax:3, speedBoost:2,
   cutKeep:3, cutRecover:0.5, cutCd:10,
   merchantRespawn:30,
   spawnEvery:5,
@@ -744,7 +743,7 @@ let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, f
 let flyingBeans=[];
 let danger=null, hurtFlash=0;
 let gameState="menu", playMode="sandbox", tutStep=-1;
-let levelIdx=0, curGoal=null, curCaps, curBeanTarget, levelStartT=0, bannerTimer=null;
+let levelIdx=0, curGoal=null, curCaps, curBeanTarget, levelStartT=0;
 let carry={len:4,charges:1};
 let hearts, invuln, cutCd, alive, paused, shake, biteAcc;
 let kills, beansEaten, prisonFormed, gameTime, spawnT, beanT;
@@ -1931,11 +1930,18 @@ function panelTrade(n){
       snake.len-=g.cost;
       g.apply(RUN,api);
       ftext(snake.fx,snake.fy-.6,g.name+"！","#ffd76e");
-      npcSlots[i]=rollGood(npcSlots.map(x=>x.id));
-      panelTrade(n);updateHud();
+      updateHud();
+      closePanel();
+      npcs.splice(npcs.indexOf(n),1);
+      npcRespawns.push({kind:n.kind,t:NPC_TYPES[n.kind].respawn||30});
     };
     opts.appendChild(b);
   });
+  const leave=document.createElement("button");
+  leave.className="npc-opt";
+  leave.textContent="离开";
+  leave.onclick=()=>closePanel();
+  opts.appendChild(leave);
   const back=document.createElement("button");
   back.className="npc-opt";
   back.textContent="返回";
@@ -2090,7 +2096,6 @@ function showLevelSelect(){
   box.appendChild(back);
   document.getElementById("overlay").classList.add("show");
 }
-function SFX_UI(){}
 
 function die(reason){
   if(!alive)return;
@@ -2112,7 +2117,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · IM SNAKE";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.24 · NPC时停版<br><br>"+
+    "玩法原型 v0.25 · 商人交易制版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
