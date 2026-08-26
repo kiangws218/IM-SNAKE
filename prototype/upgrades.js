@@ -158,3 +158,106 @@ const UPGRADE_POOL=[
     apply(R){R.spitRateMult=+(R.spitRateMult*0.85).toFixed(2);R.maxHearts=Math.min(14,R.maxHearts+1);}
   },
 ];
+
+/* ============================================================
+ * 商店商品池（商人处花费身长节购买，只含增益）—— v0.20
+ * ============================================================ */
+const SHOP_GOODS=[
+  {
+    id:"s_bean_pack", name:"小份豆包", cost:2,
+    desc:"立刻 +2 节身长",
+    apply(R,A){A.grow(2);}
+  },
+  {
+    id:"s_heart_candy", name:"心之糖", cost:3,
+    desc:"心上限 +1，并回复 1 心",
+    apply(R,A){R.maxHearts+=1;A.heal(1);}
+  },
+  {
+    id:"s_grindstone", name:"磨牙石", cost:3,
+    desc:"豆子伤害 +1",
+    apply(R){R.dmgBonus+=1;}
+  },
+  {
+    id:"s_quick_mouth", name:"快嘴秘方", cost:4,
+    desc:"站桩吐豆频率 +25%（上限 3.0x）",
+    apply(R){R.spitRateMult=Math.min(3,+(R.spitRateMult*1.25).toFixed(2));}
+  },
+  {
+    id:"s_gale_pouch", name:"疾风豆袋", cost:4,
+    desc:"豆子弹速 +25%（上限 2.0x）",
+    apply(R){R.spitSpeedMult=Math.min(2,+(R.spitSpeedMult*1.25).toFixed(2));}
+  },
+  {
+    id:"s_hard_node_can", name:"硬壳节点罐头", cost:4,
+    desc:"之后放置的环形节点耐久 +4",
+    apply(R){R.nodeHpBonus+=4;}
+  },
+  {
+    id:"s_magnet_lips2", name:"磁力唇·改良版", cost:3,
+    desc:"拾取半径 +0.2 格",
+    apply(R){R.pickupR=+(R.pickupR+0.2).toFixed(2);}
+  },
+  {
+    id:"s_swift_scale", name:"迅捷鳞片油", cost:5,
+    desc:"移动速度 +15%（上限 1.6x）",
+    apply(R){R.speedMult=Math.min(1.6,+(R.speedMult*1.15).toFixed(2));}
+  },
+  {
+    id:"s_heavy_ring", name:"重压之环", cost:5,
+    desc:"窒息监狱伤害 +2/s",
+    apply(R){R.prisonDps+=2;}
+  },
+  {
+    id:"s_big_stomach", name:"大胃王证书", cost:5,
+    desc:"吃豆额外 +1 节概率 +20%",
+    apply(R){R.greedy=Math.min(0.9,R.greedy+0.2);}
+  },
+];
+
+/* ============================================================
+ * 诅咒卡池（围死商人后掉落）：每张 = 一个增益 + 一个减益 —— v0.20
+ * 注意：apply 第二个参数 A 为引擎注入的副作用接口（A.heal/A.grow）
+ * ============================================================ */
+const CURSED_POOL=[
+  {
+    id:"c_blood_pact", name:"嗜血契约",
+    desc:"增益：豆子伤害 +2；诅咒：心上限 -1",
+    apply(R,A){
+      R.dmgBonus+=2;
+      R.maxHearts=Math.max(2,R.maxHearts-1);
+    }
+  },
+  {
+    id:"c_frenzy_saliva", name:"狂暴唾液",
+    desc:"增益：吐豆频率 +50%；诅咒：移动速度 -12%",
+    apply(R){
+      R.spitRateMult=Math.min(3.5,+(R.spitRateMult*1.5).toFixed(2));
+      R.speedMult=Math.max(0.7,+(R.speedMult-0.12).toFixed(2));
+    }
+  },
+  {
+    id:"c_greedy_curse", name:"贪婪之胃",
+    desc:"增益：吃豆额外 +1 节概率 +40%；诅咒：拾取半径 -0.15 格",
+    apply(R){
+      R.greedy=Math.min(1,R.greedy+0.4);
+      R.pickupR=Math.max(0.35,R.pickupR-0.15);
+    }
+  },
+  {
+    id:"c_glass_cannon", name:"玻璃大炮",
+    desc:"增益：豆子伤害 +3；诅咒：心上限 -2",
+    apply(R){
+      R.dmgBonus+=3;
+      R.maxHearts=Math.max(2,R.maxHearts-2);
+    }
+  },
+  {
+    id:"c_wind_curse", name:"疾风诅咒",
+    desc:"增益：豆子弹速 +45%；诅咒：断尾冷却 +4 秒",
+    apply(R){
+      R.spitSpeedMult=Math.min(2.2,+(R.spitSpeedMult*1.45).toFixed(2));
+      R.cutCd+=4;
+    }
+  },
+];

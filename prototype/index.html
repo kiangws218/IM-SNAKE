@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（IM SNAKE）· 玩法原型 v0.11</title>
+<title>我蛇了（IM SNAKE）· 玩法原型 v0.20</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -78,7 +78,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.11（数据驱动地基）</span></h1>
+<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.20（商人+诅咒）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -113,13 +113,14 @@ const CFG={
   cols:72, rows:48, tile:24,
   snakeSpeed:4, initLen:4, minLen:3,
   hearts:6, iframe:1.0,
-  spitInterval:1.0, spitSpeed:16, beanLife:6,
-  prisonDps:5, prisonBonus:2,
+  spitInterval:1.0, spitSpeed:13, beanLife:6,
+  prisonDps:9, prisonBonus:3,
   nodeHp:10, nodeMax:3, nodePickupEvery:25, speedBoost:2,
   cutKeep:3, cutRecover:0.5, cutCd:10,
-  slimeHp:5, slimeSpeed:2,
-  ratHp:4, ratSpeed:5, ratEatTime:1.0,
-  flowerHp:6, flowerCd:4, flowerTelegraph:0.7,
+  slimeHp:7, slimeSpeed:2,
+  ratHp:6, ratSpeed:5, ratEatTime:1.0,
+  flowerHp:8, flowerCd:4, flowerTelegraph:0.7,
+  merchantRespawn:30,
   caps:{slime:4,rat:2,flower:2}, spawnEvery:5,
   beanTarget:14, beanRespawn:3,
   nodeDropChance:0.16,
@@ -135,14 +136,15 @@ cv.width=VIEW_W*CFG.tile; cv.height=VIEW_H*CFG.tile;
 const cam={x:0,y:0};
 
 const RUN_DEFAULTS={
-  spitRateMult:1, dmgBonus:0, maxHearts:6, nodeHpBonus:0,
-  prisonDps:5, prisonBonus:2, cutCd:10, pickupR:.6, greedy:0,
+  spitRateMult:1, spitSpeedMult:1, dmgBonus:0, maxHearts:6, nodeHpBonus:0,
+  prisonDps:9, prisonBonus:3, cutCd:10, pickupR:.6, greedy:0,
   speedMult:1, contactDmg:0
 };
 let RUN=Object.assign({},RUN_DEFAULTS);
 function resetRun(){RUN=Object.assign({},RUN_DEFAULTS);}
 const api={
-  heal(n){hearts=Math.min(RUN.maxHearts,(hearts||0)+n);}
+  heal(n){hearts=Math.min(RUN.maxHearts,(hearts||0)+n);},
+  grow(n){snake.len=Math.max(CFG.minLen,snake.len+n);computeSegs();}
 };
 
 /* ===== 扩展系统：虚拟输入 / 地形区域 / 机关 / 开场（v0.16） ===== */
@@ -150,6 +152,7 @@ const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
 let touchMode=false;
 let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false;
+let merchant=null,merchantRespawnT=2,shopOpen=false,curses=[];
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -248,12 +251,13 @@ function hitWall(px,py,r){
   }
   return false;
 }
-function circleVsSolids(px,py,r){
+function circleVsSolids(px,py,r,skipBody){
   const x0=Math.floor(px-r),x1=Math.floor(px+r),y0=Math.floor(py-r),y1=Math.floor(py+r);
   for(let cy=y0;cy<=y1;cy++)for(let cx=x0;cx<=x1;cx++){
     let solid=false;
     if(!inB(cx,cy))solid=true;
-    else if(obstacles.has(K(cx,cy))||occSet.has(K(cx,cy)))solid=true;
+    else if(obstacles.has(K(cx,cy)))solid=true;
+    else if(!skipBody&&occSet.has(K(cx,cy)))solid=true;
     if(!solid)continue;
     if(cellCircleOverlap(px,py,r,cx,cy)){
       const penX=(r+.5)-Math.abs(px-(cx+.5)),penY=(r+.5)-Math.abs(py-(cy+.5));
@@ -322,7 +326,8 @@ function reset(forTutorial){
   segPos=[];occSet=new Set();
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
-  flyingBeans=[];
+  flyingBeans=[];curses=[];
+  merchant=null;merchantRespawnT=2;shopOpen=false;
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
@@ -339,6 +344,7 @@ function reset(forTutorial){
   }else{
     for(let i=0;i<12;i++)spawnBean();
     spawnEnemy("slime");spawnEnemy("slime");spawnEnemy("rat");spawnEnemy("flower");
+    spawnMerchant();
   }
 }
 
@@ -540,6 +546,14 @@ function pickUps(){
       ftext(b.x+.5,b.y+.3,"+1","#8fe36b");puff(b.x+.5,b.y+.5,"#8fe36b");
     }
   }
+  for(let i=curses.length-1;i>=0;i--){
+    const c=curses[i];
+    if(Math.hypot(c.x-snake.fx,c.y-snake.fy)<RUN.pickupR){
+      curses.splice(i,1);
+      openCurseCard(c.card);
+      break;
+    }
+  }
   for(let i=pickups.length-1;i>=0;i--){
     const p=pickups[i];
     if(Math.hypot(p.x+.5-snake.fx,p.y+.5-snake.fy)<RUN.pickupR){
@@ -559,7 +573,13 @@ function stanceShot(){
     return;
   }
   snake.len--;
-  projs.push({x:snake.fx+dir.x*.9,y:snake.fy+dir.y*.9,vx:dir.x*CFG.spitSpeed,vy:dir.y*CFG.spitSpeed,life:CFG.beanLife,grace:.12,trail:[]});
+  const spd=CFG.spitSpeed*RUN.spitSpeedMult;
+  let sx=snake.fx+dir.x*.9,sy=snake.fy+dir.y*.9;
+  for(const k of[.9,1.4,1.9,2.4,2.9]){
+    const tx=snake.fx+dir.x*k,ty=snake.fy+dir.y*k;
+    if(!hitWall(tx,ty,.3)&&circleVsSolids(tx,ty,.3,true)===null){sx=tx;sy=ty;break;}
+  }
+  projs.push({x:sx,y:sy,vx:dir.x*spd,vy:dir.y*spd,life:CFG.beanLife,grace:.22,trail:[]});
   shake=Math.max(shake,.08);
 }
 
@@ -623,7 +643,7 @@ function updateProjs(dt){
       p.vx*=ns/sp;p.vy*=ns/sp;sp=ns;
     }
     p.x+=p.vx*dt;p.y+=p.vy*dt;
-    const hit=circleVsSolids(p.x,p.y,.28);
+    const hit=circleVsSolids(p.x,p.y,.28,p.grace>0);
     let fed=false;
     if(hit&&hit.cx!=null){
       for(const m of MECHS){
@@ -716,6 +736,48 @@ function steerTo(e,tx,ty,spd){
   e.vx=dx/l*spd;e.vy=dy/l*spd;
 }
 
+function spawnMerchant(){
+  for(let t=0;t<80;t++){
+    const x=rnd(CFG.cols),y=rnd(CFG.rows);
+    if(!reachMask[K(x,y)]||!isFree(x,y))continue;
+    if(Math.hypot(x+.5-snake.fx,y+.5-snake.fy)<9)continue;
+    merchant={x:x+.5,y:y+.5,r:.55,hp:26,maxHp:26,flash:0,inside:false};
+    return;
+  }
+}
+function updateMerchant(dt){
+  if(!merchant){
+    merchantRespawnT-=dt;
+    if(merchantRespawnT<=0)spawnMerchant();
+    return;
+  }
+  const m=merchant;
+  m.flash-=dt;
+  const rid=prisonMask[K(Math.floor(m.x),Math.floor(m.y))];
+  if(rid>=0&&activePrisons>0&&alive){
+    m.hp-=4*dt;m.flash=.12;
+    if(Math.random()<dt*3)puff(m.x,m.y,"#c77dff");
+    ftextThrottled(m);
+    if(m.hp<=0){
+      curses.push({x:m.x,y:m.y,card:CURSED_POOL[rnd(CURSED_POOL.length)]});
+      ftext(m.x,m.y-.7,"商人的包裹掉了……","#c77dff");
+      puff(m.x,m.y,"#c77dff");
+      merchant=null;merchantRespawnT=CFG.merchantRespawn;
+    }
+  }
+  if(alive&&!shopOpen&&gameState==="play"){
+    const d=Math.hypot(m.x-snake.fx,m.y-snake.fy);
+    if(d<0.85&&!m.inside){openMerchantShop();}
+    else if(d>1.25)m.inside=false;
+  }
+}
+let lastMerText=0;
+function ftextThrottled(m){
+  if(gameTime-lastMerText>0.5){
+    lastMerText=gameTime;
+    ftext(m.x,m.y-.6,"呜哇！放我出去！","#c77dff");
+  }
+}
 function spawnBean(){
   for(let t=0;t<50;t++){
     const x=rnd(CFG.cols),y=rnd(CFG.rows);
@@ -901,6 +963,7 @@ function buildFromLevel(L){
   curCaps=Object.assign({slime:0,rat:0,flower:0},L.caps);
   curBeanTarget=L.beans||8;
   curGoal=L.goal;levelStartT=gameTime;
+  if(playMode!=="intro")spawnMerchant();
 }
 function startCampaign(){
   if(!introSeen){
@@ -1121,6 +1184,79 @@ function finishTutorial(){
   document.getElementById("overlay").classList.add("show");
 }
 
+function rollGood(excludeIds){
+  let g,guard=0;
+  do{g=SHOP_GOODS[rnd(SHOP_GOODS.length)];guard++;}
+  while(excludeIds&&excludeIds.includes(g.id)&&guard<20);
+  return g;
+}
+function openMerchantShop(){
+  const m=merchant;
+  shopOpen=true;paused=true;m.inside=true;
+  m.slots=[rollGood(),rollGood(),rollGood()];
+  document.getElementById("ovTitle").textContent="路边商人";
+  document.getElementById("ovText").innerHTML=
+    "「客官，用身长抵账——一节豆子一份货。」<br>当前身长：<b>"+snake.len+"</b> 节";
+  document.getElementById("ovBtns").style.display="none";
+  renderTrade(m);
+  document.getElementById("overlay").classList.add("show");
+}
+function renderTrade(m){
+  const box=document.getElementById("pickList");box.innerHTML="";
+  m.slots.forEach((g,i)=>{
+    const b=document.createElement("button");
+    b.className="pick-btn";
+    b.innerHTML="<b>"+g.name+" —— "+g.cost+" 节</b><span>"+g.desc+"</span>";
+    b.onclick=()=>{
+      if(snake.len<CFG.minLen+g.cost){
+        b.querySelector("span").textContent="身长不够，做不了这买卖！";
+        return;
+      }
+      snake.len-=g.cost;
+      g.apply(RUN,api);
+      ftext(snake.fx,snake.fy-.6,g.name+"！","#ffd76e");
+      m.slots[i]=rollGood(m.slots.map(x=>x.id));
+      renderTrade(m);updateHud();
+    };
+    box.appendChild(b);
+  });
+  const eat=document.createElement("button");
+  eat.className="pick-btn";
+  eat.innerHTML="<b>吃掉商人</b><span>它看起来……很好吃？身长 +1</span>";
+  eat.onclick=()=>{
+    api.grow(1);
+    ftext(m.x,m.y-.5,"啊呜！","#8fe36b");
+    merchant=null;merchantRespawnT=CFG.merchantRespawn;
+    closeShop();
+  };
+  box.appendChild(eat);
+  const leave=document.createElement("button");
+  leave.className="pick-btn";
+  leave.innerHTML="<b>离开</b><span>改天再来</span>";
+  leave.onclick=()=>closeShop();
+  box.appendChild(leave);
+}
+function closeShop(){
+  document.getElementById("pickList").innerHTML="";
+  document.getElementById("ovBtns").style.display="";
+  document.getElementById("overlay").classList.remove("show");
+  paused=false;shopOpen=false;
+}
+function openCurseCard(card){
+  shopOpen=true;paused=true;
+  document.getElementById("ovTitle").textContent="受诅咒的包裹";
+  document.getElementById("ovText").innerHTML=
+    "<b style='color:#c77dff'>"+card.name+"</b><br>"+card.desc.replace(/；/g,"<br>");
+  document.getElementById("ovBtns").style.display="none";
+  const box=document.getElementById("pickList");box.innerHTML="";
+  const b=document.createElement("button");
+  b.className="pick-btn";
+  b.innerHTML="<b>收下</b><span>命运的馈赠，早已标好了价格……</span>";
+  b.onclick=()=>{card.apply(RUN,api);updateHud();closeShop();};
+  box.appendChild(b);
+  document.getElementById("overlay").classList.add("show");
+}
+
 const TUNE_KEYS=[
   ["snakeSpeed","蛇速(格/s)",0.5,12,0.5],
   ["prisonDps","监狱伤害/s",1,20,1],
@@ -1181,7 +1317,9 @@ addEventListener("keydown",ev=>{
   }
   else if(k==="k"||k==="shift")cutTail();
   else if(k==="f")placeNode();
-  else if(k==="p")paused=!paused;
+  else if(k==="p"){
+    if(!shopOpen)paused=!paused;
+  }
 });
 addEventListener("keyup",ev=>{
   const k=ev.key.toLowerCase();
@@ -1260,7 +1398,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · IM SNAKE";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.11 · 数据驱动地基<br><br>"+
+    "玩法原型 v0.20 · 商人与诅咒版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -1463,6 +1601,43 @@ function render(){
   }
 
   const hurtAll=hurtFlash>0;
+  for(const c of curses){
+    const px=c.x*T,py=c.y*T+Math.sin(gameTime*4)*2;
+    ctx.fillStyle="rgba(199,125,255,.22)";
+    ctx.beginPath();ctx.arc(px,py,T*.55,0,7);ctx.fill();
+    ctx.fillStyle="#c77dff";
+    ctx.beginPath();ctx.arc(px,py,T*.3,0,7);ctx.fill();
+    ctx.strokeStyle="#f0d0ff";ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(px,py,T*.17,gameTime*3,gameTime*3+4.2);ctx.stroke();
+  }
+
+  if(merchant){
+    const fl=merchant.flash>0;
+    const mx=merchant.x*T+(fl?(Math.random()-.5)*5:0);
+    const my=merchant.y*T+(fl?(Math.random()-.5)*5:0);
+    const rid3=prisonMask[K(Math.floor(merchant.x),Math.floor(merchant.y))];
+    if(rid3>=0&&activePrisons>0){
+      ctx.fillStyle="rgba(199,125,255,.25)";
+      ctx.beginPath();ctx.arc(mx,my,T*.7,0,7);ctx.fill();
+    }
+    ctx.fillStyle=fl?"#ff9e9e":"#7a4fa3";
+    ctx.beginPath();
+    ctx.moveTo(mx-T*.46,my+T*.46);ctx.lineTo(mx-T*.28,my-T*.34);
+    ctx.lineTo(mx+T*.28,my-T*.34);ctx.lineTo(mx+T*.46,my+T*.46);
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle="#c77dff";ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle="#ffe0c2";
+    ctx.beginPath();ctx.arc(mx,my-T*.42,T*.17,0,7);ctx.fill();
+    ctx.fillStyle="#1a1023";
+    ctx.fillRect(mx-T*.08,my-T*.47,3,3);ctx.fillRect(mx+T*.05,my-T*.47,3,3);
+    ctx.textAlign="center";ctx.font="bold 10px Consolas";ctx.fillStyle="#ffd76e";
+    ctx.fillText("商",mx,my-T*.78);
+    if(merchant.hp<merchant.maxHp){
+      ctx.fillStyle="#20212f";ctx.fillRect(mx-T*.5,my+T*.58,T,4);
+      ctx.fillStyle="#c77dff";ctx.fillRect(mx-T*.5,my+T*.58,T*Math.max(0,merchant.hp/merchant.maxHp),4);
+    }
+  }
+
   for(let i=segPos.length-1;i>=0;i--){
     const s=segPos[i];
     const x=s.x*T,y=s.y*T;
@@ -1579,6 +1754,7 @@ function loop(now){
     updateMapNodes(dt);
     updateFlyingBeans(dt);
     updateMechs(dt);
+    updateMerchant(dt);
     if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
     if(playMode!=="tutorial")updateSpawner(dt);
