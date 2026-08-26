@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.25</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.29</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -101,10 +101,22 @@
   .npc-opt:hover{ border-color:#ffd76e;background:#2c2d44; }
   .npc-opt.red{ color:#ff5d5d;border-color:#7a2d35; }
   .npc-opt.red:hover{ border-color:#ff5d5d; }
+  #pauseMenu{
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    flex-direction:column; gap:14px; background:rgba(8,8,16,.66); z-index:20;
+  }
+  #pauseMenu.show{ display:flex; }
+  #pauseMenu h2{ font-size:26px; color:#ffd76e; letter-spacing:6px; margin-bottom:10px; }
+  #pauseMenu button{
+    width:240px; background:#23243a; color:#e8e6f0; border:1px solid #3a3b5c;
+    border-radius:6px; font-family:inherit; font-weight:bold; font-size:16px;
+    padding:10px 0; cursor:pointer; letter-spacing:4px;
+  }
+  #pauseMenu button:hover{ border-color:#ffd76e; background:#2c2d44; }
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.28（BOSS调优）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.29（暂停菜单/BOSS调优）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -121,7 +133,7 @@
 　<b>站桩吐豆</b> 长按<kbd>J</kbd>/<kbd>空格</kbd>
 　<b>断尾</b> 点按<kbd>K</kbd>/<kbd>Shift</kbd>
 　<b>放节点</b> <kbd>F</kbd>
-　<b>暂停</b> <kbd>P</kbd>
+　<b>暂停</b> <kbd>P</kbd>/<kbd>Esc</kbd>
 　<b>重来</b> <kbd>R</kbd><br>
   吃豆变长 · 站桩时定住连射高速豆子（身长即弹匣），豆子碰壁反弹减速后可吃回 · <b>F 在蛇头处放置固定环形节点，蛇身完全通过后自动回收充能</b> · 用身体围住敌人形成窒息监狱（红色区域），小心敌人啃毁节点 · 头部是唯一弱点，撞墙或咬到尾巴即死 · 金色小环=节点充能拾取物 · <b>断尾切掉2节后的身体并折损一半</b>
 </div>
@@ -130,6 +142,7 @@
   <div class="grid" id="tune"></div>
 </details>
 <div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button></div><div id="pickList"></div></div>
+<div id="pauseMenu"><h2>已暂停</h2><button id="pauseResume">继 续</button><button id="pauseHome">返回首页</button></div>
 
 <script src="levels.js"></script>
 <script src="upgrades.js"></script>
@@ -771,7 +784,15 @@ function updateSeeds(dt){
     if(hit){
       if(hit.axis==="x"){s.vx*=-1;s.x+=Math.sign(s.vx)*.05;}
       else{s.vy*=-1;s.y+=Math.sign(s.vy)*.05;}
+      if(occSet.has(K(hit.cx,hit.cy)))s.refl=true;
       puff(s.x,s.y,"#b55088");
+    }
+    if(boss&&s.refl&&Math.hypot(s.x-boss.x,s.y-boss.y)<boss.r+.3){
+      let d=6*(boss.shield>0?.25:1);
+      applyToBoss(d);boss.flash=.1;
+      ftext(s.x,s.y-.5,"-"+Math.max(1,Math.round(d)),"#4fa3ff");
+      for(let k=0;k<6;k++)particles.push({x:s.x,y:s.y,vx:(Math.random()-.5)*7,vy:(Math.random()-.5)*7,t:.35,col:"#4fa3ff"});
+      seeds.splice(i,1);continue;
     }
     if(alive&&Math.hypot(s.x-snake.fx,s.y-snake.fy)<.58){
       hurtPlayer("被种子击中");
@@ -860,7 +881,9 @@ function eatNPC(n){
   api.grow(NPC_TYPES[n.kind].foodValue||1);
   ftext(n.x,n.y-.5,"啊呜！","#8fe36b");
   puff(n.x,n.y,"#8fe36b");
+  const wasOpen=(panelNpc===n);
   npcs.splice(npcs.indexOf(n),1);
+  if(wasOpen)closePanel();
   const T=NPC_TYPES[n.kind];
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
 }
@@ -1463,7 +1486,12 @@ function openPanel(n,nodeId){
     say.textContent=node.say;
     if(node.effect==="cry"&&!n.cried){n.cried=true;n.crying=true;}
     list=(node.options||[]).map(o=>({label:o.t,
-      fn:o.action==="eat"?()=>eatNPC(n):o.action==="end"?()=>closePanel():()=>openPanel(n,o.next)}));
+      fn:()=>{
+        if(!npcs.includes(n))return closePanel();
+        if(o.action==="eat")return eatNPC(n);
+        if(o.action==="end")return closePanel();
+        return openPanel(n,o.next);
+      }}));
   }else{
     say.textContent=T.greet||"……";
     list=T.options.map(o=>({label:o.label,fn:()=>handleOption(n,o)}));
@@ -1478,8 +1506,10 @@ function openPanel(n,nodeId){
   requestAnimationFrame(()=>p.classList.add("open"));
 }
 function handleOption(n,o){
+  if(!npcs.includes(n))return closePanel();
   if(o.action==="trade")return panelTrade(n);
   if(o.action==="dialog")return openPanel(n,o.arg||"start");
+  if(o.action==="eat")return eatNPC(n);
   if(o.action==="leave")return closePanel();
 }
 function panelTrade(n){
@@ -1574,7 +1604,7 @@ function showBossSelect(){
   const box=document.getElementById("pickList");box.innerHTML="";
   const b=document.createElement("button");
   b.className="pick-btn";
-  b.innerHTML="<b>巨岩茧母 · 磐</b><span>半径 3 格的巨型茧母。一阶段弹幕+召唤小怪；半血进入护盾态并落下四座蓝晶桩——用监狱围住桩子充能破坏，每桩 -25% 护盾。豆子打盾效率仅 25%。</span>";
+  b.innerHTML="<b>巨岩茧母 · 磐</b><span>点击开始挑战</span>";
   b.onclick=()=>{box.innerHTML="";document.getElementById("ovBtns").style.display="";startBossFight();};
   box.appendChild(b);
   const back=document.createElement("button");
@@ -1610,46 +1640,71 @@ function updateBoss(dt){
       boss.ty=boss.r+2+rnd(Math.max(1,CFG.rows-boss.r*2-4));
     }
     const dx=boss.tx-boss.x,dy=boss.ty-boss.y,l=Math.hypot(dx,dy)||1;
-    boss.vx=dx/l*(boss.phase2?.55:.42);
-    boss.vy=dy/l*(boss.phase2?.55:.42);
+    boss.vx=dx/l*(boss.phase2?1.45:1.1);
+    boss.vy=dy/l*(boss.phase2?1.45:1.1);
     moveActor(boss,dt);
   }
-  if(alive&&invuln<=0&&Math.hypot(boss.x-snake.fx,boss.y-snake.fy)<boss.r+.38)
-    hurtPlayer("被巨茧碾压");
+  if(alive){
+    boss.crushCd=Math.max(0,(boss.crushCd||0)-dt);
+    const hd=Math.hypot(boss.x-snake.fx,boss.y-snake.fy);
+    if(hd<boss.r+.38){
+      die("被巨茧碾压");
+    }else if(boss.crushCd<=0){
+      let hitIdx=-1;
+      for(let i=1;i<segPos.length;i++){
+        if(Math.hypot(segPos[i].x-boss.x,segPos[i].y-boss.y)<boss.r+.3){hitIdx=i;break;}
+      }
+      if(hitIdx>0){
+        const oldLen=snake.len;
+        snake.len=Math.max(CFG.minLen,hitIdx);
+        const lost=oldLen-snake.len;
+        for(let i2=hitIdx;i2<oldLen;i2++){
+          const sgm=segPos[i2];if(!sgm)break;
+          const a=Math.atan2(sgm.y-boss.y,sgm.x-boss.x)+(Math.random()-.5)*.7;
+          const spd2=7+Math.random()*4;
+          flyingBeans.push({x:sgm.x,y:sgm.y,vx:Math.cos(a)*spd2,vy:Math.sin(a)*spd2,t:.9});
+        }
+        shake=Math.max(shake,.4);
+        ftext(snake.fx,snake.fy-1,"-"+lost+" 节！","#e86a8a");
+        puff(snake.fx,snake.fy,"#e86a8a");
+        boss.crushCd=.8;
+        computeSegs();computeEnclosure();
+      }
+    }
+  }
   if(alive&&boss.stun<=0){
     boss.waveT=(boss.waveT==null?2:boss.waveT)-dt;
     if(boss.waveT<=0&&boss.burst===0){
-      boss.burst=3;boss.burstT=0;
+      boss.burst=2;boss.burstT=0;
       boss.waveKind=(boss.waveKind+1)%2;
     }
     if(boss.burst>0){
       boss.burstT-=dt;
       if(boss.burstT<=0){
-        boss.burst--;boss.burstT=.38;
+        boss.burst--;boss.burstT=.5;
         const spd=boss.phase2?2.4:2.1;
         if(boss.waveKind===0){
-          const n=boss.phase2?16:12,off=boss.spin;boss.spin+=.37;
+          const n=boss.phase2?12:9,off=boss.spin;boss.spin+=.37;
           for(let k=0;k<n;k++){
             const a=off+k/n*Math.PI*2;
             seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:CFG.seedLife+2});
           }
         }else{
           const base=Math.atan2(snake.fy-boss.y,snake.fx-boss.x);
-          const n=boss.phase2?6:5;
+          const n=boss.phase2?5:4;
           for(let k=0;k<n;k++){
             const a=base+(k-(n-1)/2)*.16;
             seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*(spd+.5),vy:Math.sin(a)*(spd+.5),life:CFG.seedLife+2});
           }
         }
-        if(boss.burst===0)boss.waveT=boss.phase2?4.5:6;
+        if(boss.burst===0)boss.waveT=boss.phase2?6.5:8;
       }
     }
     if(!boss.phase2){
       boss.sumT-=dt;
-      if(boss.sumT<=0&&enemies.length<5){
+      if(boss.sumT<=0&&enemies.length<3){
         spawnEnemy("slime",Math.floor(boss.x),Math.floor(boss.y));
-        spawnEnemy("slime",Math.floor(boss.x),Math.floor(boss.y));
-        boss.sumT=9;
+        boss.sumT=12;
         ftext(boss.x,boss.y-boss.r-1,"茧母召来了小怪！","#ff8f5e");
       }
     }
@@ -1757,10 +1812,21 @@ addEventListener("keydown",ev=>{
   }
   else if(k==="k"||k==="shift")cutTail();
   else if(k==="f")placeNode();
-  else if(k==="p"){
-    if(!panelOpen)paused=!paused;
+  else if(k==="p"||k==="escape"){
+    if(!panelOpen)togglePause();
   }
 });
+function togglePause(){
+  if(gameState!=="play"||!alive||panelOpen||freeze)return;
+  paused=!paused;
+}
+document.getElementById("pauseResume").onclick=()=>{if(paused)togglePause();};
+document.getElementById("pauseHome").onclick=()=>{
+  paused=false;firing=false;fireKey=false;
+  boss=null;bossStakes=[];
+  closePanel();
+  showMenu();
+};
 addEventListener("keyup",ev=>{
   const k=ev.key.toLowerCase();
   heldKeys.delete(k);
@@ -1850,7 +1916,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.28 · BOSS调优版<br><br>"+
+    "玩法原型 v0.29 · 暂停菜单/BOSS调优版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -2274,9 +2340,7 @@ function render(){
   ctx.restore();
 
   if(paused&&alive){
-    ctx.fillStyle="rgba(8,8,16,.6)";ctx.fillRect(0,0,W,H);
-    ctx.fillStyle="#ffd76e";ctx.font="bold 24px Consolas";ctx.textAlign="center";
-    ctx.fillText("已暂停",W/2,H/2);
+    ctx.fillStyle="rgba(8,8,16,.45)";ctx.fillRect(0,0,W,H);
   }
 }
 
@@ -2289,6 +2353,8 @@ function goalText(){
   return"";
 }
 function updateHud(){
+  document.getElementById("pauseMenu").style.display=
+    (paused&&alive&&gameState==="play")?"flex":"none";
   document.getElementById("hearts").textContent="❤".repeat(Math.max(0,hearts));
   document.getElementById("len").textContent=snake.len;
   document.getElementById("dmg").textContent=beanDamage();
