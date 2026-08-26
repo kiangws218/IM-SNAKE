@@ -12,8 +12,9 @@ while((m=re.exec(html))){
   if(!fs.existsSync(p)){console.log("[skip missing] "+m[1]);continue;}
   code+=fs.readFileSync(p,"utf8")+"\n;\n";
 }
-const inlineMatch=html.match(/<script>([\s\S]*?)<\/script>/);
-code+=inlineMatch?inlineMatch[1]:"";
+let inline="";
+for(const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) inline+=m[1]+"\n;\n";
+code+=inline;
 
 function mkEl(id){
   return {
