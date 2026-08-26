@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（IM SNAKE）· 玩法原型 v0.22</title>
+<title>我蛇了（IM SNAKE）· 玩法原型 v0.24</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -104,7 +104,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.22（怪物注册表）</span></h1>
+<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.24（NPC时停）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -178,7 +178,7 @@ let touchMode=false;
 let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false;
 let curses=[];
-let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false;
+let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -353,7 +353,7 @@ function reset(forTutorial){
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
   flyingBeans=[];curses=[];
-  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;npcPanelEl=null;panelOpen=false;
+  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;npcPanelEl=null;panelOpen=false;freeze=false;
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
@@ -1367,7 +1367,7 @@ function drawPortraitInto(cvs,kind,crying){
   }
 }
 function openPanel(n,nodeId){
-  panelOpen=true;paused=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
+  panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
   const T=NPC_TYPES[n.kind];
   const p=ensurePanel();
   p.style.display="flex";
@@ -1424,16 +1424,22 @@ function panelTrade(n){
     };
     opts.appendChild(b);
   });
+  const back=document.createElement("button");
+  back.className="npc-opt";
+  back.textContent="返回";
+  back.onclick=()=>openPanel(n);
+  opts.appendChild(back);
 }
 function closePanel(){
   const p=npcPanelEl;if(!p)return;
   p.classList.remove("open");
   setTimeout(()=>{if(!panelOpen)p.style.display="none";},400);
   panelOpen=false;panelNpc=null;npcNode=null;
-  moveLock=true;
+  freeze=false;moveLock=false;
+  if(!(dir.x===-1&&dir.y===0))dir={x:1,y:0};
 }
 function openCurseCard(card){
-  panelOpen=true;paused=true;
+  panelOpen=true;freeze=true;
   document.getElementById("ovTitle").textContent="受诅咒的包裹";
   document.getElementById("ovText").innerHTML=
     "<b style='color:#c77dff'>"+card.name+"</b><br>"+card.desc.replace(/；/g,"<br>");
@@ -1450,7 +1456,7 @@ function resumeFromUI(){
   document.getElementById("pickList").innerHTML="";
   document.getElementById("ovBtns").style.display="";
   document.getElementById("overlay").classList.remove("show");
-  paused=false;panelOpen=false;moveLock=true;
+  paused=false;panelOpen=false;freeze=false;moveLock=true;
 }
 
 const TUNE_KEYS=[
@@ -1594,7 +1600,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · IM SNAKE";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.22 · 怪物注册表版<br><br>"+
+    "玩法原型 v0.24 · NPC时停版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -1988,7 +1994,7 @@ function loop(now){
     updateIntro(dt);
     updateCamera(dt);
   }
-  if(gameState==="play"&&alive&&!paused){
+  if(gameState==="play"&&alive&&!paused&&!freeze){
     gameTime+=dt;
     invuln=Math.max(0,invuln-dt);
     hurtFlash=Math.max(0,hurtFlash-dt);

@@ -145,8 +145,12 @@
       document.body.appendChild(ui[k]);
 
     const cross={up:["w"],left:["a"],right:["d"],down:["s"]};
-    for(const[elName,keys]of Object.entries(cross))
-      hold(ui[elName],()=>keys.forEach(k=>key(k,true)),()=>keys.forEach(k=>key(k,false)));
+    for(const[elName,keys]of Object.entries(cross)){
+      let boostTm=null;
+      hold(ui[elName],
+        ()=>{keys.forEach(k=>key(k,true));boostTm=setTimeout(()=>{VInput.boost=true;},600);},
+        ()=>{keys.forEach(k=>key(k,false));clearTimeout(boostTm);VInput.boost=false;});
+    }
     hold(ui.fire,()=>{VInput.fire=true;},()=>{VInput.fire=false;});
     hold(ui.cut,()=>key("k",true),()=>key("k",false));
     hold(ui.node,()=>key("f",true),()=>key("f",false));
