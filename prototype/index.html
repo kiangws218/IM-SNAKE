@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（IM SNAKE）· 玩法原型 v0.20</title>
+<title>我蛇了（IM SNAKE）· 玩法原型 v0.21</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -75,10 +75,36 @@
   .pick-btn:hover{ background:#2c2d44;border-color:#ffd76e; }
   .pick-btn b{ color:#ffd76e;display:block;margin-bottom:3px;letter-spacing:1px; }
   .pick-btn span{ color:var(--dim); }
+  #npcPanel{
+    position:fixed;top:50%;right:-380px;transform:translateY(-50%);
+    width:340px;max-width:88vw;height:64vh;z-index:25;
+    background:linear-gradient(180deg,rgba(29,32,54,.96),rgba(23,24,39,.98));
+    border:2px solid #3a3b5c;border-left:3px solid #ffd76e;
+    border-radius:12px 0 0 12px;
+    transition:right .38s cubic-bezier(.22,.9,.3,1);
+    display:none;flex-direction:column;padding:14px;
+    font-family:Consolas,monospace;color:#e8e6f0;
+  }
+  #npcPanel.open{ right:0; }
+  #npcHead{ display:flex;align-items:center;gap:12px; }
+  #npcPortrait{ width:84px;height:84px;image-rendering:pixelated;background:#12131f;
+    border:2px solid #ffd76e;border-radius:8px;flex:none; }
+  #npcName{ font-size:17px;color:#ffd76e;letter-spacing:2px;margin-bottom:4px; }
+  #npcSub{ font-size:11px;color:var(--dim); }
+  #npcSay{ margin-top:12px;min-height:76px;color:#ffe9b3;line-height:1.7;font-size:13px;
+    background:rgba(10,10,20,.5);border-radius:8px;padding:10px; }
+  #npcOpts{ margin-top:auto;display:flex;flex-direction:column;gap:8px;max-height:38vh;overflow-y:auto; }
+  .npc-opt{
+    padding:9px 12px;background:#23243a;border:1px solid #3a3b5c;border-radius:8px;
+    color:#e8e6f0;text-align:left;font:13px Consolas;cursor:pointer;
+  }
+  .npc-opt:hover{ border-color:#ffd76e;background:#2c2d44; }
+  .npc-opt.red{ color:#ff5d5d;border-color:#7a2d35; }
+  .npc-opt.red:hover{ border-color:#ff5d5d; }
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.20（商人+诅咒）</span></h1>
+<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.21（NPC系统）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -107,6 +133,7 @@
 
 <script src="levels.js"></script>
 <script src="upgrades.js"></script>
+<script src="npcs.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -152,7 +179,8 @@ const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
 let touchMode=false;
 let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false;
-let merchant=null,merchantRespawnT=2,shopOpen=false,curses=[];
+let curses=[];
+let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -327,7 +355,7 @@ function reset(forTutorial){
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
   flyingBeans=[];curses=[];
-  merchant=null;merchantRespawnT=2;shopOpen=false;
+  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;npcPanelEl=null;panelOpen=false;
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
@@ -344,7 +372,7 @@ function reset(forTutorial){
   }else{
     for(let i=0;i<12;i++)spawnBean();
     spawnEnemy("slime");spawnEnemy("slime");spawnEnemy("rat");spawnEnemy("flower");
-    spawnMerchant();
+    spawnNPC("merchant");spawnNPC("keti");
   }
 }
 
@@ -469,6 +497,10 @@ function applyDirQueue(){
 
 function updateMovement(dt){
   applyDirQueue();
+  if(moveLock){
+    if(dirQueue.length>0||VInput.active)moveLock=false;
+    else return;
+  }
   if(danger){
     danger.timer-=dt;
     const spd=CFG.snakeSpeed*(heldKeys.size>0&&!firing?CFG.speedBoost:1);
@@ -688,6 +720,23 @@ function updateProjs(dt){
         p.bounced=true;
       }
     }
+    for(const n of npcs){
+      if(Math.hypot(p.x-n.x,p.y-n.y)<n.r+.25){
+        const d=beanDamage();
+        n.hp-=d;n.flash=.15;spitHits++;
+        ftext(n.x,n.y-.5,"-"+d,"#ffd76e");
+        const nl=Math.hypot(p.x-n.x,p.y-n.y)||1;
+        const ax=(p.x-n.x)/nl,ay=(p.y-n.y)/nl;
+        const dot=p.vx*ax+p.vy*ay;
+        const[vx,vy]=rotateVec(p.vx-2*dot*ax,p.vy-2*dot*ay,(Math.random()-.5)*.9);
+        p.vx=vx;p.vy=vy;setSpeed(p,.7,.8);
+        p.bounced=true;
+        break;
+      }
+    }
+    for(let j=npcs.length-1;j>=0;j--){
+      if(npcs[j].hp<=0){if(panelNpc===npcs[j])closePanel();dieNPC(npcs[j]);}
+    }
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
       if(spot)groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
@@ -736,47 +785,67 @@ function steerTo(e,tx,ty,spd){
   e.vx=dx/l*spd;e.vy=dy/l*spd;
 }
 
-function spawnMerchant(){
+function spawnNPC(kind){
+  const T=NPC_TYPES[kind];if(!T)return;
   for(let t=0;t<80;t++){
     const x=rnd(CFG.cols),y=rnd(CFG.rows);
     if(!reachMask[K(x,y)]||!isFree(x,y))continue;
     if(Math.hypot(x+.5-snake.fx,y+.5-snake.fy)<9)continue;
-    merchant={x:x+.5,y:y+.5,r:.55,hp:26,maxHp:26,flash:0,inside:false};
+    npcs.push({kind,x:x+.5,y:y+.5,r:T.r,hp:T.hp,maxHp:T.hp,flash:0,inside:false,crying:false});
     return;
   }
 }
-function updateMerchant(dt){
-  if(!merchant){
-    merchantRespawnT-=dt;
-    if(merchantRespawnT<=0)spawnMerchant();
-    return;
+function updateNPCs(dt){
+  for(let i=npcRespawns.length-1;i>=0;i--){
+    npcRespawns[i].t-=dt;
+    if(npcRespawns[i].t<=0){spawnNPC(npcRespawns[i].kind);npcRespawns.splice(i,1);}
   }
-  const m=merchant;
-  m.flash-=dt;
-  const rid=prisonMask[K(Math.floor(m.x),Math.floor(m.y))];
-  if(rid>=0&&activePrisons>0&&alive){
-    m.hp-=4*dt;m.flash=.12;
-    if(Math.random()<dt*3)puff(m.x,m.y,"#c77dff");
-    ftextThrottled(m);
-    if(m.hp<=0){
-      curses.push({x:m.x,y:m.y,card:CURSED_POOL[rnd(CURSED_POOL.length)]});
-      ftext(m.x,m.y-.7,"商人的包裹掉了……","#c77dff");
-      puff(m.x,m.y,"#c77dff");
-      merchant=null;merchantRespawnT=CFG.merchantRespawn;
+  for(let i=npcs.length-1;i>=0;i--){
+    const n=npcs[i];
+    n.flash-=dt;
+    const rid=prisonMask[K(Math.floor(n.x),Math.floor(n.y))];
+    if(rid>=0&&activePrisons>0&&alive){
+      let pdps=4;
+      if(n.kind!=="merchant")pdps=prisonRegionNode[rid]?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):1;
+      n.hp-=pdps*dt;n.flash=.12;
+      if(Math.random()<dt*2)puff(n.x,n.y,"#c77dff");
+      if(n.kind==="merchant")ftextThrottled(n);
+      else if(Math.random()<dt*.8)ftextThrottledN(n);
+    }
+    if(n.hp<=0){dieNPC(n);continue;}
+    if(alive&&!panelOpen&&gameState==="play"){
+      const d=Math.hypot(n.x-snake.fx,n.y-snake.fy);
+      if(d<0.85&&!n.inside)openPanel(n);
+      else if(d>1.25)n.inside=false;
     }
   }
-  if(alive&&!shopOpen&&gameState==="play"){
-    const d=Math.hypot(m.x-snake.fx,m.y-snake.fy);
-    if(d<0.85&&!m.inside){openMerchantShop();}
-    else if(d>1.25)m.inside=false;
+}
+let lastNpcWhine=0;
+function ftextThrottledN(n){
+  if(gameTime-lastNpcWhine>0.6){
+    lastNpcWhine=gameTime;
+    ftext(n.x,n.y-.6,rnd(2)?"救救我……":"好可怕！","#c77dff");
   }
 }
-let lastMerText=0;
-function ftextThrottled(m){
-  if(gameTime-lastMerText>0.5){
-    lastMerText=gameTime;
-    ftext(m.x,m.y-.6,"呜哇！放我出去！","#c77dff");
+function dieNPC(n){
+  const T=NPC_TYPES[n.kind];
+  for(const d of(T.drops||[])){
+    if(d.type==="beans")burstBeans(Math.floor(n.x),Math.floor(n.y),d.n||2);
+    else if(d.type==="curseOrb"){curses.push({x:n.x,y:n.y,card:CURSED_POOL[rnd(CURSED_POOL.length)]});ftext(n.x,n.y-.7,"包裹掉落了……","#c77dff");}
+    else if(d.type==="nodeCharge"){charges=Math.min(CFG.nodeMax,charges+1);ftext(n.x,n.y-.6,"节点充能 +1","#ffd76e");}
   }
+  puff(n.x,n.y,"#c77dff");
+  ftext(n.x,n.y-.8,T.name+"倒下了","#c77dff");
+  npcs.splice(npcs.indexOf(n),1);
+  if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
+}
+function eatNPC(n){
+  api.grow(NPC_TYPES[n.kind].foodValue||1);
+  ftext(n.x,n.y-.5,"啊呜！","#8fe36b");
+  puff(n.x,n.y,"#8fe36b");
+  npcs.splice(npcs.indexOf(n),1);
+  const T=NPC_TYPES[n.kind];
+  if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
 }
 function spawnBean(){
   for(let t=0;t<50;t++){
@@ -963,7 +1032,7 @@ function buildFromLevel(L){
   curCaps=Object.assign({slime:0,rat:0,flower:0},L.caps);
   curBeanTarget=L.beans||8;
   curGoal=L.goal;levelStartT=gameTime;
-  if(playMode!=="intro")spawnMerchant();
+  if(playMode!=="intro")(L.npcs||["merchant"]).forEach(k=>spawnNPC(k));
 }
 function startCampaign(){
   if(!introSeen){
@@ -1190,60 +1259,108 @@ function rollGood(excludeIds){
   while(excludeIds&&excludeIds.includes(g.id)&&guard<20);
   return g;
 }
-function openMerchantShop(){
-  const m=merchant;
-  shopOpen=true;paused=true;m.inside=true;
-  m.slots=[rollGood(),rollGood(),rollGood()];
-  document.getElementById("ovTitle").textContent="路边商人";
-  document.getElementById("ovText").innerHTML=
-    "「客官，用身长抵账——一节豆子一份货。」<br>当前身长：<b>"+snake.len+"</b> 节";
-  document.getElementById("ovBtns").style.display="none";
-  renderTrade(m);
-  document.getElementById("overlay").classList.add("show");
+function ensurePanel(){
+  if(npcPanelEl)return npcPanelEl;
+  const p=document.createElement("div");p.id="npcPanel";
+  p.innerHTML="<div id='npcHead'><canvas id='npcPortrait' width='96' height='96'></canvas>"+
+    "<div><div id='npcName'></div><div id='npcSub'></div></div></div>"+
+    "<div id='npcSay'></div><div id='npcOpts'></div>";
+  document.body.appendChild(p);
+  npcPanelEl=p;return p;
 }
-function renderTrade(m){
-  const box=document.getElementById("pickList");box.innerHTML="";
-  m.slots.forEach((g,i)=>{
+function drawPortraitInto(cvs,kind,crying){
+  const c=cvs.getContext("2d");
+  c.clearRect(0,0,96,96);
+  c.fillStyle="#12131f";c.fillRect(0,0,96,96);
+  if(kind==="merchant"){
+    c.fillStyle="#7a4fa3";c.beginPath();
+    c.moveTo(18,90);c.lineTo(34,32);c.lineTo(62,32);c.lineTo(78,90);c.closePath();c.fill();
+    c.fillStyle="#ffe0c2";c.beginPath();c.arc(48,36,15,0,7);c.fill();
+    c.fillStyle="#1a1023";c.fillRect(41,33,4,5);c.fillRect(53,33,4,5);
+    c.fillStyle="#ffd76e";c.font="bold 11px Consolas";c.textAlign="center";c.fillText("$",48,76);
+  }else{
+    c.fillStyle="#f5f5fa";c.beginPath();
+    c.moveTo(22,92);c.lineTo(37,50);c.lineTo(59,50);c.lineTo(74,92);c.closePath();c.fill();
+    c.strokeStyle="#d8d8e6";c.lineWidth=2;c.stroke();
+    c.fillStyle="#ffe0c2";c.beginPath();c.arc(48,38,17,0,7);c.fill();
+    c.fillStyle="#3a2b23";c.beginPath();c.arc(48,30,17.5,Math.PI,0);c.fill();
+    c.fillRect(29,28,6,20);c.fillRect(61,28,6,20);
+    c.fillStyle="#1a1023";c.fillRect(40,39,4,5);c.fillRect(53,39,4,5);
+    c.fillStyle="#ffb3ba";c.fillRect(35,49,7,3);c.fillRect(54,49,7,3);
+    c.strokeStyle="#1a1023";c.beginPath();c.moveTo(44,53);c.lineTo(52,53);c.stroke();
+    if(crying){
+      c.fillStyle="#7fd1e8";c.fillRect(41,46,3,11);c.fillRect(55,46,3,11);
+    }
+  }
+}
+function openPanel(n,nodeId){
+  panelOpen=true;paused=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
+  const T=NPC_TYPES[n.kind];
+  const p=ensurePanel();
+  p.style.display="flex";
+  document.getElementById("npcName").textContent=T.name;
+  document.getElementById("npcSub").textContent=T.sub||"";
+  drawPortraitInto(document.getElementById("npcPortrait"),n.kind,n.crying);
+  const say=document.getElementById("npcSay");
+  const opts=document.getElementById("npcOpts");opts.innerHTML="";
+  let list=[];
+  if(nodeId){
+    const node=DIALOG_TREES[n.kind][nodeId];
+    say.textContent=node.say;
+    if(node.effect==="cry"&&!n.cried){n.cried=true;n.crying=true;}
+    list=(node.options||[]).map(o=>({label:o.t,
+      fn:o.action==="eat"?()=>eatNPC(n):o.action==="end"?()=>closePanel():()=>openPanel(n,o.next)}));
+  }else{
+    say.textContent=T.greet||"……";
+    list=T.options.map(o=>({label:o.label,fn:()=>handleOption(n,o)}));
+  }
+  for(const o of list){
     const b=document.createElement("button");
-    b.className="pick-btn";
-    b.innerHTML="<b>"+g.name+" —— "+g.cost+" 节</b><span>"+g.desc+"</span>";
+    b.className="npc-opt"+(o.label.indexOf("吃掉")>=0?" red":"");
+    b.textContent=o.label;
+    b.onclick=o.fn;
+    opts.appendChild(b);
+  }
+  requestAnimationFrame(()=>p.classList.add("open"));
+}
+function handleOption(n,o){
+  if(o.action==="trade")return panelTrade(n);
+  if(o.action==="dialog")return openPanel(n,o.arg||"start");
+  if(o.action==="leave")return closePanel();
+}
+function panelTrade(n){
+  npcSlots=[rollGood(),rollGood(),rollGood()];
+  const say=document.getElementById("npcSay");
+  const opts=document.getElementById("npcOpts");opts.innerHTML="";
+  say.innerHTML="「用身长抵账——一节豆子一份货。」<br>当前身长：<b>"+snake.len+"</b> 节";
+  npcSlots.forEach((g,i)=>{
+    const b=document.createElement("button");
+    b.className="npc-opt";
+    b.innerHTML="<span style='color:#ffd76e'>"+g.name+"</span> —— "+g.cost+" 节<br>"+
+      "<span style='opacity:.65;font-size:11px'>"+g.desc+"</span>";
     b.onclick=()=>{
       if(snake.len<CFG.minLen+g.cost){
-        b.querySelector("span").textContent="身长不够，做不了这买卖！";
+        b.lastElementChild.textContent="身长不够，做不了这买卖！";
         return;
       }
       snake.len-=g.cost;
       g.apply(RUN,api);
       ftext(snake.fx,snake.fy-.6,g.name+"！","#ffd76e");
-      m.slots[i]=rollGood(m.slots.map(x=>x.id));
-      renderTrade(m);updateHud();
+      npcSlots[i]=rollGood(npcSlots.map(x=>x.id));
+      panelTrade(n);updateHud();
     };
-    box.appendChild(b);
+    opts.appendChild(b);
   });
-  const eat=document.createElement("button");
-  eat.className="pick-btn";
-  eat.innerHTML="<b>吃掉商人</b><span>它看起来……很好吃？身长 +1</span>";
-  eat.onclick=()=>{
-    api.grow(1);
-    ftext(m.x,m.y-.5,"啊呜！","#8fe36b");
-    merchant=null;merchantRespawnT=CFG.merchantRespawn;
-    closeShop();
-  };
-  box.appendChild(eat);
-  const leave=document.createElement("button");
-  leave.className="pick-btn";
-  leave.innerHTML="<b>离开</b><span>改天再来</span>";
-  leave.onclick=()=>closeShop();
-  box.appendChild(leave);
 }
-function closeShop(){
-  document.getElementById("pickList").innerHTML="";
-  document.getElementById("ovBtns").style.display="";
-  document.getElementById("overlay").classList.remove("show");
-  paused=false;shopOpen=false;
+function closePanel(){
+  const p=npcPanelEl;if(!p)return;
+  p.classList.remove("open");
+  setTimeout(()=>{if(!panelOpen)p.style.display="none";},400);
+  panelOpen=false;panelNpc=null;npcNode=null;
+  moveLock=true;
 }
 function openCurseCard(card){
-  shopOpen=true;paused=true;
+  panelOpen=true;paused=true;
   document.getElementById("ovTitle").textContent="受诅咒的包裹";
   document.getElementById("ovText").innerHTML=
     "<b style='color:#c77dff'>"+card.name+"</b><br>"+card.desc.replace(/；/g,"<br>");
@@ -1252,9 +1369,15 @@ function openCurseCard(card){
   const b=document.createElement("button");
   b.className="pick-btn";
   b.innerHTML="<b>收下</b><span>命运的馈赠，早已标好了价格……</span>";
-  b.onclick=()=>{card.apply(RUN,api);updateHud();closeShop();};
+  b.onclick=()=>{card.apply(RUN,api);updateHud();resumeFromUI();};
   box.appendChild(b);
   document.getElementById("overlay").classList.add("show");
+}
+function resumeFromUI(){
+  document.getElementById("pickList").innerHTML="";
+  document.getElementById("ovBtns").style.display="";
+  document.getElementById("overlay").classList.remove("show");
+  paused=false;panelOpen=false;moveLock=true;
 }
 
 const TUNE_KEYS=[
@@ -1318,7 +1441,7 @@ addEventListener("keydown",ev=>{
   else if(k==="k"||k==="shift")cutTail();
   else if(k==="f")placeNode();
   else if(k==="p"){
-    if(!shopOpen)paused=!paused;
+    if(!panelOpen)paused=!paused;
   }
 });
 addEventListener("keyup",ev=>{
@@ -1398,7 +1521,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · IM SNAKE";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.20 · 商人与诅咒版<br><br>"+
+    "玩法原型 v0.21 · NPC系统版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -1408,7 +1531,7 @@ function showMenu(){
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="";
   document.getElementById("ovBtn4").textContent="选关挑战";
-  document.getElementById("ovBtn4").style.display="";
+  document.getElementById("ovBtn4").style.display="none";
   document.getElementById("pickList").innerHTML="";
   document.getElementById("tut").classList.remove("show");
   document.getElementById("overlay").classList.add("show");
@@ -1611,30 +1734,58 @@ function render(){
     ctx.beginPath();ctx.arc(px,py,T*.17,gameTime*3,gameTime*3+4.2);ctx.stroke();
   }
 
-  if(merchant){
-    const fl=merchant.flash>0;
-    const mx=merchant.x*T+(fl?(Math.random()-.5)*5:0);
-    const my=merchant.y*T+(fl?(Math.random()-.5)*5:0);
-    const rid3=prisonMask[K(Math.floor(merchant.x),Math.floor(merchant.y))];
+  for(const n of npcs){
+    const fl=n.flash>0;
+    const nx=n.x*T+(fl?(Math.random()-.5)*5:0);
+    const ny=n.y*T+(fl?(Math.random()-.5)*5:0);
+    const rid3=prisonMask[K(Math.floor(n.x),Math.floor(n.y))];
     if(rid3>=0&&activePrisons>0){
-      ctx.fillStyle="rgba(199,125,255,.25)";
-      ctx.beginPath();ctx.arc(mx,my,T*.7,0,7);ctx.fill();
+      ctx.fillStyle="rgba(199,125,255,.22)";
+      ctx.beginPath();ctx.arc(nx,ny,T*.7,0,7);ctx.fill();
     }
-    ctx.fillStyle=fl?"#ff9e9e":"#7a4fa3";
-    ctx.beginPath();
-    ctx.moveTo(mx-T*.46,my+T*.46);ctx.lineTo(mx-T*.28,my-T*.34);
-    ctx.lineTo(mx+T*.28,my-T*.34);ctx.lineTo(mx+T*.46,my+T*.46);
-    ctx.closePath();ctx.fill();
-    ctx.strokeStyle="#c77dff";ctx.lineWidth=2;ctx.stroke();
-    ctx.fillStyle="#ffe0c2";
-    ctx.beginPath();ctx.arc(mx,my-T*.42,T*.17,0,7);ctx.fill();
-    ctx.fillStyle="#1a1023";
-    ctx.fillRect(mx-T*.08,my-T*.47,3,3);ctx.fillRect(mx+T*.05,my-T*.47,3,3);
-    ctx.textAlign="center";ctx.font="bold 10px Consolas";ctx.fillStyle="#ffd76e";
-    ctx.fillText("商",mx,my-T*.78);
-    if(merchant.hp<merchant.maxHp){
-      ctx.fillStyle="#20212f";ctx.fillRect(mx-T*.5,my+T*.58,T,4);
-      ctx.fillStyle="#c77dff";ctx.fillRect(mx-T*.5,my+T*.58,T*Math.max(0,merchant.hp/merchant.maxHp),4);
+    if(n.kind==="merchant"){
+      ctx.fillStyle=fl?"#ff9e9e":"#7a4fa3";
+      ctx.beginPath();
+      ctx.moveTo(nx-T*.46,ny+T*.46);ctx.lineTo(nx-T*.28,ny-T*.34);
+      ctx.lineTo(nx+T*.28,ny-T*.34);ctx.lineTo(nx+T*.46,ny+T*.46);
+      ctx.closePath();ctx.fill();
+      ctx.strokeStyle="#c77dff";ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle="#ffe0c2";
+      ctx.beginPath();ctx.arc(nx,ny-T*.42,T*.17,0,7);ctx.fill();
+      ctx.fillStyle="#1a1023";
+      ctx.fillRect(nx-T*.08,ny-T*.47,3,3);ctx.fillRect(nx+T*.05,ny-T*.47,3,3);
+      ctx.textAlign="center";ctx.font="bold 10px Consolas";ctx.fillStyle="#ffd76e";
+      ctx.fillText("商",nx,ny-T*.78);
+    }else if(n.kind==="keti"){
+      const sway=Math.sin(gameTime*2.2)*T*.06;
+      ctx.fillStyle="#f5f5fa";
+      ctx.beginPath();
+      ctx.moveTo(nx-T*.38+sway,ny+T*.46);ctx.lineTo(nx-T*.24+sway*.5,ny-T*.2);
+      ctx.lineTo(nx+T*.24+sway*.5,ny-T*.2);ctx.lineTo(nx+T*.38+sway,ny+T*.46);
+      ctx.closePath();ctx.fill();
+      ctx.strokeStyle="#d8d8e6";ctx.lineWidth=1.5;ctx.stroke();
+      ctx.fillStyle="#ffe0c2";
+      ctx.beginPath();ctx.arc(nx+sway*.5,ny-T*.32,T*.16,0,7);ctx.fill();
+      ctx.fillStyle="#3a2b23";
+      ctx.beginPath();ctx.arc(nx+sway*.5,ny-T*.37,T*.155,Math.PI,0);ctx.fill();
+      ctx.fillRect(nx-T*.21+sway*.5,ny-T*.4,T*.07,T*.14);
+      ctx.fillRect(nx+T*.15+sway*.5,ny-T*.4,T*.07,T*.14);
+      ctx.fillStyle="#1a1023";
+      ctx.fillRect(nx-T*.08+sway*.5,ny-T*.35,2.5,3);ctx.fillRect(nx+T*.05+sway*.5,ny-T*.35,2.5,3);
+      ctx.fillStyle="#ffb3ba";
+      ctx.fillRect(nx-T*.12+sway*.5,ny-T*.27,4,2);ctx.fillRect(nx+T*.07+sway*.5,ny-T*.27,4,2);
+      if(n.crying){
+        ctx.fillStyle="#7fd1e8";
+        const ty=(gameTime*20)%14;
+        ctx.fillRect(nx-T*.06+sway*.5,ny-T*.31+ty,2.5,4);ctx.fillRect(nx+T*.05+sway*.5,ny-T*.31+ty,2.5,4);
+      }
+    }else{
+      ctx.fillStyle=fl?"#ff9e9e":"#7a4fa3";
+      ctx.beginPath();ctx.arc(nx,ny,n.r*T,0,7);ctx.fill();
+    }
+    if(n.hp<n.maxHp){
+      ctx.fillStyle="#20212f";ctx.fillRect(nx-T*.5,ny+T*.62,T,4);
+      ctx.fillStyle="#c77dff";ctx.fillRect(nx-T*.5,ny+T*.62,T*Math.max(0,n.hp/n.maxHp),4);
     }
   }
 
@@ -1754,7 +1905,7 @@ function loop(now){
     updateMapNodes(dt);
     updateFlyingBeans(dt);
     updateMechs(dt);
-    updateMerchant(dt);
+    updateNPCs(dt);
     if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
     if(playMode!=="tutorial")updateSpawner(dt);
