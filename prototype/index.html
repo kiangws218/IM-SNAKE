@@ -148,6 +148,7 @@
 <script src="upgrades.js"></script>
 <script src="npcs.js"></script>
 <script src="enemies.js"></script>
+<script src="player-core.js"></script>
 <script src="input.js"></script>
 <script>
 "use strict";
@@ -391,46 +392,8 @@ function reset(forTutorial){
   }
 }
 
-function prunePath(maxLen){
-  let acc=0,cut=-1;
-  for(let i=0;i+1<snake.path.length;i++){
-    const p=snake.path[i],q=snake.path[i+1];
-    acc+=Math.hypot(p.x-q.x,p.y-q.y);
-    if(acc>=maxLen){cut=i+2;break;}
-  }
-  if(cut>=0)snake.path.length=cut;
-  snake.pathLen=0;
-  for(let i=0;i+1<snake.path.length;i++)
-    snake.pathLen+=Math.hypot(snake.path[i].x-snake.path[i+1].x,snake.path[i].y-snake.path[i+1].y);
-}
-
-function computeSegs(){
-  segPos.length=0;
-  segPos.push({x:snake.fx,y:snake.fy});
-  let px=snake.fx,py=snake.fy,target=SPACING(),acc=0;
-  const need=(snake.len-1)*SPACING();
-  for(let i=0;i<snake.path.length&&segPos.length<snake.len;i++){
-    const p=snake.path[i];
-    const d=Math.hypot(p.x-px,p.y-py);
-    if(d>0){
-      while(acc+d>=target&&segPos.length<snake.len){
-        const r=(target-acc)/d;
-        segPos.push({x:px+(p.x-px)*r,y:py+(p.y-py)*r});
-        target+=SPACING();
-      }
-      acc+=d;px=p.x;py=p.y;
-    }
-  }
-  while(segPos.length<snake.len)segPos.push({x:px,y:py});
-  occSet.clear();
-  for(const s of segPos)occSet.add(K(Math.floor(s.x),Math.floor(s.y)));
-  for(let i=0;i+1<segPos.length;i++){
-    const ax=Math.floor(segPos[i].x),ay=Math.floor(segPos[i].y);
-    const bx=Math.floor(segPos[i+1].x),by=Math.floor(segPos[i+1].y);
-    if(ax!==bx&&ay!==by){occSet.add(K(ax,by));occSet.add(K(bx,ay));}
-  }
-  prunePath(need+3);
-}
+function prunePath(maxLen){PlayerCore.prunePath({snake},maxLen);}
+function computeSegs(){PlayerCore.computeSegments({snake,segPos,occSet},SPACING(),K);}
 function SPACING(){return 1;}
 
 function computeEnclosure(){
@@ -503,15 +466,8 @@ function applyDirQueue(){
       return;
     }
   }
-  while(dirQueue.length){
-    const d=dirQueue.shift();
-    const l1=Math.hypot(d.x,d.y)||1;
-    const nx=d.x/l1,ny=d.y/l1;
-    const dot=nx*dir.x+ny*dir.y;
-    if(dot<-0.999)continue;
-    dir={x:nx,y:ny};
-    break;
-  }
+  const next=PlayerCore.applyQueue({dir,dirQueue});
+  if(next)dir=next;
 }
 
 function updateMovement(dt){
@@ -557,15 +513,9 @@ function enterDanger(type){
   shake=Math.max(shake,.18);
 }
 function selfBiteProbe(px,py,r){
-  r=r||.62;
-  for(let i=Math.max(2,CFG.neckGuard);i<segPos.length;i++){
-    const s=segPos[i];
-    if(nearNode(s.x,s.y))continue;
-    if(Math.hypot(px-s.x,py-s.y)<r)return true;
-  }
-  return false;
+  return PlayerCore.selfBite({segPos},px,py,r||.62,Math.max(2,CFG.neckGuard),nearNode);
 }
-function path0(){return snake.path.length?snake.path[0]:{x:snake.fx,y:snake.fy};}
+function path0(){return PlayerCore.pathHead({snake});}
 
 function nearNode(x,y){
   for(const n of mapNodes)
@@ -1810,13 +1760,7 @@ function comboVec(){
   if(heldKeys.has("right"))x++;
   return(x||y)?{x,y}:null;
 }
-function pushCombo(){
-  const c=comboVec();if(!c)return;
-  const ref=dirQueue.length?dirQueue[dirQueue.length-1]:dir;
-  if(c.x===ref.x&&c.y===ref.y)return;
-  dirQueue.push(c);
-  if(dirQueue.length>3)dirQueue.shift();
-}
+function pushCombo(){PlayerCore.queueDirection({dir,dirQueue},comboVec(),3);}
 addEventListener("keydown",ev=>{
   const k=ev.key.toLowerCase();
   const action=InputMap.actionFor(1,ev);
