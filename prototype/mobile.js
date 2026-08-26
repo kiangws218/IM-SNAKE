@@ -31,13 +31,42 @@
   }
 
   /* ---------- 主流程 ---------- */
+  const STORE_KEY="imsnake_input_v23";
+  const BUILD="v0.23";
   let mode=null;
-  try{mode=localStorage.getItem("imsnake_input");}catch(e){}
+  try{mode=localStorage.getItem(STORE_KEY);}catch(e){}
+
+  function statusChip(){
+    let h=document.getElementById("imsStatus");
+    if(!h){
+      h=document.createElement("div");h.id="imsStatus";
+      h.style.cssText="position:fixed;top:6px;left:6px;z-index:40;pointer-events:none;"+
+        "font:10px Consolas;color:rgba(232,230,240,.55);background:rgba(10,10,20,.4);"+
+        "padding:2px 6px;border-radius:4px;";
+      document.body.appendChild(h);
+    }
+    h.textContent=BUILD+" · 触屏:"+(hasTouch?"✓":"✗")+" · 模式:"+(mode||"未选");
+  }
+  function gear(){
+    const g=document.createElement("div");
+    g.textContent="操作⚙";
+    g.style.cssText="position:fixed;top:4px;right:4px;z-index:45;pointer-events:auto;cursor:pointer;"+
+      "font:10px Consolas;color:#ffd76e;background:rgba(10,10,20,.55);padding:3px 8px;border-radius:4px;"+
+      "border:1px solid #3a3b5c;";
+    g.addEventListener("pointerup",ev=>{
+      ev.preventDefault();
+      try{localStorage.removeItem(STORE_KEY);}catch(e){}
+      location.reload();
+    });
+    document.body.appendChild(g);
+  }
 
   function main(){
     fitCanvas();
     addEventListener("resize",fitCanvas);
     addEventListener("orientationchange",()=>setTimeout(fitCanvas,300));
+    statusChip();
+    if(hasTouch&&mode!=="kb")gear();
     if(mode==="touch")buildTouch();
     else if(mode==="kb"){touchMode=false;}
     else buildChooser();
@@ -61,24 +90,31 @@
     t.textContent="请选择操作方式";
     t.style.cssText="font-size:19px;letter-spacing:4px;color:#ffd76e;margin-bottom:6px;";
     wrap.appendChild(t);
-    const mk=(label,sub,m)=>{
+    const mk=(label,sub,m,accent)=>{
       const b=document.createElement("button");
       b.innerHTML="<div style='font-size:16px;font-weight:bold'>"+label+"</div>"+
         "<div style='font-size:10px;opacity:.55;margin-top:4px'>"+sub+"</div>";
       b.style.cssText="width:min(240px,72vw);padding:13px 8px;background:#23243a;"+
-        "border:1px solid #3a3b5c;border-radius:10px;color:#e8e6f0;font-family:inherit;cursor:pointer;";
+        "border:2px solid "+(accent||"#3a3b5c")+";border-radius:10px;color:#e8e6f0;"+
+        "font-family:inherit;cursor:pointer;";
       b.addEventListener("pointerup",ev=>{ev.preventDefault();choose(m);});
       return b;
     };
-    wrap.appendChild(mk("📱 手机触屏","虚拟方向键 · 大开火钮"));
-    wrap.appendChild(mk("⌨️ 键盘鼠标","WASD + J/K/F"));
+    wrap.appendChild(mk("📱 手机触屏","虚拟方向键 · 大开火钮","touch","#ffd76e"));
+    wrap.appendChild(mk("⌨️ 键盘鼠标","WASD + J/K/F","kb"));
+    const ver=document.createElement("div");
+    ver.textContent=BUILD+" · 触屏检测:"+(hasTouch?"✓":"✗");
+    ver.style.cssText="font-size:10px;color:rgba(232,230,240,.4);";
+    wrap.appendChild(ver);
     document.body.appendChild(wrap);
   }
   function choose(m){
     mode=m;
-    try{localStorage.setItem("imsnake_input",m);}catch(e){}
+    try{localStorage.setItem(STORE_KEY,m);}catch(e){}
     const c=document.getElementById("imsChooser");
     if(c)c.remove();
+    const g=document.querySelector('div[style*="cursor:pointer"][style*="操作"]');
+    statusChip();
     if(m==="touch")buildTouch();
     fitCanvas();portraitHint();
   }
