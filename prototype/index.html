@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（IM SNAKE）· 玩法原型 v0.21</title>
+<title>我蛇了（IM SNAKE）· 玩法原型 v0.22</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -104,7 +104,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.21（NPC系统）</span></h1>
+<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.22（怪物注册表）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -134,6 +134,7 @@
 <script src="levels.js"></script>
 <script src="upgrades.js"></script>
 <script src="npcs.js"></script>
+<script src="enemies.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -144,11 +145,8 @@ const CFG={
   prisonDps:9, prisonBonus:3,
   nodeHp:10, nodeMax:3, nodePickupEvery:25, speedBoost:2,
   cutKeep:3, cutRecover:0.5, cutCd:10,
-  slimeHp:7, slimeSpeed:2,
-  ratHp:6, ratSpeed:5, ratEatTime:1.0,
-  flowerHp:8, flowerCd:4, flowerTelegraph:0.7,
   merchantRespawn:30,
-  caps:{slime:4,rat:2,flower:2}, spawnEvery:5,
+  spawnEvery:5,
   beanTarget:14, beanRespawn:3,
   nodeDropChance:0.16,
   flyDrag:3.5, flyStop:.6,
@@ -854,6 +852,7 @@ function spawnBean(){
   }
 }
 function spawnEnemy(type,ax,ay){
+  const T=ENEMY_TYPES[type];if(!T)return;
   for(let t=0;t<80;t++){
     let x,y;
     if(ax!==undefined){
@@ -862,11 +861,13 @@ function spawnEnemy(type,ax,ay){
     }else{x=rnd(CFG.cols);y=rnd(CFG.rows);}
     if(!inB(x,y)||!reachMask[K(x,y)]||!isFree(x,y))continue;
     if(Math.hypot(x+.5-snake.fx,y+.5-snake.fy)<4)continue;
-    const base={type,x:x+.5,y:y+.5,flash:0,hitT:0};
-    if(type==="slime")Object.assign(base,{hp:CFG.slimeHp,max:CFG.slimeHp,r:.55,wanderT:0});
-    if(type==="rat")Object.assign(base,{hp:CFG.ratHp,max:CFG.ratHp,r:.5,state:"seek",eatT:0,fleeT:0,carried:0,wt:0,tx:x,y:y});
-    if(type==="flower")Object.assign(base,{hp:CFG.flowerHp,max:CFG.flowerHp,r:.62,shootT:CFG.flowerCd*rnd(2)});
-    enemies.push(base);return;
+    const e={type,x:x+.5,y:y+.5,flash:0,hitT:0,hp:T.hp,max:T.hp,r:T.r,
+      vx:0,vy:0,wanderT:0,squash:rnd(6)};
+    if(type==="rat")Object.assign(e,{state:"seek",eatT:0,fleeT:0,carried:0,wt:0,tx:x,ty:y});
+    if(type==="flower")Object.assign(e,{shootT:T.cadence*rnd(2),warned:false});
+    if(T.kind==="charger")Object.assign(e,{state:"idle",stT:0});
+    if(T.kind==="bomber")Object.assign(e,{state:"seek",stT:0});
+    enemies.push(e);return;
   }
 }
 
@@ -894,26 +895,27 @@ function updateEnemies(dt){
         }
       }
     }
-    if(e.type==="slime"){
+    const T=ENEMY_TYPES[e.type];
+    if(T.kind==="chaser"){
       e.wanderT-=dt;
       if(e.wanderT<=0){
         e.wanderT=.5;
-        if(alive)steerTo(e,snake.fx,snake.fy,CFG.slimeSpeed);else{e.vx=0;e.vy=0;}
+        if(alive)steerTo(e,snake.fx,snake.fy,T.speed);else{e.vx=0;e.vy=0;}
       }
       moveActor(e,dt);
       e.squash=(e.squash||0)+dt*6;
     }
-    if(e.type==="rat"){
+    else if(T.kind==="thief"){
       if(e.state==="seek"){
         let best=null,bd=1e9;
         for(const b of groundBeans){const d=Math.hypot(b.x+.5-e.x,b.y+.5-e.y);if(d<bd){bd=d;best=b;}}
         if(best){
-          steerTo(e,best.x+.5,best.y+.5,CFG.ratSpeed);
-          if(bd<.4){e.state="eat";e.eatT=CFG.ratEatTime;e.targetBean=best;}
+          steerTo(e,best.x+.5,best.y+.5,T.speed);
+          if(bd<.4){e.state="eat";e.eatT=T.eatTime;e.targetBean=best;}
         }else{
           e.wt-=dt;
           if(e.wt<=0){e.wt=1.2;e.tx=e.x+rnd(7)-3;e.ty=e.y+rnd(7)-3;}
-          steerTo(e,e.tx,e.ty,CFG.ratSpeed*.6);
+          steerTo(e,e.tx,e.ty,T.speed*.6);
         }
       }else if(e.state==="eat"){
         e.eatT-=dt;e.vx=0;e.vy=0;
@@ -924,18 +926,80 @@ function updateEnemies(dt){
           const a=Math.random()*Math.PI*2;e.tx=e.x+Math.cos(a)*8;e.ty=e.y+Math.sin(a)*8;
         }
       }else{
-        e.fleeT-=dt;steerTo(e,e.tx,e.ty,CFG.ratSpeed);
+        e.fleeT-=dt;steerTo(e,e.tx,e.ty,T.speed);
         if(e.fleeT<=0)e.state="seek";
       }
       moveActor(e,dt);
     }
-    if(e.type==="flower"){
+    else if(T.kind==="ranged"){
       e.shootT-=dt;e.vx=0;e.vy=0;
-      if(e.shootT<=CFG.flowerTelegraph&&!e.warned)e.warned=true;
+      if(e.shootT<=T.telegraph&&!e.warned)e.warned=true;
       if(e.shootT<=0&&alive){
-        e.shootT=CFG.flowerCd;e.warned=false;
+        e.shootT=T.cadence;e.warned=false;
         const dx=snake.fx-e.x,dy=snake.fy-e.y,l=Math.hypot(dx,dy)||1;
-        seeds.push({x:e.x,y:e.y,vx:dx/l*2,vy:dy/l*2,life:CFG.seedLife});
+        seeds.push({x:e.x,y:e.y,vx:dx/l*T.bulletSpeed,vy:dy/l*T.bulletSpeed,life:CFG.seedLife});
+      }
+    }
+    else if(T.kind==="charger"){
+      if(e.state==="windup"){
+        e.stT-=dt;e.vx=0;e.vy=0;
+        if(e.stT<=0){
+          const dx=snake.fx-e.x,dy=snake.fy-e.y,l=Math.hypot(dx,dy)||1;
+          e.vx=dx/l*T.chargeSpeed;e.vy=dy/l*T.chargeSpeed;
+          e.state="charge";
+        }
+      }else if(e.state==="charge"){
+        const px=e.x,py=e.y;
+        moveActor(e,dt);
+        const moved=Math.hypot(e.x-px,e.y-py),want=T.chargeSpeed*dt;
+        if(moved<want*.35){
+          e.state="stun";e.stT=T.stun;
+          shake=Math.max(shake,.25);puff(e.x,e.y,"#7a4a2b");
+        }else{
+          const hdx=snake.fx-e.x,hdy=snake.fy-e.y;
+          if(alive&&invuln<=0&&Math.hypot(hdx,hdy)<e.r+.38){
+            hurtPlayer("被野猪撞飞");
+            e.state="stun";e.stT=T.stun;e.vx=0;e.vy=0;
+          }
+        }
+      }else if(e.state==="stun"){
+        e.vx=0;e.vy=0;e.stT-=dt;
+        if(e.stT<=0)e.state="idle";
+      }else{
+        e.wanderT-=dt;
+        if(e.wanderT<=0){
+          e.wanderT=1;
+          e.tx=e.x+rnd(9)-4;e.ty=e.y+rnd(9)-4;
+          steerTo(e,e.tx,e.ty,T.walk);
+        }
+        moveActor(e,dt);
+        const dx=snake.fx-e.x,dy=snake.fy-e.y,d=Math.hypot(dx,dy)||1;
+        const l1=Math.hypot(e.vx,e.vy)||1;
+        const al=(e.vx/l1)*(dx/d)+(e.vy/l1)*(dy/d);
+        if(d>2&&d<9&&al>.93){e.state="windup";e.stT=T.windup;e.vx=0;e.vy=0;}
+      }
+    }
+    else if(T.kind==="bomber"){
+      if(e.state==="fuse"){
+        e.stT-=dt;e.vx=0;e.vy=0;
+        if(e.stT<=0){
+          for(let bi=groundBeans.length-1;bi>=0;bi--){
+            const b=groundBeans[bi];
+            if(Math.hypot(b.x+.5-e.x,b.y+.5-e.y)<T.boomR)groundBeans.splice(bi,1);
+          }
+          if(alive&&Math.hypot(snake.fx-e.x,snake.fy-e.y)<T.boomR)hurtPlayer("被炸飞");
+          shake=Math.max(shake,.45);
+          for(let k=0;k<16;k++){
+            const a=k/16*Math.PI*2;
+            particles.push({x:e.x,y:e.y,vx:Math.cos(a)*7,vy:Math.sin(a)*7,t:.45,col:"#e8c14d"});
+          }
+          ftext(e.x,e.y-.5,"轰！","#e8c14d");
+          enemies.splice(i,1);continue;
+        }
+      }else{
+        steerTo(e,snake.fx,snake.fy,T.speed);
+        moveActor(e,dt);
+        if(alive&&Math.hypot(snake.fx-e.x,snake.fy-e.y)<1.6){e.state="fuse";e.stT=T.fuse;e.vx=0;e.vy=0;}
       }
     }
     if(alive&&invuln<=0){
@@ -949,11 +1013,15 @@ function updateEnemies(dt){
       kills++;
       if(activePrisons>0&&prisonMask[K(Math.floor(e.x),Math.floor(e.y))]>=0)prisonKills++;
       if(e.type==="flower")flowersKilled++;
-      const drop=e.type==="rat"?e.carried+1:2;
+      const drop=T.drops+(e.type==="rat"?e.carried:0);
       if(drop>0)burstBeans(Math.floor(e.x),Math.floor(e.y),drop,e.hitDir?e.hitDir.x:undefined,e.hitDir?e.hitDir.y:undefined,.5);
       if(Math.random()<CFG.nodeDropChance&&charges<CFG.nodeMax){
         const np=findFreeNear(Math.floor(e.x),Math.floor(e.y),1);
         if(np){pickups.push({x:np.x,y:np.y});ftext(np.x+.5,np.y,"节点掉落！","#ffd76e");}
+      }
+      if(T.onDeathSpawns){
+        for(const s of T.onDeathSpawns)
+          for(let k=0;k<s.count;k++)spawnEnemy(s.type,Math.floor(e.x),Math.floor(e.y));
       }
       ftext(e.x,e.y-.5,"击杀！","#8fe36b");
       puff(e.x,e.y,"#fff");enemies.splice(i,1);
@@ -987,9 +1055,14 @@ function updateSpawner(dt){
   if(spawnT<=0){
     spawnT=CFG.spawnEvery;
     const cnt=t=>enemies.filter(e=>e.type===t).length;
-    if(cnt("slime")<curCaps.slime)spawnEnemy("slime");
-    else if(cnt("rat")<curCaps.rat)spawnEnemy("rat");
-    else if(cnt("flower")<curCaps.flower)spawnEnemy("flower");
+    if(playMode==="sandbox"){
+      const keys=Object.keys(SANDBOX_CAPS).filter(k=>cnt(k)<SANDBOX_CAPS[k]);
+      if(keys.length)spawnEnemy(keys[rnd(keys.length)]);
+    }else{
+      if(cnt("slime")<curCaps.slime)spawnEnemy("slime");
+      else if(cnt("rat")<curCaps.rat)spawnEnemy("rat");
+      else if(cnt("flower")<curCaps.flower)spawnEnemy("flower");
+    }
   }
   beanT-=dt;
   if(beanT<=0){beanT=CFG.beanRespawn;if(groundBeans.length<curBeanTarget)spawnBean();}
@@ -1521,7 +1594,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · IM SNAKE";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.21 · NPC系统版<br><br>"+
+    "玩法原型 v0.22 · 怪物注册表版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -1682,12 +1755,43 @@ function render(){
       ctx.fillStyle=prisonRegionNode[rid2]?"rgba(255,215,110,.3)":"rgba(255,90,90,.25)";
       ctx.beginPath();ctx.arc(px,py,T*.6,0,7);ctx.fill();
     }
-    if(e.type==="slime"){
-      const sq=Math.sin(e.squash||0)*.08;
-      ctx.fillStyle="#63c74d";
-      roundRect(px-T*.52,py-T*(0.44-sq),T*1.04,T*(0.88+sq),T*.3);ctx.fill();
+    const ET=ENEMY_TYPES[e.type];
+    if(ET.kind==="chaser"){
+      const sq=Math.sin((e.squash||0))*.06;
+      ctx.fillStyle=ET.body;
+      roundRect(px-ET.r*T,py-ET.r*T*.92,ET.r*2*T,ET.r*1.84*T,ET.r*T*.5);ctx.fill();
+      if(e.type==="turtle"){
+        ctx.strokeStyle="rgba(0,0,0,.28)";ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(px,py,ET.r*T*.55,0,7);ctx.stroke();
+      }
       ctx.fillStyle="#0f380f";
-      ctx.fillRect(px-T*.24,py-T*.16,T*.12,T*.18);ctx.fillRect(px+T*.12,py-T*.16,T*.12,T*.18);
+      ctx.fillRect(px-ET.r*T*.45,py-ET.r*T*.32,ET.r*T*.24,ET.r*T*.34);
+      ctx.fillRect(px+ET.r*T*.2,py-ET.r*T*.32,ET.r*T*.24,ET.r*T*.34);
+    }
+    else if(ET.kind==="charger"){
+      ctx.fillStyle=e.flash>0?"#ff9e9e":(e.state==="windup"&&Math.sin(gameTime*20)>0?"#ff5d5d":ET.body);
+      ctx.beginPath();ctx.ellipse(px,py,ET.r*T*1.05,ET.r*T*.8,0,0,7);ctx.fill();
+      ctx.fillStyle="#ffe0c2";
+      ctx.beginPath();ctx.arc(px+ET.r*T*.7,py,ET.r*T*.26,0,7);ctx.fill();
+      ctx.strokeStyle="#fff";ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(px+ET.r*T*.72,py-T*.14);ctx.lineTo(px+ET.r*T*1.02,py-T*.3);
+      ctx.moveTo(px+ET.r*T*.72,py+T*.16);ctx.lineTo(px+ET.r*T*1.02,py+T*.3);
+      ctx.stroke();
+      if(e.state!=="idle"){
+        ctx.fillStyle="#20212f";ctx.fillRect(px-T*.5,py-T*.9,T,4);
+        ctx.fillStyle="#ff5d5d";
+        const frac=e.state==="windup"?1-Math.max(0,e.stT/ET.windup):Math.max(0,e.stT/ET.stun);
+        ctx.fillRect(px-T*.5,py-T*.9,T*frac,4);
+      }
+    }
+    else if(ET.kind==="bomber"){
+      const blink=e.state==="fuse"&&Math.floor(gameTime*(6+8*(1-Math.max(0,e.stT)/ET.fuse)))%2===0;
+      ctx.fillStyle=blink?"#ffffff":ET.body;
+      ctx.beginPath();ctx.arc(px,py,ET.r*T,0,7);ctx.fill();
+      ctx.strokeStyle="#1a1023";ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(px,py,ET.r*T*.62,-.6,.6);ctx.stroke();
+      ctx.beginPath();ctx.arc(px,py,ET.r*T*.62,Math.PI-.6,Math.PI+.6);ctx.stroke();
     }
     if(e.type==="rat"){
       ctx.fillStyle="#9ba0b5";

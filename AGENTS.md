@@ -21,6 +21,7 @@
 | `prototype/index.html` | 引擎+规则层 | **谨慎修改**：只动引擎/系统，改前先理解 RUN 状态机制 |
 | `prototype/levels.js` | 关卡轨道 | 自由增删关卡，遵循文件头规范（含 zones/mechs 扩展） |
 | `prototype/upgrades.js` | 肉鸽卡池轨道 | 自由增删强化卡，效果只能通过修改 RUN 字段实现 |
+| `prototype/enemies.js` | 怪物注册表轨道 | 怪物行为原型（chaser/thief/ranged/charger/bomber）与数值 |
 | `prototype/mobile.js` | 移动端轨道 | 触屏控件，只通过 VInput 全局与合成键盘事件对接引擎 |
 | `prototype/intro.js` | 开场演出轨道 | 只定义 window.INTRO_SCENE 数据，播放器在引擎内 |
 | `STORY.md` | 剧情轨道 | 未启用（基调未定） |
