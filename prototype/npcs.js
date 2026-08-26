@@ -17,6 +17,7 @@ const NPC_TYPES={
   merchant:{
     name:"路边商人", sub:"神秘行商", hp:26, r:.55, foodValue:1,
     greet:"「客官，用身长抵账——一节豆子一份货。」",
+    hurtGreet:"「你个小混蛋，打我干嘛……行行行，货照卖，但每分伤都得算进价里！」",
     options:[{label:"交易",action:"trade"},{label:"吃掉",action:"eat"},{label:"离开",action:"leave"}],
     drops:[{type:"curseOrb"}],
     respawn:30,

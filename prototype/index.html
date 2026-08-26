@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.29</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.31</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -116,7 +116,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.29（暂停菜单/BOSS调优）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.31（商人加价/监狱判定修复）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -164,6 +164,7 @@ const CFG={
   flyDrag:3.5, flyStop:.6,
   beanDrag:7, beanStop:0.35, beanBounceKeep:0.78, beanDragInit:1.5,
   nodePassR:1.15,
+  neckGuard:4,
   seedLife:10,
 };
 
@@ -223,7 +224,7 @@ function grantReward(r){
 function updateMechs(dt){
   for(const m of MECHS){
     if(m.done||m.kind!=="pillar")continue;
-    const enc=prisonMask[K(m.x,m.y)]>=0&&activePrisons>0;
+    const enc=prisonMask[K(m.x,m.y)]>=0;
     if(enc)m.prog+=dt;
     else m.prog=Math.max(0,m.prog-dt*.5);
     if(m.prog>=m.charge){
@@ -477,7 +478,11 @@ function computeEnclosure(){
     }
   }
   for(let id=0;id<prisonRegions.length;id++){
-    if(enemies.some(e=>prisonMask[K(Math.floor(e.x),Math.floor(e.y))]===id)){
+    const occupied=
+      enemies.some(e=>prisonMask[K(Math.floor(e.x),Math.floor(e.y))]===id)||
+      npcs.some(n=>prisonMask[K(Math.floor(n.x),Math.floor(n.y))]===id)||
+      (boss&&prisonMask[K(Math.floor(boss.x),Math.floor(boss.y))]===id);
+    if(occupied){
       activePrisons++;
       if(prisonRegionNode[id])activeNodePrisons++;
     }
@@ -552,7 +557,7 @@ function enterDanger(type){
 }
 function selfBiteProbe(px,py,r){
   r=r||.62;
-  for(let i=2;i<segPos.length;i++){
+  for(let i=Math.max(2,CFG.neckGuard);i<segPos.length;i++){
     const s=segPos[i];
     if(nearNode(s.x,s.y))continue;
     if(Math.hypot(px-s.x,py-s.y)<r)return true;
@@ -738,6 +743,7 @@ function updateProjs(dt){
         const d=beanDamage();
         n.hp-=d;n.flash=.15;spitHits++;
         ftext(n.x,n.y-.5,"-"+d,"#ffd76e");
+        if(n.kind==="merchant")ftextThrottled(n);
         const nl=Math.hypot(p.x-n.x,p.y-n.y)||1;
         const ax=(p.x-n.x)/nl,ay=(p.y-n.y)/nl;
         const dot=p.vx*ax+p.vy*ay;
@@ -859,6 +865,13 @@ function updateNPCs(dt){
   }
 }
 let lastNpcWhine=0;
+let lastMerchantGrumble=0;
+function ftextThrottled(n){
+  if(gameTime-lastMerchantGrumble>1.4){
+    lastMerchantGrumble=gameTime;
+    ftext(n.x,n.y-.6,rnd(2)?"你个小混蛋，打我干嘛":"住手！再打可要加价了！","#c77dff");
+  }
+}
 function ftextThrottledN(n){
   if(gameTime-lastNpcWhine>0.6){
     lastNpcWhine=gameTime;
@@ -1471,6 +1484,7 @@ function drawPortraitInto(cvs,kind,crying){
   }
 }
 function openPanel(n,nodeId){
+  if(!n||!npcs.includes(n)){closePanel();return;}
   panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
   const T=NPC_TYPES[n.kind];
   const p=ensurePanel();
@@ -1493,7 +1507,7 @@ function openPanel(n,nodeId){
         return openPanel(n,o.next);
       }}));
   }else{
-    say.textContent=T.greet||"……";
+    say.textContent=(n.hp<n.maxHp&&T.hurtGreet)?T.hurtGreet:(T.greet||"……");
     list=T.options.map(o=>({label:o.label,fn:()=>handleOption(n,o)}));
   }
   for(const o of list){
@@ -1512,22 +1526,32 @@ function handleOption(n,o){
   if(o.action==="eat")return eatNPC(n);
   if(o.action==="leave")return closePanel();
 }
+function merchantMarkup(n){
+  const T=NPC_TYPES[n.kind];
+  if(!T||!T.hp||n.hp>=n.maxHp)return 1;
+  return 1+0.6*Math.max(0,1-n.hp/T.hp);
+}
 function panelTrade(n){
   npcSlots=[rollGood(),rollGood(),rollGood()];
+  const mk=merchantMarkup(n);
   const say=document.getElementById("npcSay");
   const opts=document.getElementById("npcOpts");opts.innerHTML="";
-  say.innerHTML="「用身长抵账——一节豆子一份货。」<br>当前身长：<b>"+snake.len+"</b> 节";
+  say.innerHTML="「用身长抵账——一节豆子一份货。」"+
+    (mk>1?"<br><span style='color:#ff5d5d'>你打伤了他——全部加价 "+Math.round((mk-1)*100)+"%（含医药费）</span>":"")+
+    "<br>当前身长：<b>"+snake.len+"</b> 节";
   npcSlots.forEach((g,i)=>{
+    const cost=Math.ceil(g.cost*mk);
     const b=document.createElement("button");
     b.className="npc-opt";
-    b.innerHTML="<span style='color:#ffd76e'>"+g.name+"</span> —— "+g.cost+" 节<br>"+
+    b.innerHTML="<span style='color:#ffd76e'>"+g.name+"</span> —— "+cost+" 节"+
+      (cost>g.cost?" <span style='color:#ff5d5d'>(原价 "+g.cost+")</span>":"")+"<br>"+
       "<span style='opacity:.65;font-size:11px'>"+g.desc+"</span>";
     b.onclick=()=>{
-      if(snake.len<CFG.minLen+g.cost){
+      if(snake.len<CFG.minLen+cost){
         b.lastElementChild.textContent="身长不够，做不了这买卖！";
         return;
       }
-      snake.len-=g.cost;
+      snake.len-=cost;
       g.apply(RUN,api);
       ftext(snake.fx,snake.fy-.6,g.name+"！","#ffd76e");
       updateHud();
@@ -1717,7 +1741,7 @@ function updateBoss(dt){
   for(const s of bossStakes){
     if(s.dead)continue;
     const sr=prisonMask[K(Math.floor(s.x),Math.floor(s.y))];
-    if(sr>=0&&activePrisons>0){s.cap+=dt;s.hot=true;}
+    if(sr>=0){s.cap+=dt;s.hot=true;}
     else{s.cap=Math.max(0,s.cap-dt*.6);s.hot=false;}
     if(s.cap>=s.need){
       s.dead=true;
@@ -1761,6 +1785,7 @@ const TUNE_KEYS=[
   ["ratSpeed","偷豆鼠速度",1,10,0.5],
   ["beanTarget","地面豆数量",0,30,1],
   ["beanDragInit","豆子初段阻力",0,5,0.1],
+  ["neckGuard","颈部自撞豁免(节)",2,10,1],
 ];
 function buildPanel(){
   const g=document.getElementById("tune");
@@ -1916,7 +1941,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.29 · 暂停菜单/BOSS调优版<br><br>"+
+    "玩法原型 v0.31 · 商人加价/监狱判定修复版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -2376,6 +2401,7 @@ function loop(now){
     updateCamera(dt);
   }
   if(gameState==="play"&&alive&&!paused&&!freeze){
+   try{
     gameTime+=dt;
     invuln=Math.max(0,invuln-dt);
     hurtFlash=Math.max(0,hurtFlash-dt);
@@ -2410,6 +2436,7 @@ function loop(now){
          (g.type==="survive"&&t>=g.time&&(!g.kills||kills>=g.kills)))levelClear();
     }
     if(playMode==="tutorial"&&tutIdx>=0&&tutIdx<TUT2.length&&!panelOpen&&TUT2[tutIdx].done())advanceTut();
+   }catch(err){console.error("update error:",err);}
   }
   render();updateHud();
   if(boss&&(gameState==="play"||gameState==="victory"))drawBossUI();
