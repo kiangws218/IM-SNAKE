@@ -148,6 +148,7 @@
 <script src="upgrades.js"></script>
 <script src="npcs.js"></script>
 <script src="enemies.js"></script>
+<script src="input.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -1799,14 +1800,14 @@ function buildPanel(){
   }
 }
 
-const MOVE_KEYS={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]};
+const MOVE_KEYS={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
 const heldKeys=new Set();
 function comboVec(){
   let x=0,y=0;
-  if(heldKeys.has("w")||heldKeys.has("arrowup"))y--;
-  if(heldKeys.has("s")||heldKeys.has("arrowdown"))y++;
-  if(heldKeys.has("a")||heldKeys.has("arrowleft"))x--;
-  if(heldKeys.has("d")||heldKeys.has("arrowright"))x++;
+  if(heldKeys.has("up"))y--;
+  if(heldKeys.has("down"))y++;
+  if(heldKeys.has("left"))x--;
+  if(heldKeys.has("right"))x++;
   return(x||y)?{x,y}:null;
 }
 function pushCombo(){
@@ -1818,6 +1819,7 @@ function pushCombo(){
 }
 addEventListener("keydown",ev=>{
   const k=ev.key.toLowerCase();
+  const action=InputMap.actionFor(1,ev);
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))ev.preventDefault();
   if(k==="r"){
     if(playMode==="intro"){endIntro();return;}
@@ -1827,16 +1829,16 @@ addEventListener("keydown",ev=>{
     return;
   }
   if(gameState!=="play"&&gameState!=="intro")return;
-  if(MOVE_KEYS[k]){
-    heldKeys.add(k);
+  if(MOVE_KEYS[action]){
+    heldKeys.add(action);
     if(!ev.repeat)pushCombo();
   }
-  else if(k==="j"||k===" "){
+  else if(action==="fire"){
     if(gameState==="intro"){advanceIntro();return;}
     fireKey=true;
   }
-  else if(k==="k"||k==="shift")cutTail();
-  else if(k==="f")placeNode();
+  else if(action==="cut")cutTail();
+  else if(action==="node")placeNode();
   else if(k==="p"||k==="escape"){
     if(!panelOpen)togglePause();
   }
@@ -1853,10 +1855,10 @@ document.getElementById("pauseHome").onclick=()=>{
   showMenu();
 };
 addEventListener("keyup",ev=>{
-  const k=ev.key.toLowerCase();
-  heldKeys.delete(k);
-  if(k==="j"||k===" ")fireKey=false;
-  if(MOVE_KEYS[k])pushCombo();
+  const action=InputMap.actionFor(1,ev);
+  heldKeys.delete(action);
+  if(action==="fire")fireKey=false;
+  if(MOVE_KEYS[action])pushCombo();
 });
 addEventListener("blur",()=>{heldKeys.clear();firing=false;fireKey=false;});
 addEventListener("pointerdown",()=>{
