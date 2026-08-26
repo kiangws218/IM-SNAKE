@@ -19,42 +19,42 @@
  * ============================================================ */
 const ENEMY_TYPES={
   slime:{
-    kind:"chaser", name:"呆呆史莱姆", hp:7, speed:2, r:.55,
+    kind:"chaser", name:"呆呆史莱姆", hp:14, speed:2, r:.55,
     body:"#63c74d", drops:2,
   },
   mini_slime:{
-    kind:"chaser", name:"小史莱姆", hp:2, speed:2.6, r:.3,
+    kind:"chaser", name:"小史莱姆", hp:4, speed:2.6, r:.3,
     body:"#8fe36b", drops:1,
   },
   split_slime:{
-    kind:"chaser", name:"分裂史莱姆", hp:9, speed:.8, r:.7,
+    kind:"chaser", name:"分裂史莱姆", hp:18, speed:.8, r:.7,
     body:"#4aa3a3", drops:1,
     onDeathSpawns:[{type:"mini_slime",count:2}],
   },
   turtle:{
-    kind:"chaser", name:"铁壳蜗龟", hp:18, speed:.6, r:.72,
+    kind:"chaser", name:"铁壳蜗龟", hp:36, speed:.6, r:.72,
     body:"#8a6f3c", drops:4,
   },
   giant_slime:{
-    kind:"chaser", name:"巨岩史莱姆", hp:30, speed:.5, r:1.15,
+    kind:"chaser", name:"巨岩史莱姆", hp:60, speed:.5, r:1.15,
     body:"#3f8f4f", drops:6,
   },
   boar:{
-    kind:"charger", name:"冲锋野猪", hp:12, r:.68,
+    kind:"charger", name:"冲锋野猪", hp:24, r:.68,
     body:"#7a4a2b", drops:3,
     walk:.6, windup:.95, chargeSpeed:7, stun:1.5,
   },
   bomber:{
-    kind:"bomber", name:"自爆蛛蜂", hp:4, speed:3.2, r:.38,
+    kind:"bomber", name:"自爆蛛蜂", hp:8, speed:3.2, r:.38,
     body:"#e8c14d", drops:0,
     fuse:.8, boomR:2.4,
   },
   rat:{
-    kind:"thief", name:"偷豆鼠", hp:6, speed:5, r:.45,
+    kind:"thief", name:"偷豆鼠", hp:12, speed:5, r:.45,
     body:"#9ba0b5", eatTime:1, drops:1,
   },
   flower:{
-    kind:"ranged", name:"针刺花", hp:8, r:.62,
+    kind:"ranged", name:"针刺花", hp:16, r:.62,
     body:"#b55088", cadence:4, telegraph:.7, bulletSpeed:2, drops:2,
   },
 };

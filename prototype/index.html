@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.31</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.32</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -116,7 +116,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.31（商人加价/监狱判定修复）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.32（监狱结算/豆速/弹射）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -154,7 +154,7 @@ const CFG={
   cols:72, rows:48, tile:24,
   snakeSpeed:4, initLen:4, minLen:3,
   iframe:1.0,
-  spitSpeed:13,   beanLife:6,
+  spitSpeed:10,   beanLife:6,
   nodeHp:10, nodeMax:3, speedBoost:2,
   cutKeep:3, cutRecover:0.5, cutCd:10,
   merchantRespawn:30,
@@ -175,7 +175,7 @@ const cam={x:0,y:0};
 
 const RUN_DEFAULTS={
   spitRateMult:1, spitSpeedMult:1, dmgBonus:0, maxHearts:6, nodeHpBonus:0,
-  prisonDps:9, prisonBonus:3, cutCd:10, pickupR:.6, greedy:0,
+  prisonDps:20, prisonBonus:3, cutCd:10, pickupR:.6, greedy:0,
   speedMult:1, contactDmg:0
 };
 let RUN=Object.assign({},RUN_DEFAULTS);
@@ -686,6 +686,7 @@ function updateProjs(dt){
     let sp=Math.hypot(p.vx,p.vy);
     const zn=zoneAt(p.x,p.y);
     let drag=p.bounced?CFG.beanDrag:CFG.beanDragInit;
+    if(p.scatter)drag*=.35;
     if(zn&&zn.kind==="slope"&&zn.dragMult)drag*=zn.dragMult;
     if(zn&&zn.kind==="wind"){p.vx+=(zn.fx||0)*dt*3;p.vy+=(zn.fy||0)*dt*3;}
     if(sp>0){
@@ -730,12 +731,10 @@ function updateProjs(dt){
         const sp0=Math.hypot(p.vx,p.vy)||1;
         e.hitDir={x:p.vx/sp0,y:p.vy/sp0};
         ftext(e.x,e.y-.5,"-"+d,"#ffd76e");
-        const nl=Math.hypot(p.x-e.x,p.y-e.y)||1;
-        const ax=(p.x-e.x)/nl,ay=(p.y-e.y)/nl;
-        const dot=p.vx*ax+p.vy*ay;
-        const[vx,vy]=rotateVec(p.vx-2*dot*ax,p.vy-2*dot*ay,(Math.random()-.5)*.9);
-        p.vx=vx;p.vy=vy;setSpeed(p,.7,.8);
-        p.bounced=true;
+        const ang=Math.random()*Math.PI*2;
+        const scat=(2.5+Math.random()*4.5)*(Math.random()<.35?1.6:1);
+        p.vx=Math.cos(ang)*scat;p.vy=Math.sin(ang)*scat;
+        p.scatter=true;p.bounced=true;
       }
     }
     for(const n of npcs){
@@ -744,12 +743,10 @@ function updateProjs(dt){
         n.hp-=d;n.flash=.15;spitHits++;
         ftext(n.x,n.y-.5,"-"+d,"#ffd76e");
         if(n.kind==="merchant")ftextThrottled(n);
-        const nl=Math.hypot(p.x-n.x,p.y-n.y)||1;
-        const ax=(p.x-n.x)/nl,ay=(p.y-n.y)/nl;
-        const dot=p.vx*ax+p.vy*ay;
-        const[vx,vy]=rotateVec(p.vx-2*dot*ax,p.vy-2*dot*ay,(Math.random()-.5)*.9);
-        p.vx=vx;p.vy=vy;setSpeed(p,.7,.8);
-        p.bounced=true;
+        const ang=Math.random()*Math.PI*2;
+        const scat=(2.5+Math.random()*4.5)*(Math.random()<.35?1.6:1);
+        p.vx=Math.cos(ang)*scat;p.vy=Math.sin(ang)*scat;
+        p.scatter=true;p.bounced=true;
         break;
       }
     }
@@ -766,13 +763,14 @@ function updateProjs(dt){
         boss.hp-=d;boss.flash=.1;
         ftext(p.x,p.y-.5,"-"+Math.max(1,Math.round(d)),"#4fa3ff");
         const nl=bd2||1,ax=(p.x-boss.x)/nl,ay=(p.y-boss.y)/nl;
-        const dot=p.vx*ax+p.vy*ay;
-        const[vx,vy]=rotateVec(p.vx-2*dot*ax,p.vy-2*dot*ay,(Math.random()-.5)*.5);
-        p.vx=vx;p.vy=vy;setSpeed(p,.95,2.5);
+        const ang=Math.random()*Math.PI*2;
+        const scat=(3+Math.random()*5)*(Math.random()<.35?1.6:1);
+        p.vx=Math.cos(ang)*scat;p.vy=Math.sin(ang)*scat;
         p.x=boss.x+ax*(boss.r+.45);p.y=boss.y+ay*(boss.r+.45);
-        p.bounced=true;p.bossCd=.3;
+        p.scatter=true;p.bounced=true;p.bossCd=.3;
       }
     }
+    dead=p.life<=0||Math.hypot(p.vx,p.vy)<CFG.beanStop;
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
       if(spot)groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
@@ -849,13 +847,20 @@ function updateNPCs(dt){
     n.flash-=dt;
     const rid=prisonMask[K(Math.floor(n.x),Math.floor(n.y))];
     if(rid>=0&&activePrisons>0&&alive){
-      let pdps=4;
-      if(n.kind!=="merchant")pdps=prisonRegionNode[rid]?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):1;
+      n.pburst=Math.max(0,(n.pburst||0)-dt);
+      const node=prisonRegionNode[rid];
+      if(!n.wasPrison&&n.pburst<=0){
+        const b=node?10:2;
+        n.hp-=b;n.pburst=1.0;
+        ftext(n.x,n.y-.5,"困"+b+"！",node?"#ffd76e":"#ff8f5e");
+      }
+      n.wasPrison=true;
+      const pdps=node?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):5;
       n.hp-=pdps*dt;n.flash=.12;
       if(Math.random()<dt*2)puff(n.x,n.y,"#c77dff");
       if(n.kind==="merchant")ftextThrottled(n);
       else if(Math.random()<dt*.8)ftextThrottledN(n);
-    }
+    }else n.wasPrison=false;
     if(n.hp<=0){dieNPC(n);continue;}
     if(alive&&!panelOpen&&gameState==="play"){
       const d=Math.hypot(n.x-snake.fx,n.y-snake.fy);
@@ -932,14 +937,21 @@ function updateEnemies(dt){
     e.flash-=dt;e.hitT-=dt;
     const rid=prisonMask[K(Math.floor(e.x),Math.floor(e.y))];
     const inPrison=rid>=0&&activePrisons>0;
-    let dps=0;
+    e.pburst=Math.max(0,(e.pburst||0)-dt);
     if(inPrison){
-      dps=prisonRegionNode[rid]
+      const node=prisonRegionNode[rid];
+      if(!e.wasPrison&&e.pburst<=0){
+        const b=node?10:2;
+        e.hp-=b;e.pburst=1.0;
+        ftext(e.x,e.y-.5,"困"+b+"！",node?"#ffd76e":"#ff8f5e");
+      }
+      e.wasPrison=true;
+      const dps=node
         ?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1)
-        :1;
+        :5;
       e.hp-=dps*dt;
       if(Math.random()<dt*2)puff(e.x,e.y,"#ff8f5e");
-    }
+    }else e.wasPrison=false;
     if(RUN.contactDmg>0&&e.hitT<=0){
       for(let si=2;si<segPos.length;si++){
         const s=segPos[si];
@@ -1735,9 +1747,18 @@ function updateBoss(dt){
   }
   const rid=prisonMask[K(Math.floor(boss.x),Math.floor(boss.y))];
   if(rid>=0&&activePrisons>0&&alive){
-    applyToBoss((prisonRegionNode[rid]?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):1)
+    boss.pburst=Math.max(0,(boss.pburst||0)-dt);
+    const node=prisonRegionNode[rid];
+    if(!boss.wasPrison&&boss.pburst<=0){
+      const b=node?10:2;
+      applyToBoss(b*(boss.shield>0?.25:1));
+      boss.pburst=1.0;
+      ftext(boss.x,boss.y-boss.r-.5,"困"+b+"！",node?"#ffd76e":"#ff8f5e");
+    }
+    boss.wasPrison=true;
+    applyToBoss((node?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):5)
       *(boss.shield>0?.25:1)*dt);
-  }
+  }else boss.wasPrison=false;
   for(const s of bossStakes){
     if(s.dead)continue;
     const sr=prisonMask[K(Math.floor(s.x),Math.floor(s.y))];
@@ -1941,7 +1962,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.31 · 商人加价/监狱判定修复版<br><br>"+
+    "玩法原型 v0.32 · 监狱结算/豆速/弹射版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
