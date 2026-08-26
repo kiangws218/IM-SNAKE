@@ -104,7 +104,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.27（BOSS战）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.28（BOSS调优）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -1254,8 +1254,9 @@ function updateProjs(dt){
       if(npcs[j].hp<=0){if(panelNpc===npcs[j])closePanel();dieNPC(npcs[j]);}
     }
     if(boss){
+      if((p.bossCd||0)>0)p.bossCd-=dt;
       const bd2=Math.hypot(p.x-boss.x,p.y-boss.y);
-      if(bd2<boss.r+.25){
+      if(bd2<boss.r+.25&&(p.bossCd||0)<=0){
         let d=beanDamage()*(boss.shield>0?.25:1);
         spitHits++;
         if(boss.shield>0){const s2=Math.min(boss.shield,d);boss.shield-=s2;d-=s2;}
@@ -1263,8 +1264,10 @@ function updateProjs(dt){
         ftext(p.x,p.y-.5,"-"+Math.max(1,Math.round(d)),"#4fa3ff");
         const nl=bd2||1,ax=(p.x-boss.x)/nl,ay=(p.y-boss.y)/nl;
         const dot=p.vx*ax+p.vy*ay;
-        const[vx,vy]=rotateVec(p.vx-2*dot*ax,p.vy-2*dot*ay,(Math.random()-.5)*.9);
-        p.vx=vx;p.vy=vy;setSpeed(p,.7,.8);p.bounced=true;
+        const[vx,vy]=rotateVec(p.vx-2*dot*ax,p.vy-2*dot*ay,(Math.random()-.5)*.5);
+        p.vx=vx;p.vy=vy;setSpeed(p,.95,2.5);
+        p.x=boss.x+ax*(boss.r+.45);p.y=boss.y+ay*(boss.r+.45);
+        p.bounced=true;p.bossCd=.3;
       }
     }
     if(dead){
@@ -2067,7 +2070,8 @@ function startBossFight(){
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
   tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
   boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
-    phase2:false,patT:2.2,patIdx:0,sumT:6,stun:0,spin:0,flash:0,vx:0,vy:0};
+    phase2:false,patT:2.2,patIdx:0,sumT:9,stun:0,spin:0,flash:0,vx:0,vy:0,
+    wt:0,tx:48,ty:24,waveT:3,burst:0,burstT:0,waveKind:1};
   bossStakes=[];
   computeEnclosure();
   gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
@@ -2102,8 +2106,8 @@ function applyToBoss(d){
 function enterPhase2(){
   boss.phase2=true;boss.shield=100;bossStakes=[];
   for(const[ox,oy]of[[1,1],[-1,1],[1,-1],[-1,-1]]){
-    const tx=Math.round(boss.x+ox*6),ty=Math.round(boss.y+oy*6);
-    const p=findFreeNear(tx,ty,2)||{x:Math.max(2,Math.min(CFG.cols-3,tx)),y:Math.max(2,Math.min(CFG.rows-3,ty))};
+    const tx=Math.round(boss.x+ox*10),ty=Math.round(boss.y+oy*10);
+    const p=findFreeNear(tx,ty,3)||{x:Math.max(2,Math.min(CFG.cols-3,tx)),y:Math.max(2,Math.min(CFG.rows-3,ty))};
     bossStakes.push({x:p.x+.5,y:p.y+.5,cap:0,need:3,dead:false,hot:false});
   }
   seeds.length=0;shake=.4;
@@ -2115,28 +2119,45 @@ function updateBoss(dt){
   if(boss.stun>0){
     boss.stun-=dt;boss.vx=0;boss.vy=0;
   }else{
-    steerTo(boss,snake.fx,snake.fy,boss.phase2?.5:.42);
+    boss.wt-=dt;
+    if(boss.wt<=0||Math.hypot(boss.tx-boss.x,boss.ty-boss.y)<1.5){
+      boss.wt=3+rnd(3);
+      boss.tx=boss.r+2+rnd(Math.max(1,CFG.cols-boss.r*2-4));
+      boss.ty=boss.r+2+rnd(Math.max(1,CFG.rows-boss.r*2-4));
+    }
+    const dx=boss.tx-boss.x,dy=boss.ty-boss.y,l=Math.hypot(dx,dy)||1;
+    boss.vx=dx/l*(boss.phase2?.55:.42);
+    boss.vy=dy/l*(boss.phase2?.55:.42);
     moveActor(boss,dt);
   }
   if(alive&&invuln<=0&&Math.hypot(boss.x-snake.fx,boss.y-snake.fy)<boss.r+.38)
     hurtPlayer("被巨茧碾压");
   if(alive&&boss.stun<=0){
-    boss.patT-=dt;
-    if(boss.patT<=0){
-      boss.patT=boss.phase2?2.3:3.1;
-      boss.patIdx++;
-      if(boss.patIdx%2===1){
-        const n=boss.phase2?16:12,off=boss.spin;boss.spin+=.4;
-        for(let k=0;k<n;k++){
-          const a=off+k/n*Math.PI*2;
-          seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*2.1,vy:Math.sin(a)*2.1,life:CFG.seedLife+2});
+    boss.waveT=(boss.waveT==null?2:boss.waveT)-dt;
+    if(boss.waveT<=0&&boss.burst===0){
+      boss.burst=3;boss.burstT=0;
+      boss.waveKind=(boss.waveKind+1)%2;
+    }
+    if(boss.burst>0){
+      boss.burstT-=dt;
+      if(boss.burstT<=0){
+        boss.burst--;boss.burstT=.38;
+        const spd=boss.phase2?2.4:2.1;
+        if(boss.waveKind===0){
+          const n=boss.phase2?16:12,off=boss.spin;boss.spin+=.37;
+          for(let k=0;k<n;k++){
+            const a=off+k/n*Math.PI*2;
+            seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:CFG.seedLife+2});
+          }
+        }else{
+          const base=Math.atan2(snake.fy-boss.y,snake.fx-boss.x);
+          const n=boss.phase2?6:5;
+          for(let k=0;k<n;k++){
+            const a=base+(k-(n-1)/2)*.16;
+            seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*(spd+.5),vy:Math.sin(a)*(spd+.5),life:CFG.seedLife+2});
+          }
         }
-      }else{
-        const base=Math.atan2(snake.fy-boss.y,snake.fx-boss.x);
-        for(let k=-2;k<=2;k++){
-          const a=base+k*.16;
-          seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*2.7,vy:Math.sin(a)*2.7,life:CFG.seedLife+2});
-        }
+        if(boss.burst===0)boss.waveT=boss.phase2?4.5:6;
       }
     }
     if(!boss.phase2){
@@ -2345,7 +2366,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.27 · BOSS战版<br><br>"+
+    "玩法原型 v0.28 · BOSS调优版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
