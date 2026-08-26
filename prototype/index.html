@@ -104,7 +104,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.25（商人交易制）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.27（BOSS战）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -129,7 +129,7 @@
   <summary>▶ 数值调参面板（改完立即生效，用于玩法验证）</summary>
   <div class="grid" id="tune"></div>
 </details>
-<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button></div><div id="pickList"></div></div>
+<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button></div><div id="pickList"></div></div>
 
 <script src="levels.js"></script>
 <script src="upgrades.js"></script>
@@ -237,6 +237,7 @@ let hearts, invuln, cutCd, alive, paused, shake, biteAcc;
 let kills, beansEaten, prisonFormed, gameTime, spawnT, beanT;
 let distMoved, spitHits, projRecycled, cutUsed, nodesPlaced, prisonKills, flowersKilled;
 let plainPrisonKills, nodePrisonKills;
+let boss=null,bossStakes=[],victoryRetry="menu";
 let obstacles, reachMask, prisonMask, prisonRegions, activePrisons, prevPrisons;
 let prisonRegionNode=[], activeNodePrisons=0;
 
@@ -736,6 +737,20 @@ function updateProjs(dt){
     for(let j=npcs.length-1;j>=0;j--){
       if(npcs[j].hp<=0){if(panelNpc===npcs[j])closePanel();dieNPC(npcs[j]);}
     }
+    if(boss){
+      const bd2=Math.hypot(p.x-boss.x,p.y-boss.y);
+      if(bd2<boss.r+.25){
+        let d=beanDamage()*(boss.shield>0?.25:1);
+        spitHits++;
+        if(boss.shield>0){const s2=Math.min(boss.shield,d);boss.shield-=s2;d-=s2;}
+        boss.hp-=d;boss.flash=.1;
+        ftext(p.x,p.y-.5,"-"+Math.max(1,Math.round(d)),"#4fa3ff");
+        const nl=bd2||1,ax=(p.x-boss.x)/nl,ay=(p.y-boss.y)/nl;
+        const dot=p.vx*ax+p.vy*ay;
+        const[vx,vy]=rotateVec(p.vx-2*dot*ax,p.vy-2*dot*ay,(Math.random()-.5)*.9);
+        p.vx=vx;p.vy=vy;setSpeed(p,.7,.8);p.bounced=true;
+      }
+    }
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
       if(spot)groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
@@ -1179,6 +1194,30 @@ function updateIntro(dt){
     }else intro.arrived=true;
   }
 }
+function drawBossUI(){
+  const W=cv.width;
+  const bw=Math.min(W*.52,430),bx=(W-bw)/2,by=10;
+  ctx.textAlign="center";
+  ctx.font="bold 12px Consolas";
+  ctx.fillStyle="#ffd76e";
+  ctx.fillText("巨岩茧母 · 磐",W/2,by+2);
+  ctx.fillStyle="#20212f";ctx.fillRect(bx,by+8,bw,12);
+  ctx.fillStyle="#ff5d5d";ctx.fillRect(bx,by+8,bw*Math.max(0,boss.hp/boss.maxHp),12);
+  ctx.strokeStyle="#3a3b5c";ctx.lineWidth=1;ctx.strokeRect(bx+.5,by+8.5,bw-1,11);
+  if(boss.phase2||boss.shield>0){
+    ctx.fillStyle="#20212f";ctx.fillRect(bx,by+23,bw,8);
+    ctx.fillStyle="#4fa3ff";ctx.fillRect(bx,by+23,bw*Math.max(0,boss.shield/100),8);
+    ctx.strokeStyle="#3a3b5c";ctx.strokeRect(bx+.5,by+23.5,bw-1,7);
+    for(let i=0;i<4;i++){
+      const dx=bx-16-i*16,dy=by+27;
+      const dead=bossStakes[i]&&bossStakes[i].dead;
+      ctx.fillStyle=dead?"rgba(120,120,140,.5)":"#4fa3ff";
+      ctx.beginPath();
+      ctx.moveTo(dx,dy-6);ctx.lineTo(dx+5,dy);ctx.lineTo(dx,dy+6);ctx.lineTo(dx-5,dy);
+      ctx.closePath();ctx.fill();
+    }
+  }
+}
 function drawIntroOverlay(){
   const sc=introScene();
   const T=CFG.tile,W=cv.width,H=cv.height;
@@ -1246,7 +1285,7 @@ function levelClear(){
   document.getElementById("overlay").classList.add("show");
 }
 function victory(){
-  gameState="victory";
+  gameState="victory";victoryRetry="menu";
   document.getElementById("ovTitle").textContent="通 关 ！";
   document.getElementById("ovText").innerHTML=
     "你征服了全部 "+LEVELS.length+" 个关卡<br>击杀 "+kills+" ｜ 用时 "+gameTime.toFixed(0)+"s ｜ 监狱达成 "+prisonFormed+" 次";
@@ -1505,6 +1544,138 @@ function resumeFromUI(){
   paused=false;panelOpen=false;freeze=false;moveLock=true;
 }
 
+function startBossFight(){
+  playMode="boss";
+  resetRun();
+  reset(false);
+  enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
+  tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
+  boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
+    phase2:false,patT:2.2,patIdx:0,sumT:6,stun:0,spin:0,flash:0,vx:0,vy:0};
+  bossStakes=[];
+  computeEnclosure();
+  gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
+  heldKeys.clear();dirQueue.length=0;moveLock=false;
+  document.getElementById("overlay").classList.remove("show");
+  document.getElementById("tut").classList.remove("show");
+  document.getElementById("ovBtns").style.display="";
+  document.getElementById("pickList").innerHTML="";
+  banner("BOSS战：巨岩茧母 · 磐");
+}
+function showBossSelect(){
+  gameState="menu";
+  document.getElementById("ovTitle").textContent="⚔ Boss 挑战";
+  document.getElementById("ovText").innerHTML="选择对手（当前开放 1 名）";
+  document.getElementById("ovBtns").style.display="none";
+  const box=document.getElementById("pickList");box.innerHTML="";
+  const b=document.createElement("button");
+  b.className="pick-btn";
+  b.innerHTML="<b>巨岩茧母 · 磐</b><span>半径 3 格的巨型茧母。一阶段弹幕+召唤小怪；半血进入护盾态并落下四座蓝晶桩——用监狱围住桩子充能破坏，每桩 -25% 护盾。豆子打盾效率仅 25%。</span>";
+  b.onclick=()=>{box.innerHTML="";document.getElementById("ovBtns").style.display="";startBossFight();};
+  box.appendChild(b);
+  const back=document.createElement("button");
+  back.className="pick-btn";back.innerHTML="<b>← 返回</b>";
+  back.onclick=()=>{box.innerHTML="";document.getElementById("ovBtns").style.display="";showMenu();};
+  box.appendChild(back);
+  document.getElementById("overlay").classList.add("show");
+}
+function applyToBoss(d){
+  if(boss.shield>0){const s2=Math.min(boss.shield,d);boss.shield-=s2;d-=s2;}
+  boss.hp-=d;boss.flash=.1;
+}
+function enterPhase2(){
+  boss.phase2=true;boss.shield=100;bossStakes=[];
+  for(const[ox,oy]of[[1,1],[-1,1],[1,-1],[-1,-1]]){
+    const tx=Math.round(boss.x+ox*6),ty=Math.round(boss.y+oy*6);
+    const p=findFreeNear(tx,ty,2)||{x:Math.max(2,Math.min(CFG.cols-3,tx)),y:Math.max(2,Math.min(CFG.rows-3,ty))};
+    bossStakes.push({x:p.x+.5,y:p.y+.5,cap:0,need:3,dead:false,hot:false});
+  }
+  seeds.length=0;shake=.4;
+  ftext(boss.x,boss.y-boss.r-.8,"茧母张开护盾！围住四座蓝晶桩破坏它！","#4fa3ff");
+}
+function updateBoss(dt){
+  if(!boss)return;
+  boss.flash-=dt;
+  if(boss.stun>0){
+    boss.stun-=dt;boss.vx=0;boss.vy=0;
+  }else{
+    steerTo(boss,snake.fx,snake.fy,boss.phase2?.5:.42);
+    moveActor(boss,dt);
+  }
+  if(alive&&invuln<=0&&Math.hypot(boss.x-snake.fx,boss.y-snake.fy)<boss.r+.38)
+    hurtPlayer("被巨茧碾压");
+  if(alive&&boss.stun<=0){
+    boss.patT-=dt;
+    if(boss.patT<=0){
+      boss.patT=boss.phase2?2.3:3.1;
+      boss.patIdx++;
+      if(boss.patIdx%2===1){
+        const n=boss.phase2?16:12,off=boss.spin;boss.spin+=.4;
+        for(let k=0;k<n;k++){
+          const a=off+k/n*Math.PI*2;
+          seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*2.1,vy:Math.sin(a)*2.1,life:CFG.seedLife+2});
+        }
+      }else{
+        const base=Math.atan2(snake.fy-boss.y,snake.fx-boss.x);
+        for(let k=-2;k<=2;k++){
+          const a=base+k*.16;
+          seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*2.7,vy:Math.sin(a)*2.7,life:CFG.seedLife+2});
+        }
+      }
+    }
+    if(!boss.phase2){
+      boss.sumT-=dt;
+      if(boss.sumT<=0&&enemies.length<5){
+        spawnEnemy("slime",Math.floor(boss.x),Math.floor(boss.y));
+        spawnEnemy("slime",Math.floor(boss.x),Math.floor(boss.y));
+        boss.sumT=9;
+        ftext(boss.x,boss.y-boss.r-1,"茧母召来了小怪！","#ff8f5e");
+      }
+    }
+  }
+  const rid=prisonMask[K(Math.floor(boss.x),Math.floor(boss.y))];
+  if(rid>=0&&activePrisons>0&&alive){
+    applyToBoss((prisonRegionNode[rid]?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):1)
+      *(boss.shield>0?.25:1)*dt);
+  }
+  for(const s of bossStakes){
+    if(s.dead)continue;
+    const sr=prisonMask[K(Math.floor(s.x),Math.floor(s.y))];
+    if(sr>=0&&activePrisons>0){s.cap+=dt;s.hot=true;}
+    else{s.cap=Math.max(0,s.cap-dt*.6);s.hot=false;}
+    if(s.cap>=s.need){
+      s.dead=true;
+      boss.shield=Math.max(0,boss.shield-25);
+      ftext(s.x,s.y-.8,"蓝晶桩破坏！护盾 -25%","#4fa3ff");
+      puff(s.x,s.y,"#4fa3ff");
+      if(bossStakes.every(x=>x.dead)){
+        boss.shield=0;boss.stun=2.2;shake=Math.max(shake,.5);
+        ftext(boss.x,boss.y-boss.r-.8,"护盾击破！！","#4fa3ff");
+      }
+    }
+  }
+  if(!boss.phase2&&boss.hp<=boss.maxHp*.5)enterPhase2();
+  if(boss.hp<=0)bossDefeated();
+}
+function bossDefeated(){
+  for(let k=0;k<40;k++){
+    const a=Math.random()*Math.PI*2,sp2=2+Math.random()*8;
+    particles.push({x:boss.x,y:boss.y,vx:Math.cos(a)*sp2,vy:Math.sin(a)*sp2,t:.8,col:k%2?"#ffd76e":"#3f8f4f"});
+  }
+  shake=.8;
+  gameState="victory";victoryRetry="boss";
+  document.getElementById("ovTitle").textContent="BOSS 击破！";
+  document.getElementById("ovText").innerHTML=
+    "巨岩茧母 · 磐 已被吞噬<br>用时 "+gameTime.toFixed(0)+"s ｜ 剩余身长 "+snake.len+" 节 ｜ 剩余 ❤ "+hearts;
+  document.getElementById("ovBtn").textContent="再战一次";
+  document.getElementById("ovBtn2").textContent="回到首页";
+  document.getElementById("ovBtn2").style.display="";
+  document.getElementById("ovBtn3").style.display="none";
+  document.getElementById("ovBtn4").style.display="none";
+  document.getElementById("ovBtn5").style.display="none";
+  document.getElementById("overlay").classList.add("show");
+}
+
 const TUNE_KEYS=[
   ["snakeSpeed","蛇速(格/s)",0.5,12,0.5],
   ["prisonDps","监狱伤害/s",1,20,1],
@@ -1581,16 +1752,28 @@ addEventListener("pointerdown",()=>{
 });
 document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
-  if(gameState==="victory"){showMenu();return;}
+  if(gameState==="victory"){
+    if(victoryRetry==="boss")startBossFight();
+    else showMenu();
+    return;
+  }
   if(gameState==="dead"){
     if(playMode==="campaign")startLevel();
+    else if(playMode==="boss")startBossFight();
     else if(playMode==="tutorial")startTutorial();
     else startGame();
     return;
   }
   startCampaign();
 };
-document.getElementById("ovBtn2").onclick=()=>startTutorial();
+document.getElementById("ovBtn2").onclick=()=>{
+  if(gameState==="victory"){showMenu();return;}
+  startTutorial();
+};
+document.getElementById("ovBtn5").onclick=()=>{
+  if(gameState==="play"||gameState==="between")return;
+  showBossSelect();
+};
 document.getElementById("ovBtn3").onclick=()=>startGame();
 document.getElementById("ovBtn4").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
@@ -1636,16 +1819,17 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试教学":playMode==="campaign"?"重试本关":"再来一局";
+    playMode==="tutorial"?"重试教学":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
   document.getElementById("ovBtn2").style.display="none";
   document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
+  document.getElementById("ovBtn5").style.display="none";
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.25 · 商人交易制版<br><br>"+
+    "玩法原型 v0.27 · BOSS战版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -1656,6 +1840,8 @@ function showMenu(){
   document.getElementById("ovBtn3").style.display="";
   document.getElementById("ovBtn4").textContent="选关挑战";
   document.getElementById("ovBtn4").style.display="none";
+  document.getElementById("ovBtn5").textContent="⚔ Boss挑战";
+  document.getElementById("ovBtn5").style.display="";
   document.getElementById("pickList").innerHTML="";
   document.getElementById("tut").classList.remove("show");
   document.getElementById("overlay").classList.add("show");
@@ -1796,6 +1982,69 @@ function render(){
     ctx.beginPath();ctx.arc(px,py,T*.28,0,7);ctx.fill();
     ctx.fillStyle="#ff9e9e";
     ctx.beginPath();ctx.arc(px-T*.07,py-T*.08,T*.08,0,7);ctx.fill();
+  }
+
+  for(const s of bossStakes){
+    if(s.dead)continue;
+    const sx=s.x*T,sy=s.y*T;
+    const cr=Math.min(1,s.cap/s.need);
+    if(s.hot){
+      ctx.fillStyle="rgba(79,163,255,.18)";
+      ctx.beginPath();ctx.arc(sx,sy,T*.95,0,7);ctx.fill();
+    }
+    ctx.fillStyle=s.hot?"#4fa3ff":"#2b4d7a";
+    ctx.beginPath();
+    ctx.moveTo(sx,sy-T*.75);ctx.lineTo(sx+T*.42,sy+T*.3);ctx.lineTo(sx,sy+T*.58);ctx.lineTo(sx-T*.42,sy+T*.3);
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle="#9cc8ff";ctx.lineWidth=2;ctx.stroke();
+    ctx.strokeStyle="#20212f";ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(sx,sy,T*.95,-Math.PI/2,-Math.PI/2+Math.PI*2*cr);ctx.stroke();
+  }
+  if(boss){
+    const bx=boss.x*T,by=boss.y*T+Math.sin(gameTime*1.6)*5;
+    const R=boss.r*T;
+    if(boss.shield>0){
+      ctx.fillStyle="rgba(79,163,255,.08)";
+      ctx.beginPath();ctx.arc(bx,by,R*1.16,0,7);ctx.fill();
+      ctx.strokeStyle="rgba(79,163,255,"+(0.45+0.2*Math.sin(gameTime*4))+")";
+      ctx.lineWidth=5;
+      ctx.beginPath();ctx.arc(bx,by,R*1.16,0,7);ctx.stroke();
+    }
+    const wob=Math.sin(gameTime*2)*R*.035;
+    ctx.fillStyle=boss.flash>0?"#ff9e9e":"#2f6b39";
+    ctx.beginPath();ctx.ellipse(bx,by,R+wob,R*.92-wob,0,0,7);ctx.fill();
+    ctx.fillStyle="#3f8f4f";
+    ctx.beginPath();ctx.ellipse(bx-R*.12,by-R*.08,R*.74,R*.62,0,0,7);ctx.fill();
+    ctx.fillStyle="rgba(0,0,0,.18)";
+    for(const[ox2,oy2,rr]of[[-.4,-.3,.22],[.3,-.45,.18],[.42,.3,.2],[-.15,.42,.16]]){
+      ctx.beginPath();ctx.arc(bx+ox2*R,by+oy2*R,rr*R,0,7);ctx.fill();
+    }
+    if(boss.phase2){
+      ctx.fillStyle="#2b4d7a";
+      for(let k=0;k<7;k++){
+        const a=Math.PI+ (k/6)*Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(bx+Math.cos(a)*R*.92,by+Math.sin(a)*R*.92);
+        ctx.lineTo(bx+Math.cos(a)*R*1.1,by+Math.sin(a)*R*1.1-8);
+        ctx.lineTo(bx+Math.cos(a+0.35)*R*.92,by+Math.sin(a+0.35)*R*.92);
+        ctx.closePath();ctx.fill();
+      }
+    }
+    const pdx=snake.fx-boss.x,pdy=snake.fy-boss.y,pl=Math.hypot(pdx,pdy)||1;
+    for(const s2 of[-1,1]){
+      const ex=bx+s2*R*.34,ey=by-R*.3;
+      ctx.fillStyle="#ffe762";
+      ctx.beginPath();ctx.ellipse(ex,ey,R*.14,R*.18,s2*.3,0,7);ctx.fill();
+      ctx.fillStyle="#1a1023";
+      ctx.beginPath();ctx.arc(ex+pdx/pl*R*.05,ey+pdy/pl*R*.05,R*.08,0,7);ctx.fill();
+    }
+    if(boss.stun>0){
+      ctx.fillStyle="#ffd76e";
+      for(let k=0;k<3;k++){
+        const a=gameTime*5+k*2.1;
+        ctx.beginPath();ctx.arc(bx+Math.cos(a)*R*.5,by-R*.9+Math.sin(a)*6,4,0,7);ctx.fill();
+      }
+    }
   }
 
   for(const e of enemies){
@@ -2061,9 +2310,10 @@ function loop(now){
     updateFlyingBeans(dt);
     updateMechs(dt);
     updateNPCs(dt);
+    updateBoss(dt);
     if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
-    if(playMode!=="tutorial")updateSpawner(dt);
+    if(playMode==="sandbox"||playMode==="campaign")updateSpawner(dt);
     computeEnclosure();
     updateCamera(dt);
     if(playMode==="campaign"&&curGoal&&alive){
@@ -2075,6 +2325,7 @@ function loop(now){
     if(playMode==="tutorial"&&tutIdx>=0&&tutIdx<TUT2.length&&!panelOpen&&TUT2[tutIdx].done())advanceTut();
   }
   render();updateHud();
+  if(boss&&(gameState==="play"||gameState==="victory"))drawBossUI();
   if(gameState==="intro"&&intro)drawIntroOverlay();
   requestAnimationFrame(loop);
 }
