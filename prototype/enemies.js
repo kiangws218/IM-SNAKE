@@ -23,30 +23,34 @@ const ENEMY_TYPES={
     body:"#63c74d", drops:2,
   },
   mini_slime:{
-    kind:"chaser", name:"小史莱姆", hp:2, speed:2.6, r:.32,
+    kind:"chaser", name:"小史莱姆", hp:2, speed:2.6, r:.3,
     body:"#8fe36b", drops:1,
   },
   split_slime:{
-    kind:"chaser", name:"分裂史莱姆", hp:9, speed:.8, r:.6,
+    kind:"chaser", name:"分裂史莱姆", hp:9, speed:.8, r:.7,
     body:"#4aa3a3", drops:1,
     onDeathSpawns:[{type:"mini_slime",count:2}],
   },
   turtle:{
-    kind:"chaser", name:"铁壳蜗龟", hp:18, speed:.6, r:.62,
+    kind:"chaser", name:"铁壳蜗龟", hp:18, speed:.6, r:.72,
     body:"#8a6f3c", drops:4,
   },
+  giant_slime:{
+    kind:"chaser", name:"巨岩史莱姆", hp:30, speed:.5, r:1.15,
+    body:"#3f8f4f", drops:6,
+  },
   boar:{
-    kind:"charger", name:"冲锋野猪", hp:12, r:.55,
+    kind:"charger", name:"冲锋野猪", hp:12, r:.68,
     body:"#7a4a2b", drops:3,
     walk:.6, windup:.95, chargeSpeed:7, stun:1.5,
   },
   bomber:{
-    kind:"bomber", name:"自爆蛛蜂", hp:4, speed:3.2, r:.4,
+    kind:"bomber", name:"自爆蛛蜂", hp:4, speed:3.2, r:.38,
     body:"#e8c14d", drops:0,
     fuse:.8, boomR:2.4,
   },
   rat:{
-    kind:"thief", name:"偷豆鼠", hp:6, speed:5, r:.5,
+    kind:"thief", name:"偷豆鼠", hp:6, speed:5, r:.45,
     body:"#9ba0b5", eatTime:1, drops:1,
   },
   flower:{
@@ -58,5 +62,5 @@ const ENEMY_TYPES={
 /* 沙盒模式各类型的同屏上限（选关/战役模式以关卡 caps 为准） */
 const SANDBOX_CAPS={
   slime:3, mini_slime:0, split_slime:2, turtle:2,
-  boar:2, bomber:2, rat:2, flower:2,
+  giant_slime:1, boar:2, bomber:2, rat:2, flower:2,
 };

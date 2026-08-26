@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（IM SNAKE）· 玩法原型 v0.25</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.25</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -104,7 +104,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>IM SNAKE · 玩法原型 v0.25（商人交易制）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.25（商人交易制）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -608,30 +608,34 @@ const ENEMY_TYPES={
     body:"#63c74d", drops:2,
   },
   mini_slime:{
-    kind:"chaser", name:"小史莱姆", hp:2, speed:2.6, r:.32,
+    kind:"chaser", name:"小史莱姆", hp:2, speed:2.6, r:.3,
     body:"#8fe36b", drops:1,
   },
   split_slime:{
-    kind:"chaser", name:"分裂史莱姆", hp:9, speed:.8, r:.6,
+    kind:"chaser", name:"分裂史莱姆", hp:9, speed:.8, r:.7,
     body:"#4aa3a3", drops:1,
     onDeathSpawns:[{type:"mini_slime",count:2}],
   },
   turtle:{
-    kind:"chaser", name:"铁壳蜗龟", hp:18, speed:.6, r:.62,
+    kind:"chaser", name:"铁壳蜗龟", hp:18, speed:.6, r:.72,
     body:"#8a6f3c", drops:4,
   },
+  giant_slime:{
+    kind:"chaser", name:"巨岩史莱姆", hp:30, speed:.5, r:1.15,
+    body:"#3f8f4f", drops:6,
+  },
   boar:{
-    kind:"charger", name:"冲锋野猪", hp:12, r:.55,
+    kind:"charger", name:"冲锋野猪", hp:12, r:.68,
     body:"#7a4a2b", drops:3,
     walk:.6, windup:.95, chargeSpeed:7, stun:1.5,
   },
   bomber:{
-    kind:"bomber", name:"自爆蛛蜂", hp:4, speed:3.2, r:.4,
+    kind:"bomber", name:"自爆蛛蜂", hp:4, speed:3.2, r:.38,
     body:"#e8c14d", drops:0,
     fuse:.8, boomR:2.4,
   },
   rat:{
-    kind:"thief", name:"偷豆鼠", hp:6, speed:5, r:.5,
+    kind:"thief", name:"偷豆鼠", hp:6, speed:5, r:.45,
     body:"#9ba0b5", eatTime:1, drops:1,
   },
   flower:{
@@ -643,7 +647,7 @@ const ENEMY_TYPES={
 /* 沙盒模式各类型的同屏上限（选关/战役模式以关卡 caps 为准） */
 const SANDBOX_CAPS={
   slime:3, mini_slime:0, split_slime:2, turtle:2,
-  boar:2, bomber:2, rat:2, flower:2,
+  giant_slime:1, boar:2, bomber:2, rat:2, flower:2,
 };
 
 </script>
@@ -742,12 +746,13 @@ let segPos=[], occSet=new Set();
 let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats;
 let flyingBeans=[];
 let danger=null, hurtFlash=0;
-let gameState="menu", playMode="sandbox", tutStep=-1;
+let gameState="menu", playMode="sandbox", tutIdx=-1;
 let levelIdx=0, curGoal=null, curCaps, curBeanTarget, levelStartT=0;
 let carry={len:4,charges:1};
 let hearts, invuln, cutCd, alive, paused, shake, biteAcc;
 let kills, beansEaten, prisonFormed, gameTime, spawnT, beanT;
 let distMoved, spitHits, projRecycled, cutUsed, nodesPlaced, prisonKills, flowersKilled;
+let plainPrisonKills, nodePrisonKills;
 let obstacles, reachMask, prisonMask, prisonRegions, activePrisons, prevPrisons;
 let prisonRegionNode=[], activeNodePrisons=0;
 
@@ -868,6 +873,7 @@ function reset(forTutorial){
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
+  plainPrisonKills=0;nodePrisonKills=0;
   computeSegs();
   cam.x=Math.max(0,Math.min(CFG.cols-VIEW_W,snake.fx-VIEW_W/2));
   cam.y=Math.max(0,Math.min(CFG.rows-VIEW_H,snake.fy-VIEW_H/2));
@@ -1522,7 +1528,11 @@ function updateEnemies(dt){
     }
     if(e.hp<=0){
       kills++;
-      if(activePrisons>0&&prisonMask[K(Math.floor(e.x),Math.floor(e.y))]>=0)prisonKills++;
+      const rk=prisonMask[K(Math.floor(e.x),Math.floor(e.y))];
+      if(activePrisons>0&&rk>=0){
+        prisonKills++;
+        if(prisonRegionNode[rk])nodePrisonKills++;else plainPrisonKills++;
+      }
       if(e.type==="flower")flowersKilled++;
       const drop=T.drops+(e.type==="rat"?e.carried:0);
       if(drop>0)burstBeans(Math.floor(e.x),Math.floor(e.y),drop,e.hitDir?e.hitDir.x:undefined,e.hitDir?e.hitDir.y:undefined,.5);
@@ -1726,7 +1736,7 @@ function startLevel(){
   charges=Math.min(CFG.nodeMax,carry.charges);
   coilPath();
   computeSegs();
-  tutStep=-1;gameState="play";paused=false;firing=false;
+  tutIdx=-1;gameState="play";paused=false;firing=false;
   heldKeys.clear();
   document.getElementById("overlay").classList.remove("show");
   document.getElementById("tut").classList.remove("show");
@@ -1780,61 +1790,87 @@ function showPick(onPick){
   });
 }
 
-let tutStepGuard;
-const TUT_STEPS=[
-  {text:()=>"用 WASD / 方向键移动：转向即时生效，点按转向，长按冲刺。你无法停下——小心别撞墙！（移动 "+Math.min(Math.floor(distMoved),14)+"/14 格）",
+const TUT2=[
+  {goalText:"移动 14 格",
+   say:"这具身体自己会往前走——点按方向键转向，长按还能冲刺。先随便走走，找找感觉。（移动 14 格）",
    done:()=>distMoved>=14},
-  {text:()=>"走向地上的红色豆子吃掉它：身长 +1 节。吃满 3 颗。（"+beansEaten+"/3）",
+  {goalText:"吃豆 3 颗",
+   say:"地上红色的豆子是本命食粮，吃一颗长一节。去吃 3 颗。（"+beansEaten+"/3）",
    done:()=>beansEaten>=3},
-  {text:()=>"长按 J / 空格 进入火力站桩：定身连射高速豆子（每秒约 "+CFG.snakeSpeed+" 发）。命中史莱姆 1 次即可（命中 "+spitHits+"/1）。松开恢复移动。",
-   init(){spawnEnemy("slime",Math.floor(snake.fx),Math.floor(snake.fy));},
+  {goalText:"命中史莱姆 1 次",
+   setup(){spawnEnemy("slime",Math.floor(snake.fx),Math.floor(snake.fy));},
+   say:"停下脚步，长按 J ——把身体当子弹吐出去！命中那只史莱姆一次就行。（命中 "+spitHits+"/1）",
    done:()=>spitHits>=1},
-  {text:()=>"弹出的豆子碰撞减速后会落地——跑过去吃回它，弹药回收！（回收 "+projRecycled+"/1）",
-   done:()=>projRecycled>=1},
-  {text:()=>"先吃豆到 8 节（当前 "+snake.len+"/8），然后点按 K / Shift 断尾：第 2 节之后的身体化作一半数量的豆子弹开。",
-   done:()=>cutUsed>=1},
-  {text:()=>"按 F 在蛇头当前位置放置固定环形节点；蛇身完全通过节点格后自动回收充能。（已放置 "+nodesPlaced+"/1）",
+  {goalText:"无节点监狱处决 1 只",
+   say:"东边石凹里蹲着一只针刺花。不用节点也能造监狱：用身体把缺口堵上，让它活活憋死！（窒息处决 1 只）",
+   done:()=>plainPrisonKills>=1},
+  {goalText:"放置环形节点",
+   say:"按 F 在头顶放下环形节点——它是你能穿过自己身体的门。试试看。（放置 "+nodesPlaced+"/1）",
    done:()=>nodesPlaced>=1},
-  {text:()=>"毕业考①：用身体把这只史莱姆围一圈封口，形成红色窒息监狱直到它倒下。可先按 F 布点辅助封口！",
-   init(){spawnEnemy("slime",Math.floor(snake.fx),Math.floor(snake.fy));},
-   done:()=>prisonKills>=1},
-  {text:()=>"毕业考②：针刺花会朝你的头部射慢速种子，命中 -1 心（共 6 心）。侧移闪避种子，同时吐豆摧毁它！",
-   init(){spawnEnemy("flower",Math.floor(snake.fx),Math.floor(snake.fy));},
-   done:()=>flowersKilled>=1},
+  {goalText:"节点监狱处决 1 只",
+   setup(){spawnEnemy("slime",Math.floor(snake.fx),Math.floor(snake.fy));},
+   say:"真考验来了：绕着它跑一整圈，让蛇头踩着节点封口——黄色监狱才是完全体！（节点监狱处决 1 只）",
+   done:()=>nodePrisonKills>=1},
+  {goalText:"身长 8 节后断尾",
+   say:"最后一步：吃到 8 节（当前 "+snake.len+"/8），点按 K 断尾——舍掉一半身长，换一条生路。",
+   done:()=>cutUsed>=1},
 ];
 function startTutorial(){
   playMode="tutorial";
   resetRun();
   reset(true);
-  tutStep=-1;
-  gameState="play";paused=false;firing=false;
-  heldKeys.clear();
-  document.getElementById("ovBtns").style.display="";
-  document.getElementById("pickList").innerHTML="";
+  tutIdx=-1;
+  for(const[rx,ry,rw,rh]of[[30,18,8,1],[30,22,8,1],[30,19,1,3]])
+    for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
+  computeEnclosure();
+  enemies.push({type:"flower",x:34.5,y:20.5,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.62,vx:0,vy:0,shootT:2,warned:false});
+  charges=1;
+  gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
+  heldKeys.clear();dirQueue.length=0;moveLock=false;
   document.getElementById("overlay").classList.remove("show");
+  document.getElementById("tut").classList.remove("show");
   advanceTut();
 }
 function advanceTut(){
-  tutStep++;
-  const box=document.getElementById("tut");
-  if(tutStep>=TUT_STEPS.length){finishTutorial();return;}
-  const s=TUT_STEPS[tutStep];
-  if(s.init)s.init();
-  box.classList.add("show");
-  document.getElementById("tutTitle").textContent="教学 "+(tutStep+1)+"/"+TUT_STEPS.length;
-  document.getElementById("tutText").textContent=s.text();
+  tutIdx++;
+  if(tutIdx>=TUT2.length){finishTutorial();return;}
+  const s=TUT2[tutIdx];
+  if(s.setup)s.setup();
+  openTutPanel(tutIdx);
+}
+function openTutPanel(i){
+  const s=TUT2[i];
+  panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
+  const p=ensurePanel();p.style.display="flex";
+  document.getElementById("npcName").textContent="我";
+  document.getElementById("npcSub").textContent="自言自语 · 教学 "+(i+1)+"/"+TUT2.length;
+  drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
+  document.getElementById("npcSay").textContent=s.say;
+  const opts=document.getElementById("npcOpts");opts.innerHTML="";
+  const b=document.createElement("button");
+  b.className="npc-opt";
+  b.textContent="知道了，出发！（目标："+s.goalText+"）";
+  b.onclick=()=>{closePanel();banner("教学目标："+s.goalText);};
+  opts.appendChild(b);
+  requestAnimationFrame(()=>p.classList.add("open"));
 }
 function finishTutorial(){
-  playMode="sandbox";
-  gameState="menu";
-  document.getElementById("tut").classList.remove("show");
-  document.getElementById("ovTitle").textContent="教学完成！";
-  document.getElementById("ovText").innerHTML=
-    "你已掌握全部核心能力：<br>移动冲刺 · 进食成长 · 站桩吐豆 · 弹药回收 · 断尾保命 · 布点围困 · 弹幕应对<br><br>去沙盒自由测试吧！";
-  document.getElementById("ovBtn").textContent="进入沙盒";
-  document.getElementById("ovBtn2").style.display="";
-  document.getElementById("ovBtn3").style.display="none";
-  document.getElementById("overlay").classList.add("show");
+  panelOpen=true;freeze=true;
+  const p=ensurePanel();p.style.display="flex";
+  document.getElementById("npcName").textContent="恭喜完成教学！";
+  document.getElementById("npcSub").textContent=TUT2.length+"/"+TUT2.length;
+  drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
+  document.getElementById("npcSay").textContent="移动、进食、吐豆、无节点监狱、环形节点、节点监狱、断尾——全部掌握。前面的世界，随便你去吃。";
+  const opts=document.getElementById("npcOpts");opts.innerHTML="";
+  const again=document.createElement("button");
+  again.className="npc-opt";again.textContent="再次体验";
+  again.onclick=()=>{const pp=npcPanelEl;pp.classList.remove("open");pp.style.display="none";panelOpen=false;freeze=false;startTutorial();};
+  opts.appendChild(again);
+  const home=document.createElement("button");
+  home.className="npc-opt";home.textContent="回到首页";
+  home.onclick=()=>{const pp=npcPanelEl;pp.classList.remove("open");pp.style.display="none";panelOpen=false;freeze=false;showMenu();};
+  opts.appendChild(home);
+  requestAnimationFrame(()=>p.classList.add("open"));
 }
 
 function rollGood(excludeIds){
@@ -1862,6 +1898,14 @@ function drawPortraitInto(cvs,kind,crying){
     c.fillStyle="#ffe0c2";c.beginPath();c.arc(48,36,15,0,7);c.fill();
     c.fillStyle="#1a1023";c.fillRect(41,33,4,5);c.fillRect(53,33,4,5);
     c.fillStyle="#ffd76e";c.font="bold 11px Consolas";c.textAlign="center";c.fillText("$",48,76);
+  }else if(kind==="snake_self"){
+    c.fillStyle="#8fe36b";c.beginPath();c.arc(48,52,26,0,7);c.fill();
+    c.fillStyle="#0f380f";c.fillRect(35,42,9,11);c.fillRect(52,42,9,11);
+    c.fillStyle="#fff";c.fillRect(37,44,4,5);c.fillRect(54,44,4,5);
+    c.strokeStyle="#0f380f";c.lineWidth=2;
+    c.beginPath();c.moveTo(42,64);c.lineTo(54,64);c.stroke();
+    c.strokeStyle="#ff5d5d";c.lineWidth=2;
+    c.beginPath();c.moveTo(48,66);c.lineTo(48,74);c.lineTo(43,79);c.moveTo(48,74);c.lineTo(53,79);c.stroke();
   }else{
     c.fillStyle="#f5f5fa";c.beginPath();
     c.moveTo(22,92);c.lineTo(37,50);c.lineTo(59,50);c.lineTo(74,92);c.closePath();c.fill();
@@ -2115,7 +2159,7 @@ function die(reason){
 }
 function showMenu(){
   gameState="menu";
-  document.getElementById("ovTitle").textContent="我蛇了 · IM SNAKE";
+  document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
     "玩法原型 v0.25 · 商人交易制版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
@@ -2136,7 +2180,7 @@ function startGame(){
   playMode="sandbox";
   resetRun();
   reset(false);
-  tutStep=-1;
+  tutIdx=-1;
   gameState="play";paused=false;firing=false;
   heldKeys.clear();
   document.getElementById("ovBtns").style.display="";
@@ -2544,11 +2588,7 @@ function loop(now){
          (g.type==="prisonKills"&&prisonKills>=g.count)||
          (g.type==="survive"&&t>=g.time&&(!g.kills||kills>=g.kills)))levelClear();
     }
-    if(playMode==="tutorial"&&tutStep>=0&&tutStep<TUT_STEPS.length&&TUT_STEPS[tutStep].done()){
-      advanceTut();
-      if(tutStep<TUT_STEPS.length)
-        document.getElementById("tutText").textContent=TUT_STEPS[tutStep].text();
-    }
+    if(playMode==="tutorial"&&tutIdx>=0&&tutIdx<TUT2.length&&!panelOpen&&TUT2[tutIdx].done())advanceTut();
   }
   render();updateHud();
   if(gameState==="intro"&&intro)drawIntroOverlay();
