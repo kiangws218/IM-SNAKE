@@ -159,15 +159,16 @@
 "use strict";
 const CFG={
   cols:72, rows:48, tile:24,
-  snakeSpeed:4, initLen:4, minLen:3,
+  snakeSpeed:4, initLen:4, minLen:3, spitRate:2,
   iframe:1.0,
   spitSpeed:10,   beanLife:6,
-  nodeHp:10, nodeMax:3, speedBoost:2,
-  cutKeep:3, cutRecover:0.5, cutCd:10,
-  merchantRespawn:30,
+  nodeHp:2, nodeMax:3, speedBoost:2,
+  cutKeep:3, cutRecover:0.6, cutCd:10,
+  merchantRespawn:60,
   spawnEvery:5,
   beanTarget:14, beanRespawn:3,
-  nodeDropChance:0.16,
+  nodeDropChance:0.05,
+  nodePrisonInstant:15, nodePrisonDps:30, plainPrisonInstant:10, plainPrisonDps:10,
   flyDrag:3.5, flyStop:.6,
   beanDrag:7, beanStop:0.35, beanBounceKeep:0.78, beanDragInit:1.5,
   ricSpread:.25, ricEscalate:.05, ricKeep:.7, ricKeepStep:.03, ricCap:25,
@@ -183,7 +184,7 @@ const cam={x:0,y:0};
 
 const RUN_DEFAULTS={
   spitRateMult:1, spitSpeedMult:1, dmgBonus:0, maxHearts:3, nodeHpBonus:0,
-  prisonDps:20, prisonBonus:3, cutCd:10, pickupR:.6, greedy:0,
+  prisonDps:30, prisonBonus:-1, cutCd:10, pickupR:.6, greedy:0,
   speedMult:1, contactDmg:0
 };
 let RUN=Object.assign({},RUN_DEFAULTS);
@@ -360,7 +361,7 @@ function updateFlyingBeans(dt){
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
 function beanDamage(){
-  const base=1+RUN.dmgBonus;
+  const base=4+RUN.dmgBonus;
   return Math.max(1,Math.round(base*(TEMPBUFF.t>0?TEMPBUFF.mult:1)));
 }
 
@@ -878,12 +879,12 @@ function updateNPCs(dt){
       n.pburst=Math.max(0,(n.pburst||0)-dt);
       const node=prisonRegionNode[rid];
       if(!n.wasPrison&&n.pburst<=0){
-        const b=node?10:2;
+        const b=node?15:10;
         n.hp-=b;n.pburst=1.0;
         ftext(n.x,n.y-.5,"困"+b+"！",node?"#ffd76e":"#ff8f5e");
       }
       n.wasPrison=true;
-      const pdps=node?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):5;
+      const pdps=node?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):10;
       n.hp-=pdps*dt;n.flash=.12;
       if(Math.random()<dt*2)puff(n.x,n.y,"#c77dff");
       if(n.kind==="merchant")ftextThrottled(n);
@@ -969,14 +970,14 @@ function updateEnemies(dt){
     if(inPrison){
       const node=prisonRegionNode[rid];
       if(!e.wasPrison&&e.pburst<=0){
-        const b=node?10:2;
+        const b=node?15:10;
         e.hp-=b;e.pburst=1.0;
         ftext(e.x,e.y-.5,"困"+b+"！",node?"#ffd76e":"#ff8f5e");
       }
       e.wasPrison=true;
       const dps=node
         ?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1)
-        :5;
+        :10;
       e.hp-=dps*dt;
       if(Math.random()<dt*2)puff(e.x,e.y,"#ff8f5e");
     }else e.wasPrison=false;
@@ -1831,13 +1832,13 @@ function updateBoss(dt){
     boss.pburst=Math.max(0,(boss.pburst||0)-dt);
     const node=prisonRegionNode[rid];
     if(!boss.wasPrison&&boss.pburst<=0){
-      const b=node?10:2;
+      const b=node?15:10;
       applyToBoss(b*(boss.shield>0?.25:1));
       boss.pburst=1.0;
       ftext(boss.x,boss.y-boss.r-.5,"困"+b+"！",node?"#ffd76e":"#ff8f5e");
     }
     boss.wasPrison=true;
-    applyToBoss((node?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):5)
+    applyToBoss((node?RUN.prisonDps+RUN.prisonBonus*Math.max(0,activeNodePrisons-1):CFG.plainPrisonDps)
       *(boss.shield>0?.25:1)*dt);
   }else boss.wasPrison=false;
   for(const s of bossStakes){
@@ -2526,11 +2527,11 @@ function loop(now){
     shake=Math.max(0,shake-dt);
     updateMovement(dt);
     const wantFire=(fireKey||VInput.fire)&&alive&&!paused;
-    if(wantFire&&!firing){firing=true;stanceShot();fireT=1/(CFG.snakeSpeed*RUN.spitRateMult);}
+    if(wantFire&&!firing){firing=true;stanceShot();fireT=1/(CFG.spitRate*RUN.spitRateMult);}
     if(!wantFire){firing=false;fireStreak=0;}
     if(firing){
       fireT-=dt;
-      const shotInt=1/(CFG.snakeSpeed*RUN.spitRateMult);
+      const shotInt=1/(CFG.spitRate*RUN.spitRateMult);
       while(fireT<=0&&firing){
         stanceShot();
         fireT+=shotInt;
