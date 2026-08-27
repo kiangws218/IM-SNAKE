@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>I SNAKED · 卡牌管理台</title>
+<title>I SNAKED · 数值管理器</title>
 <style>
   :root{
     --bg:#0e0f1a;--panel:#171827;--line:#2c2d44;--fg:#e8e6f0;--dim:#8b88a3;
@@ -13,9 +13,12 @@
   body{background:var(--bg);color:var(--fg);font:14px/1.5 ui-monospace,Consolas,"Courier New",monospace;padding:16px}
   #errbar{display:none;position:fixed;top:0;left:0;right:0;z-index:99;background:#7a1020;color:#fff;font:11px Consolas;padding:6px;white-space:pre-wrap}
   #errbar.show{display:block}
-  header{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:14px}
+  header{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:10px}
   h1{font-size:18px;color:var(--gold);letter-spacing:2px}
   h1 small{color:var(--dim);font-size:11px;letter-spacing:0}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+  .tabs button{background:#20212f;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:8px 16px;font:bold 13px inherit;cursor:pointer}
+  .tabs button.on{background:#2c2d44;color:var(--gold);border-color:var(--gold)}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
   .actions button,.filters select,.filters input{
     background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:6px;
@@ -26,6 +29,9 @@
   .filters input{flex:1;min-width:160px}
   #stat{color:var(--dim);font-size:12px;margin-left:auto}
   #stat b{color:var(--fg)}
+  #srcStatus{color:var(--dim);font-size:11px}
+  section.tabsec{display:none}
+  section.tabsec.on{display:block}
   #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
   .card{
     background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
@@ -41,18 +47,34 @@
   .desc b{color:var(--gold)}
   .pars{font-size:11px;color:var(--dim);line-height:1.7}
   .pars em{color:#7fd1e8;font-style:normal}
-  .links{font-size:11px;color:var(--dim)}
-  .links span{color:#7fd1e8}
+  .links{font-size:11px;color:var(--dim);line-height:1.8}
+  .links a{color:#7fd1e8;cursor:pointer;text-decoration:underline;margin-right:4px}
   .ops{margin-top:auto;display:flex;gap:8px;justify-content:flex-end}
   .ops button{background:#20212f;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 12px;font:inherit;cursor:pointer}
   .ops button.del{color:var(--red);border-color:#7a2d35}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:12px}
+  .panel h2{color:var(--gold);font-size:14px;margin-bottom:12px;letter-spacing:1px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+  .cell{display:flex;flex-direction:column;gap:3px}
+  .cell label{font-size:11px;color:var(--dim)}
+  .cell input,.cell select,.cell textarea{
+    background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font:inherit;
+  }
+  .mtab{width:100%;border-collapse:collapse;margin-bottom:12px}
+  .mtab th{font-size:11px;color:var(--dim);text-align:left;padding:6px;border-bottom:1px solid var(--line)}
+  .mtab td{padding:5px;border-bottom:1px solid rgba(44,45,68,.5);vertical-align:top}
+  .mtab input,.mtab select{background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font:inherit;width:100%}
+  .mtab input[type=text]{min-width:90px}
+  .mtab .narrow{width:76px}
+  .madd{background:#23243a;color:#7fd1e8;border:1px dashed #3a3b5c;border-radius:6px;padding:6px 14px;font:inherit;cursor:pointer}
   #mask{display:none;position:fixed;inset:0;z-index:60;background:rgba(8,8,16,.72);align-items:center;justify-content:center;padding:12px}
   #mask.show{display:flex}
-  #modal{
+  #modal,#popup{
     background:var(--panel);color:var(--fg);border:1px solid var(--gold);border-radius:12px;
     width:min(640px,96vw);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.6);
   }
-  #modal h2{color:var(--gold);margin-bottom:12px;font-size:16px}
+  #popup{width:min(420px,92vw)}
+  #modal h2,#popup h2{color:var(--gold);margin-bottom:12px;font-size:16px}
   .field{margin-bottom:10px}
   .field label{display:block;font-size:11px;color:var(--dim);margin-bottom:4px}
   .field input,.field textarea,.field select{
@@ -61,10 +83,7 @@
   }
   .field textarea{resize:vertical;min-height:56px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-  .prow{
-    display:flex;gap:6px;align-items:center;margin-bottom:6px;background:#20212f;
-    border:1px solid var(--line);border-radius:8px;padding:6px;
-  }
+  .prow{display:flex;gap:6px;align-items:center;margin-bottom:6px;background:#20212f;border:1px solid var(--line);border-radius:8px;padding:6px}
   .prow .pname{width:70px;text-align:center;font-weight:bold;color:var(--gold)}
   .prow input[type=number]{width:0;flex:1;min-width:0}
   .prow .pdel{background:none;border:none;color:var(--red);font:bold 14px inherit;cursor:pointer;padding:2px 6px}
@@ -75,47 +94,55 @@
   .dbtn{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
   .dbtn button{background:#ffd76e;color:#1a1023;border:none;border-radius:6px;padding:9px 20px;font:bold 13px inherit;cursor:pointer}
   .dbtn button.ghost{background:#20212f;color:var(--fg)}
-  #toast{
-    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:80;
-    background:#2f3d2f;color:#b5e8b5;padding:8px 18px;border-radius:8px;font-size:13px;
-    opacity:0;transition:opacity .25s;pointer-events:none;
-  }
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:80;background:#2f3d2f;color:#b5e8b5;padding:8px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
   #toast.show{opacity:1}
   .empty{color:var(--dim);text-align:center;padding:40px;grid-column:1/-1}
+  .sub{color:var(--dim);font-size:11px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div id="errbar"></div>
 <header>
-  <h1>I SNAKED · 卡牌管理台 <small>描述用 {参数名} 引用数值 · 改完自动保存 · 导出 JSON 同步游戏</small></h1>
+  <h1>I SNAKED · 数值管理器 <small>卡牌 / 蛇身 / 怪物 / NPC / 互动 · 改完自动保存 · 导出 JSON 同步游戏</small></h1>
+  <div class="tabs" id="tabs">
+    <button type="button" data-tab="cards" class="on">🃏 卡牌</button>
+    <button type="button" data-tab="snake">🐍 蛇身</button>
+    <button type="button" data-tab="monsters">👾 怪物</button>
+    <button type="button" data-tab="npcs">🧙 NPC</button>
+    <button type="button" data-tab="interact">💬 互动</button>
+  </div>
   <div class="row actions">
-    <button type="button" class="primary" id="btnAdd">＋ 新增卡牌</button>
+    <button type="button" class="primary" id="btnAdd" data-in-cards>＋ 新增卡牌</button>
     <button type="button" id="btnExport">⭳ 导出 JSON</button>
     <button type="button" id="btnImport">⭱ 导入 JSON</button>
-    <button type="button" id="btnReset">↺ 恢复默认卡组</button>
+    <button type="button" id="btnReset">↺ 恢复默认配置</button>
     <input type="file" id="fileImport" accept=".json,application/json" hidden>
+    <span id="srcStatus"></span>
+    <span id="stat"></span>
   </div>
-  <div class="row filters">
+  <div class="row filters" data-in-cards>
     <select id="fCat"><option value="">全部类别</option></select>
     <select id="fRar"><option value="">全部稀有度</option></select>
     <select id="fLv"><option value="">全部等级</option><option>1</option><option>2</option><option>3</option></select>
     <input id="fSearch" placeholder="搜索名称 / 效果 / 前置…">
-    <span id="stat"></span>
-    <span id="srcStatus" style="color:var(--dim);font-size:11px"></span>
   </div>
 </header>
-<main id="list"></main>
+
+<section class="tabsec on" id="sec-cards"><main id="list"></main></section>
+
+<section class="tabsec" id="sec-snake"></section>
+<section class="tabsec" id="sec-monsters"></section>
+<section class="tabsec" id="sec-npcs"></section>
+<section class="tabsec" id="sec-interact"></section>
+
 <div id="mask"><div id="modal"><h2 id="mTitle">编辑卡牌</h2><div id="mForm"></div></div></div>
+<div id="popup" style="display:none"></div>
 <div id="toast"></div>
 
 <script>
 "use strict";
 window.onerror=function(msg,src,line){showErr(msg+" @"+(line||""));return false;};
-function showErr(msg){
-  const b=document.getElementById("errbar");
-  b.textContent="[错误] "+msg;
-  b.classList.add("show");
-}
+function showErr(msg){const b=document.getElementById("errbar");b.textContent="[错误] "+msg;b.classList.add("show");}
 const CATS={attack:"攻击",siege:"围困",survival:"生存",economy:"经济",mobility:"机动",special:"特殊"};
 const RARS=[
   {id:"green",name:"绿",color:"#63c74d"},
@@ -125,8 +152,13 @@ const RARS=[
   {id:"red",name:"红",color:"#ff5d5d"},
 ];
 const RAR_ORDER={green:0,blue:1,purple:2,gold:3,red:4};
+const KINDS={chaser:"追击",thief:"盗豆",ranged:"炮台",charger:"冲锋",bomber:"自爆"};
+const MON_FIELDS={
+  chaser:["speed"],thief:["speed","eatTime"],ranged:["cadence","telegraph","bulletSpeed"],
+  charger:["walk","windup","chargeSpeed","stun"],bomber:["speed","fuse","boomR"]
+};
 
-/* 卡牌 = {id,name,cat,rar,lv,params:{名:{1,2,3}},desc(可含{名}占位),pre,mut} */
+/* ============ 默认数据 ============ */
 const DEFAULT_CARDS=[
   {id:"c_beanpack",name:"小份豆包",cat:"economy",rar:"green",lv:1,params:{x:{1:2,2:3,3:4}},desc:"立刻 +{x} 节身长",pre:[],mut:[]},
   {id:"c_magnet",name:"磁力唇",cat:"economy",rar:"green",lv:1,params:{x:{1:.2,2:.3,3:.4}},desc:"拾取半径 +{x} 格",pre:[],mut:[]},
@@ -152,47 +184,89 @@ const DEFAULT_CARDS=[
   {id:"c_thickskin",name:"铁头功",cat:"survival",rar:"red",lv:1,params:{x:{1:2,2:2,3:3}},desc:"心上限 +{x}",pre:["c_heart"],mut:["c_glass"]},
   {id:"c_blood",name:"嗜血契约",cat:"special",rar:"red",lv:1,params:{x:{1:2,2:3,3:4}},desc:"豆伤+{x}，心上限-1（诅咒）",pre:[],mut:["c_thickskin"]},
 ];
+const DEFAULT_SNAKE={
+  moveSpeed:4,sprintMult:2,initLen:4,minLen:3,maxHearts:3,iframe:1,
+  spitRate:4,beanDamageBase:1,spitSpeed:13,beanLife:6,
+  nodePrisonInstant:10,nodePrisonDps:20,plainPrisonInstant:2,plainPrisonDps:5,prisonBonus:2,
+  nodeHp:10,nodeMax:3,nodePassR:1.15,nodeDropChance:.16,
+  cutKeep:3,cutRecover:.5,cutCd:10,
+  pickupR:.6,greedy:0,contactDmg:0,
+  beanDrag:7,beanStop:.35,beanBounceKeep:.78,beanDragInit:1.5,
+  flyDrag:3.5,flyStop:.6,seedLife:10,merchantRespawn:30,
+};
+const SNAKE_FIELDS=[
+  ["移动","moveSpeed","基础移速(格/s)",4],["移动","sprintMult","冲刺倍率",2],
+  ["身长","initLen","初始身长(节)",4],["身长","minLen","最小身长",3],
+  ["生命","maxHearts","初始心上限",3],["生命","iframe","受击无敌帧(s)",1],
+  ["战斗","spitRate","吐豆频率(发/s)",4],["战斗","beanDamageBase","豆伤基础",1],
+  ["战斗","spitSpeed","弹速(格/s)",13],["战斗","beanLife","豆子寿命(s)",6],
+  ["监狱","nodePrisonInstant","节点监狱瞬时伤害",10],["监狱","nodePrisonDps","节点监狱DPS",20],
+  ["监狱","plainPrisonInstant","无节点监狱瞬时",2],["监狱","plainPrisonDps","无节点监狱DPS",5],
+  ["监狱","prisonBonus","每多一环加成",2],
+  ["节点","nodeHp","节点耐久",10],["节点","nodeMax","节点上限",3],
+  ["节点","nodePassR","节点穿越豁免半径",1.15],["节点","nodeDropChance","节点掉落率",.16],
+  ["断尾","cutKeep","断尾保留节数",3],["断尾","cutRecover","断尾回收率",.5],["断尾","cutCd","断尾冷却(s)",10],
+  ["拾取","pickupR","拾取半径(格)",.6],["拾取","greedy","贪食概率",0],["拾取","contactDmg","身体接触伤害/s",0],
+  ["弹道","beanDrag","碰撞后阻力",7],["弹道","beanStop","落地阈值",.35],
+  ["弹道","beanBounceKeep","反弹速度保留",.78],["弹道","beanDragInit","初段阻力",1.5],
+  ["环境","flyDrag","掉落豆飞行阻力",3.5],["环境","flyStop","掉落豆落地阈值",.6],
+  ["环境","seedLife","种子寿命(s)",10],["环境","merchantRespawn","商人重生(s)",30],
+];
+const DEFAULT_MONSTERS={
+  slime:{name:"呆呆史莱姆",kind:"chaser",hp:7,speed:2,r:.55,drops:2,split:""},
+  mini_slime:{name:"小史莱姆",kind:"chaser",hp:2,speed:2.6,r:.3,drops:1,split:""},
+  split_slime:{name:"分裂史莱姆",kind:"chaser",hp:9,speed:.8,r:.7,drops:1,split:"mini_slime:2"},
+  turtle:{name:"铁壳蜗龟",kind:"chaser",hp:18,speed:.6,r:.72,drops:4,split:""},
+  giant_slime:{name:"巨岩史莱姆",kind:"chaser",hp:30,speed:.5,r:1.15,drops:6,split:""},
+  boar:{name:"冲锋野猪",kind:"charger",hp:12,r:.68,drops:3,walk:.6,windup:.95,chargeSpeed:7,stun:1.5,split:""},
+  bomber:{name:"自爆蛛蜂",kind:"bomber",hp:4,speed:3.2,r:.38,drops:0,fuse:.8,boomR:2.4,split:""},
+  rat:{name:"偷豆鼠",kind:"thief",hp:6,speed:5,r:.45,drops:1,eatTime:1,split:""},
+  flower:{name:"针刺花",kind:"ranged",hp:8,r:.62,drops:2,cadence:4,telegraph:.7,bulletSpeed:2,split:""},
+};
+const DEFAULT_NPCS={
+  merchant:{name:"路边商人",hp:26,r:.55,foodValue:1,respawn:30,drop:"curseOrb"},
+  keti:{name:"可蒂",hp:14,r:.42,foodValue:2,respawn:0,drop:"beans:3"},
+};
+const DEFAULT_INTERACT={
+  merchant:[{label:"交易",action:"trade",arg:""},{label:"离开",action:"leave",arg:""}],
+  keti:[{label:"对话",action:"dialog",arg:"start"},{label:"离开",action:"leave",arg:""}],
+};
+const ACTION_NAMES={trade:"交易",dialog:"对话",leave:"离开",eat:"吃掉",end:"结束"};
 
-const LS_KEY="imsnake_cards_v3";
-let db={meta:{version:3,note:""},cards:[]};
+const LS_KEY="imsnake_cards_v4";
+let db={meta:{version:4,note:""},cards:[],snake:{},monsters:{},npcs:{},interact:{}};
 
 function migrateCard(c){
-  if(c.vals&&!c.params){
-    c.params={x:{1:c.vals[1]||0,2:c.vals[2]||0,3:c.vals[3]||0}};
-    delete c.vals;
-  }
+  if(c.vals&&!c.params){c.params={x:{1:c.vals[1]||0,2:c.vals[2]||0,3:c.vals[3]||0}};delete c.vals;}
   if(!c.params)c.params={};
   return c;
 }
 function load(){
-  let source="默认卡组";
-  let hadData=false;
+  let source="默认配置",hadData=false;
   try{
     const raw=localStorage.getItem(LS_KEY);
-    if(raw){db=JSON.parse(raw);hadData=true;source="本地存档(v3)";}
+    if(raw){db=JSON.parse(raw);hadData=true;source="本地存档";}
     else{
-      const old=localStorage.getItem("imsnake_cards_v2");
-      if(old){
-        db=JSON.parse(old);hadData=true;source="迁移自 v2";
-        try{localStorage.removeItem("imsnake_cards_v2");}catch(e){}
-      }else{
-        db=null;
+      for(const oldKey of["imsnake_cards_v3","imsnake_cards_v2"]){
+        const old=localStorage.getItem(oldKey);
+        if(old){db=JSON.parse(old);hadData=true;source="迁移自旧版";try{localStorage.removeItem(oldKey);}catch(e){}break;}
       }
     }
   }catch(e){showErr("读取存档失败："+e.message);db=null;}
-  if(!db||!Array.isArray(db.cards)){
-    db={meta:{version:3,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
-    source=hadData?"存档异常，已恢复默认":"默认卡组";
-  }else{
-    db.cards=db.cards.map(migrateCard);
-  }
+  if(!db||typeof db!=="object")db={};
+  if(!Array.isArray(db.cards))db.cards=[];
+  db.cards=db.cards.map(migrateCard);
+  db.snake=Object.assign({},DEFAULT_SNAKE,db.snake||{});
+  db.monsters=Object.assign({},DEFAULT_MONSTERS,db.monsters||{});
+  db.npcs=Object.assign({},DEFAULT_NPCS,db.npcs||{});
+  db.interact=Object.assign({},DEFAULT_INTERACT,db.interact||{});
+  if(!db.cards.length){db.cards=JSON.parse(JSON.stringify(DEFAULT_CARDS));source=hadData?"存档卡牌为空，已恢复默认":"默认配置";}
   try{localStorage.setItem(LS_KEY,JSON.stringify(db));}catch(e){showErr("写入存档失败："+e.message);}
-  const st=document.getElementById("srcStatus");
-  if(st)st.textContent="来源："+source+" · "+db.cards.length+" 张";
+  document.getElementById("srcStatus").textContent="来源："+source+" · "+db.cards.length+" 张卡";
 }
 function save(){
   try{localStorage.setItem(LS_KEY,JSON.stringify(db));}catch(e){showErr("保存失败："+e.message);return;}
-  toast("已保存 ("+db.cards.length+" 张)");
+  toast("已保存");
 }
 function rarById(id){return RARS.find(r=>r.id===id)||RARS[0];}
 function catName(id){return CATS[id]||id;}
@@ -201,21 +275,17 @@ function id2name(id){const c=cardById(id);return c?c.name:id;}
 function el(id){return document.getElementById(id);}
 function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));}
 function fmt(v){return v===undefined?"—":(Math.abs(v)<1?+v.toFixed(3):v);}
-function subDesc(c){
-  let s=c.desc||"";
-  for(const n of Object.keys(c.params||{})){
-    const v=(c.params[n]||{})[c.lv];
-    s=s.split("{"+n+"}").join(fmt(v));
-  }
-  return s;
+function subDesc(c){let s=c.desc||"";for(const n of Object.keys(c.params||{})){const v=(c.params[n]||{})[c.lv];s=s.split("{"+n+"}").join(fmt(v));}return s;}
+function parSummary(c){return Object.keys(c.params||{}).map(n=>{const p=(c.params[n]||{});return "<em>"+esc(n)+"</em> Lv1 "+fmt(p[1])+" ｜ Lv2 "+fmt(p[2])+" ｜ Lv3 "+fmt(p[3]);}).join("<br>");}
+
+function linkList(ids,type){
+  return (ids||[]).map(id=>"<a data-id='"+id+"'>"+esc(id2name(id))+"</a>").join("")||"—";
 }
-function parSummary(c){
-  return Object.keys(c.params||{}).map(n=>{
-    const p=c.params[n]||{};
-    return "<em>"+esc(n)+"</em> Lv1 "+fmt(p[1])+" ｜ Lv2 "+fmt(p[2])+" ｜ Lv3 "+fmt(p[3]);
-  }).join("<br>");
+function bindCardLinks(root){
+  root.querySelectorAll("a[data-id]").forEach(a=>a.onclick=()=>showCardPopup(a.getAttribute("data-id")));
 }
 
+/* ============ 卡牌页 ============ */
 function render(){
   try{
     const cat=el("fCat").value,rar=el("fRar").value,lv=el("fLv").value,q=el("fSearch").value.toLowerCase();
@@ -236,10 +306,11 @@ function render(){
         "<span class='badge b-lv'>Lv"+c.lv+"</span></div>"+
         "<div class='desc'>"+esc(subDesc(c))+"</div>"+
         "<div class='pars'>"+parSummary(c)+"</div>"+
-        "<div class='links'>前置："+((c.pre||[]).map(id2name).join("、")||"—")+"<br>互斥："+((c.mut||[]).map(id2name).join("、")||"—")+"</div>"+
+        "<div class='links'>前置："+linkList(c.pre)+"<br>互斥："+linkList(c.mut)+"</div>"+
         "<div class='ops'><button type='button' data-edit='"+c.id+"'>编辑</button><button type='button' class='del' data-del='"+c.id+"'>删除</button></div>";
       box.appendChild(d);
     });
+    bindCardLinks(box);
     box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(b.getAttribute("data-edit")));
     box.querySelectorAll("[data-del]").forEach(b=>b.onclick=function(){
       const c=cardById(this.getAttribute("data-del"));
@@ -254,34 +325,43 @@ function render(){
 function updateStat(){
   const n=db.cards.length;
   const parts=RARS.map(r=>r.name+"<b>"+db.cards.filter(c=>c.rar===r.id).length+"</b>").join(" ｜ ");
-  el("stat").innerHTML="共 <b>"+n+"</b> 张 ｜ "+parts;
+  el("stat").innerHTML="卡 <b>"+n+"</b> ｜ 怪 <b>"+Object.keys(db.monsters).length+"</b> ｜ "+parts;
+}
+function showCardPopup(id){
+  const c=cardById(id);if(!c)return;
+  const p=el("popup");
+  const R=rarById(c.rar);
+  p.innerHTML=
+    "<h2 style='color:"+R.color+"'>"+esc(c.name)+"</h2>"+
+    "<div style='margin-bottom:8px'>"+
+      "<span class='badge b-rar' style='background:"+R.color+"'>"+R.name+"</span> "+
+      "<span class='badge b-cat'>"+catName(c.cat)+"</span> "+
+      "<span class='badge b-lv'>Lv"+c.lv+"</span></div>"+
+    "<div class='desc' style='font-size:14px;min-height:auto;margin-bottom:6px'>"+esc(subDesc(c))+"</div>"+
+    "<div class='pars'>"+parSummary(c)+"</div>"+
+    "<div class='links' style='margin-top:8px'>前置："+linkList(c.pre)+"<br>互斥："+linkList(c.mut)+"</div>"+
+    "<div class='dbtn'><button type='button' class='ghost' id='popupClose'>关闭</button></div>";
+  bindCardLinks(p);
+  el("popupClose").onclick=()=>{p.style.display="none";};
+  p.style.display="block";
 }
 
-function mkSelect(id,opts,sel){
-  return "<select id='"+id+"'>"+opts.map(([v,t])=>"<option value='"+v+"'"+(String(sel)===String(v)?" selected":"")+">"+t+"</option>").join("")+"</select>";
-}
+/* ============ 卡牌编辑弹窗 ============ */
+function mkSelect(id,opts,sel){return "<select id='"+id+"'>"+opts.map(([v,t])=>"<option value='"+v+"'"+(String(sel)===String(v)?" selected":"")+">"+t+"</option>").join("")+"</select>";}
 function mkMulti(id,sel){
-  const opts=db.cards.slice().sort((a,b)=>a.name.localeCompare(b.name))
-    .map(x=>"<label><input type='checkbox' value='"+x.id+"'"+(sel.indexOf(x.id)>=0?" checked":"")+">"+x.name+"</label>");
+  const opts=db.cards.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(x=>"<label><input type='checkbox' value='"+x.id+"'"+(sel.indexOf(x.id)>=0?" checked":"")+">"+x.name+"</label>");
   return "<div class='mlist' id='"+id+"'>"+(opts.join("")||"<span style='color:var(--dim)'>（暂无卡牌）</span>")+"</div>";
 }
-function readMulti(id){
-  return Array.prototype.map.call(el(id).querySelectorAll("input:checked"),i=>i.value);
-}
+function readMulti(id){return Array.prototype.map.call(el(id).querySelectorAll("input:checked"),i=>i.value);}
 function closeModal(){el("mask").classList.remove("show");}
-
 function renderParams(params){
   const box=el("paramBox");box.innerHTML="";
   const names=Object.keys(params||{});
-  if(!names.length){
-    box.innerHTML="<div style='color:var(--dim);font-size:12px'>暂无参数——用「＋ 新增参数」添加，并在描述里写 {参数名}</div>";
-  }
+  if(!names.length)box.innerHTML="<div style='color:var(--dim);font-size:12px'>暂无参数——用「＋ 新增参数」添加，并在描述里写 {参数名}</div>";
   names.forEach(n=>{
     const p=params[n]||{};
-    const row=document.createElement("div");
-    row.className="prow";
-    row.innerHTML=
-      "<input class='pname' value='"+esc(n)+"'>"+
+    const row=document.createElement("div");row.className="prow";
+    row.innerHTML="<input class='pname' value='"+esc(n)+"'>"+
       "<input type='number' data-lv='1' value='"+(p[1]!==undefined?p[1]:"")+"'>"+
       "<input type='number' data-lv='2' value='"+(p[2]!==undefined?p[2]:"")+"'>"+
       "<input type='number' data-lv='3' value='"+(p[3]!==undefined?p[3]:"")+"'>"+
@@ -290,19 +370,11 @@ function renderParams(params){
     box.appendChild(row);
   });
   el("btnAddParam").onclick=function(){
-    const row=document.createElement("div");
-    row.className="prow";
-    const used=[];
-    box.querySelectorAll(".pname").forEach(i=>used.push(i.value.trim()));
-    let name="x";
-    for(const c of"xyzαβγabc"){
-      if(used.indexOf(c)<0){name=c;break;}
-    }
-    row.innerHTML=
-      "<input class='pname' value='"+name+"'>"+
-      "<input type='number' data-lv='1' value=''>"+
-      "<input type='number' data-lv='2' value=''>"+
-      "<input type='number' data-lv='3' value=''>"+
+    const used=[];box.querySelectorAll(".pname").forEach(i=>used.push(i.value.trim()));
+    let name="x";for(const c of"xyzαβγabc"){if(used.indexOf(c)<0){name=c;break;}}
+    const row=document.createElement("div");row.className="prow";
+    row.innerHTML="<input class='pname' value='"+name+"'>"+
+      "<input type='number' data-lv='1' value=''><input type='number' data-lv='2' value=''><input type='number' data-lv='3' value=''>"+
       "<button type='button' class='pdel'>✕</button>";
     row.querySelector(".pdel").onclick=()=>{row.remove();};
     box.appendChild(row);
@@ -311,17 +383,11 @@ function renderParams(params){
 function collectParams(){
   const params={};
   el("paramBox").querySelectorAll(".prow").forEach(row=>{
-    const n=row.querySelector(".pname").value.trim();
-    if(!n)return;
-    params[n]={
-      1:parseFloat(row.querySelector('[data-lv="1"]').value)||0,
-      2:parseFloat(row.querySelector('[data-lv="2"]').value)||0,
-      3:parseFloat(row.querySelector('[data-lv="3"]').value)||0
-    };
+    const n=row.querySelector(".pname").value.trim();if(!n)return;
+    params[n]={1:parseFloat(row.querySelector('[data-lv="1"]').value)||0,2:parseFloat(row.querySelector('[data-lv="2"]').value)||0,3:parseFloat(row.querySelector('[data-lv="3"]').value)||0};
   });
   return params;
 }
-
 function openModal(id){
   try{
     const c=id?cardById(id):null;
@@ -337,8 +403,7 @@ function openModal(id){
         field("等级",mkSelect("inpLv",[[1,"Lv1"],[2,"Lv2"],[3,"Lv3"]],c?(c.lv||1):1))+
       '</div>'+
       field("效果描述（用 {参数名} 引用数值，如：豆伤+{x}）",'<textarea id="inpDesc">'+esc(c?c.desc:"")+'</textarea>')+
-      '<div class="field"><label>参数数值（按等级设置，名称随意）</label><div id="paramBox"></div>'+
-        '<button type="button" id="btnAddParam">＋ 新增参数</button></div>'+
+      '<div class="field"><label>参数数值（按等级设置）</label><div id="paramBox"></div><button type="button" id="btnAddParam">＋ 新增参数</button></div>'+
       field("前置卡牌（需先拥有其一）",mkMulti("inpPre",c?(c.pre||[]):[]))+
       field("互斥卡牌（不可同时拥有）",mkMulti("inpMut",c?(c.mut||[]):[]))+
       '<div class="dbtn"><button type="button" class="ghost" id="btnCancel">取消</button><button type="button" id="btnSave">保存</button></div>';
@@ -346,16 +411,11 @@ function openModal(id){
     el("btnCancel").onclick=closeModal;
     el("btnSave").onclick=function(){
       try{
-        const name=el("inpName").value.trim();
-        if(!name){toast("名称不能为空");return;}
+        const name=el("inpName").value.trim();if(!name){toast("名称不能为空");return;}
         const cat=el("inpCat").value,rar=el("inpRar").value,lv=parseInt(el("inpLv").value,10)||1;
-        const desc=el("inpDesc").value.trim();
-        const params=collectParams();
-        if(c){
-          c.name=name;c.cat=cat;c.rar=rar;c.lv=lv;c.desc=desc;c.params=params;
-        }else{
-          db.cards.push({id:"c_"+Date.now().toString(36),name,cat,rar,lv,params,desc,pre:[],mut:[]});
-        }
+        const desc=el("inpDesc").value.trim(),params=collectParams();
+        if(c){c.name=name;c.cat=cat;c.rar=rar;c.lv=lv;c.desc=desc;c.params=params;}
+        else{db.cards.push({id:"c_"+Date.now().toString(36),name,cat,rar,lv,params,desc,pre:[],mut:[]});}
         save();render();closeModal();
       }catch(e){showErr("保存卡牌失败："+e.message);}
     };
@@ -363,17 +423,182 @@ function openModal(id){
   }catch(e){showErr("打开编辑失败："+e.message);}
 }
 
-let toastT=null;
-function toast(msg){
-  const t=el("toast");t.textContent=msg;t.classList.add("show");
-  clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove("show");},1600);
+/* ============ 蛇身页 ============ */
+function renderSnake(){
+  const s=el("sec-snake");
+  let html="";
+  let lastGrp="";
+  SNAKE_FIELDS.forEach(([grp,key,label])=>{
+    if(grp!==lastGrp){lastGrp=grp;html+="<div class='panel'><h2>"+grp+"</h2><div class='grid'>";}
+    html+="<div class='cell'><label>"+label+"</label><input type='number' step='any' data-k='"+key+"' value='"+(db.snake[key]!==undefined?db.snake[key]:"")+"'></div>";
+    if(grp!==SNAKE_FIELDS[SNAKE_FIELDS.length-1][0]){/*continue*/}
+  });
+  // 闭合分组：按出现顺序切
+  s.innerHTML="";
+  let cur="";
+  SNAKE_FIELDS.forEach(([grp,key,label])=>{
+    if(grp!==cur){
+      if(cur)s.innerHTML+="</div></div>";
+      cur=grp;
+      s.innerHTML+="<div class='panel'><h2>"+grp+"</h2><div class='grid'>";
+    }
+    s.innerHTML+="<div class='cell'><label>"+label+"</label><input type='number' step='any' data-k='"+key+"' value='"+(db.snake[key]!==undefined?db.snake[key]:"")+"'></div>";
+  });
+  s.innerHTML+="</div></div>";
+  s.querySelectorAll("input[data-k]").forEach(inp=>{
+    inp.addEventListener("change",()=>{
+      db.snake[inp.getAttribute("data-k")]=parseFloat(inp.value)||0;
+      save();updateStat();
+    });
+  });
 }
+
+/* ============ 怪物页 ============ */
+function renderMonsters(){
+  const s=el("sec-monsters");
+  s.innerHTML="<div class='panel'><h2>怪物</h2><div class='sub'>「分裂」格式：mini_slime:2（死后分裂 2 只小史莱姆）</div><table class='mtab'><thead><tr><th>名称</th><th>类型</th><th class='narrow'>HP</th><th class='narrow'>速度</th><th class='narrow'>半径</th><th class='narrow'>掉豆</th><th>分裂</th><th style='width:40px'></th></tr></thead><tbody id='monBody'></tbody></table><button type='button' class='madd' id='monAdd'>＋ 新增怪物</button></div>";
+  const body=el("monBody");body.innerHTML="";
+  Object.keys(db.monsters).forEach(key=>renderMonRow(body,key));
+  el("monAdd").onclick=function(){
+    const key="mon_"+Date.now().toString(36);
+    db.monsters[key]={name:"新怪物",kind:"chaser",hp:5,speed:1,r:.5,drops:2,split:""};
+    renderMonRow(body,key);save();
+  };
+}
+function renderMonRow(body,key){
+  const m=db.monsters[key];
+  const tr=document.createElement("tr");
+  const num=(k,w)=>'<td><input class="narrow" type="number" step="any" data-k="'+k+'" value="'+(m[k]!==undefined?m[k]:"")+'"></td>';
+  let extra="";
+  (MON_FIELDS[m.kind]||[]).forEach(f=>{extra+=num(f);});
+  tr.innerHTML="<td><input type='text' data-k='name' value='"+esc(m.name)+"'></td>"+
+    "<td><select data-k='kind'>"+Object.keys(KINDS).map(k=>"<option value='"+k+"'"+(m.kind===k?" selected":"")+">"+KINDS[k]+"</option>").join("")+"</select></td>"+
+    num("hp")+num("speed")+num("r")+num("drops")+
+    "<td><input type='text' data-k='split' value='"+esc(m.split||"")+"'></td>"+
+    "<td><button type='button' class='del' data-del='"+key+"'>删</button></td>";
+  // 类型特有字段（追加在新列不美观，改为行内小字块）
+  const extraDiv=document.createElement("tr");
+  extraDiv.className="extra";
+  extraDiv.innerHTML="<td colspan='8' style='font-size:11px;color:var(--dim)'>特殊参数："+
+    Object.keys(KINDS).length; // placeholder replaced below
+  // 简化：把特殊字段做成第二行
+  const fields=(MON_FIELDS[m.kind]||[]);
+  const cells=fields.map(f=>{
+    const lbl={walk:"闲逛速",windup:"蓄力",chargeSpeed:"冲速",stun:"眩晕",fuse:"引信",boomR:"爆炸半径",eatTime:"进食",cadence:"间隔",telegraph:"前摇",bulletSpeed:"弹速"}[f]||f;
+    return "<span style='margin-right:8px'>"+lbl+" <input type='number' step='any' data-k='"+f+"' value='"+(m[f]!==undefined?m[f]:"")+"' style='width:64px;background:#101120;border:1px solid var(--line);border-radius:5px;padding:3px;color:var(--fg)'></span>";
+  }).join("");
+  extraDiv.innerHTML="<td colspan='8' style='font-size:11px'>"+cells+"</td>";
+  body.appendChild(tr);
+  body.appendChild(extraDiv);
+  tr.querySelector('[data-k="kind"]').onchange=function(){
+    m.kind=this.value;renderMonsters();save();
+  };
+  tr.querySelectorAll("input[data-k], select[data-k]").forEach(inp=>{
+    inp.addEventListener("change",function(){
+      const k=this.getAttribute("data-k");
+      if(k==="name")m.name=this.value;
+      else if(k==="split")m.split=this.value;
+      else m[k]=parseFloat(this.value)||0;
+      save();updateStat();
+    });
+  });
+  tr.querySelector("[data-del]").onclick=function(){
+    if(!confirm("删除怪物「"+m.name+"」？"))return;
+    delete db.monsters[key];renderMonsters();save();
+  };
+}
+
+/* ============ NPC 页 ============ */
+function renderNpcs(){
+  const s=el("sec-npcs");s.innerHTML="";
+  Object.keys(db.npcs).forEach(kind=>{
+    const n=db.npcs[kind];
+    const p=document.createElement("div");
+    p.className="panel";
+    p.innerHTML="<h2>"+esc(n.name||kind)+" <span style='color:var(--dim);font-size:11px'>("+kind+")</span></h2>"+
+      "<div class='grid'>"+
+      "<div class='cell'><label>显示名</label><input data-k='name' value='"+esc(n.name)+"'></div>"+
+      "<div class='cell'><label>HP</label><input type='number' step='any' data-k='hp' value='"+n.hp+"'></div>"+
+      "<div class='cell'><label>半径</label><input type='number' step='any' data-k='r' value='"+n.r+"'></div>"+
+      "<div class='cell'><label>吃掉获得(节)</label><input type='number' step='any' data-k='foodValue' value='"+(n.foodValue||0)+"'></div>"+
+      "<div class='cell'><label>重生秒数(0=不重生)</label><input type='number' step='any' data-k='respawn' value='"+(n.respawn||0)+"'></div>"+
+      "<div class='cell'><label>死亡掉落</label><input data-k='drop' value='"+esc(n.drop||"")+"'></div>"+
+      "</div>";
+    p.querySelectorAll("input[data-k]").forEach(inp=>{
+      inp.addEventListener("change",function(){
+        const k=this.getAttribute("data-k");
+        if(k==="name")n.name=this.value;
+        else if(k==="drop")n.drop=this.value;
+        else n[k]=parseFloat(this.value)||0;
+        save();
+      });
+    });
+    s.appendChild(p);
+  });
+  const add=document.createElement("button");add.type="button";add.className="madd";
+  add.textContent="＋ 新增 NPC";
+  add.onclick=function(){
+    const kind="npc_"+Date.now().toString(36);
+    db.npcs[kind]={name:"新NPC",hp:10,r:.5,foodValue:1,respawn:0,drop:"beans:2"};
+    save();renderNpcs();
+  };
+  s.appendChild(add);
+}
+
+/* ============ 互动页 ============ */
+function renderInteract(){
+  const s=el("sec-interact");s.innerHTML="";
+  Object.keys(db.interact).forEach(kind=>{
+    const opts=db.interact[kind]||[];
+    const p=document.createElement("div");
+    p.className="panel";
+    p.innerHTML="<h2>"+esc((db.npcs[kind]&&db.npcs[kind].name)||kind)+" 的互动选项 <span style='color:var(--dim);font-size:11px'>（「吃掉」为红字固定项，不在此列）</span></h2>";
+    const box=document.createElement("div");box.className="mlist";box.style.maxHeight="none";
+    p.appendChild(box);
+    const renderOpts=()=>{
+      box.innerHTML="";
+      opts.forEach((o,i)=>{
+        const row=document.createElement("div");
+        row.className="prow";
+        row.innerHTML="<input class='pname' style='width:120px' data-i='"+i+"' data-f='label' value='"+esc(o.label)+"'>"+
+          "<select data-i='"+i+"' data-f='action' style='width:90px;background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:5px'>"+
+          Object.keys(ACTION_NAMES).map(a=>"<option value='"+a+"'"+(o.action===a?" selected":"")+">"+ACTION_NAMES[a]+"</option>").join("")+
+          "</select>"+
+          "<input data-i='"+i+"' data-f='arg' value='"+esc(o.arg||"")+"' placeholder='参数(节点id等)' style='flex:1;background:#101120;border:1px solid var(--line);border-radius:5px;padding:5px;color:var(--fg)'>"+
+          "<button type='button' class='pdel' data-i='"+i+"'>✕</button>";
+        box.appendChild(row);
+      });
+      box.querySelectorAll("[data-f]").forEach(inp=>{
+        inp.addEventListener("change",function(){
+          const i=+this.getAttribute("data-i"),f=this.getAttribute("data-f");
+          if(f==="action")opts[i].action=this.value;
+          else if(f==="label")opts[i].label=this.value;
+          else opts[i].arg=this.value;
+          save();
+        });
+      });
+      box.querySelectorAll(".pdel").forEach(btn=>btn.onclick=function(){
+        opts.splice(+this.getAttribute("data-i"),1);save();renderOpts();
+      });
+    };
+    renderOpts();
+    const add=document.createElement("button");add.type="button";add.className="madd";add.style.marginTop="8px";
+    add.textContent="＋ 新增选项";
+    add.onclick=function(){opts.push({label:"新选项",action:"leave",arg:""});save();renderOpts();};
+    p.appendChild(add);
+    s.appendChild(p);
+  });
+}
+
+/* ============ 全局 ============ */
+let toastT=null;
+function toast(msg){const t=el("toast");t.textContent=msg;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove("show");},1600);}
 function exportJSON(){
   const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);a.download="imsnake-cards.json";a.click();
+  a.href=URL.createObjectURL(blob);a.download="imsnake-balance.json";a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href);},500);
-  toast("已导出 imsnake-cards.json（放入仓库或发给开发者）");
+  toast("已导出 imsnake-balance.json（放入仓库或发给开发者）");
 }
 function importJSON(file){
   const r=new FileReader();
@@ -381,29 +606,42 @@ function importJSON(file){
     try{
       const j=JSON.parse(r.result);
       if(!Array.isArray(j.cards))throw new Error("缺少 cards 数组");
-      db=j;db.cards=db.cards.map(migrateCard);save();render();
-      toast("导入成功 ("+db.cards.length+" 张)");
+      db=j;db.cards=db.cards.map(migrateCard);
+      db.snake=Object.assign({},DEFAULT_SNAKE,db.snake||{});
+      db.monsters=Object.assign({},DEFAULT_MONSTERS,db.monsters||{});
+      db.npcs=Object.assign({},DEFAULT_NPCS,db.npcs||{});
+      db.interact=Object.assign({},DEFAULT_INTERACT,db.interact||{});
+      save();renderAll();
+      toast("导入成功 ("+db.cards.length+" 张卡)");
     }catch(e){toast("导入失败："+e.message);}
   };
   r.readAsText(file);
 }
+function renderAll(){render();renderSnake();renderMonsters();renderNpcs();renderInteract();}
 
 el("btnAdd").onclick=function(){openModal(null);};
 el("btnExport").onclick=exportJSON;
 el("btnImport").onclick=function(){el("fileImport").click();};
 el("fileImport").onchange=function(e){if(e.target.files[0])importJSON(e.target.files[0]);e.target.value="";};
 el("btnReset").onclick=function(){
-  if(!confirm("恢复默认卡组？当前编辑会丢失。"))return;
-  db={meta:{version:3,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
-  save();render();
+  if(!confirm("恢复默认配置？当前所有编辑会丢失。"))return;
+  db={meta:{version:4,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS)),snake:Object.assign({},DEFAULT_SNAKE),monsters:Object.assign({},DEFAULT_MONSTERS),npcs:Object.assign({},DEFAULT_NPCS),interact:Object.assign({},DEFAULT_INTERACT)};
+  save();renderAll();
 };
 Object.keys(CATS).forEach(function(k){el("fCat").insertAdjacentHTML("beforeend","<option value='"+k+"'>"+CATS[k]+"</option>");});
 RARS.forEach(function(r){el("fRar").insertAdjacentHTML("beforeend","<option value='"+r.id+"'>"+r.name+"</option>");});
 ["fCat","fRar","fLv"].forEach(function(id){el(id).addEventListener("change",render);});
 el("fSearch").addEventListener("input",render);
 el("mask").addEventListener("click",function(e){if(e.target===el("mask"))closeModal();});
+el("tabs").addEventListener("click",function(e){
+  const b=e.target.closest("[data-tab]");if(!b)return;
+  el("tabs").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+  const tab=b.getAttribute("data-tab");
+  ["cards","snake","monsters","npcs","interact"].forEach(t=>el("sec-"+t).classList.toggle("on",t===tab));
+  document.querySelectorAll("[data-in-cards]").forEach(x=>x.style.display=(tab==="cards"?"":"none"));
+});
 
-load();render();
+load();renderAll();
 </script>
 </body>
 </html>
