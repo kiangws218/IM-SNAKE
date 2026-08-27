@@ -107,6 +107,7 @@
   .npc-opt:hover{ border-color:#ffd76e;background:#2c2d44; }
   .npc-opt.red{ color:#ff5d5d;border-color:#7a2d35; }
   .npc-opt.red:hover{ border-color:#ff5d5d; }
+  .npc-opt.sel{ border-color:#ffd76e;background:#2c2d44;box-shadow:0 0 0 1px #ffd76e; }
   #pauseMenu{
     position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; background:rgba(8,8,16,.66); z-index:20;
@@ -231,7 +232,7 @@ function grantReward(r){
 function updateMechs(dt){
   for(const m of MECHS){
     if(m.done||m.kind!=="pillar")continue;
-    const enc=prisonMask[K(m.x,m.y)]>=0;
+    const enc=prisonMask[K(m.x,m.y)]>=0&&prisonRegionBody[prisonMask[K(m.x,m.y)]];
     if(enc)m.prog+=dt;
     else m.prog=Math.max(0,m.prog-dt*.5);
     if(m.prog>=m.charge){
@@ -261,7 +262,7 @@ let plainPrisonKills, nodePrisonKills;
 let boss=null,bossStakes=[],victoryRetry="menu";
 const BA={x:5,y:8,w:52,h:32};
 let obstacles, reachMask, prisonMask, prisonRegions, activePrisons, prevPrisons;
-let prisonRegionNode=[], activeNodePrisons=0;
+let prisonRegionNode=[], activeNodePrisons=0, prisonRegionBody=[];
 
 const K=(x,y)=>y*CFG.cols+x;
 const inB=(x,y)=>x>=0&&y>=0&&x<CFG.cols&&y<CFG.rows;
@@ -485,11 +486,21 @@ function computeEnclosure(){
       if(isNode){prisonRegionNode[id]=true;break;}
     }
   }
+  prisonRegionBody=new Array(prisonRegions.length).fill(false);
   for(let id=0;id<prisonRegions.length;id++){
-    const occupied=
+    for(const i of prisonRegions[id]){
+      const x=i%CFG.cols,y=(i/CFG.cols)|0;
+      for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
+        if(occSet.has(K(x+dx,y+dy))){prisonRegionBody[id]=true;break;}
+      }
+      if(prisonRegionBody[id])break;
+    }
+  }
+  for(let id=0;id<prisonRegions.length;id++){
+    const occupied=prisonRegionBody[id]&&(
       enemies.some(e=>prisonMask[K(Math.floor(e.x),Math.floor(e.y))]===id)||
       npcs.some(n=>prisonMask[K(Math.floor(n.x),Math.floor(n.y))]===id)||
-      (boss&&prisonMask[K(Math.floor(boss.x),Math.floor(boss.y))]===id);
+      (boss&&prisonMask[K(Math.floor(boss.x),Math.floor(boss.y))]===id));
     if(occupied){
       activePrisons++;
       if(prisonRegionNode[id])activeNodePrisons++;
@@ -643,7 +654,7 @@ function stanceShot(){
 }
 
 function placeNode(){
-  if(gameState!=="play"||!alive||paused)return;
+  if(gameState!=="play"||!alive||paused||freeze)return;
   const cx=Math.floor(snake.fx),cy=Math.floor(snake.fy);
   if(charges<=0){ftext(snake.fx,snake.fy-1,"没有节点充能！","#ff5d5d");return;}
   if(mapNodes.some(n=>n.x===cx&&n.y===cy))return;
@@ -863,7 +874,7 @@ function updateNPCs(dt){
     const n=npcs[i];
     n.flash-=dt;
     const rid=prisonMask[K(Math.floor(n.x),Math.floor(n.y))];
-    if(rid>=0&&activePrisons>0&&alive){
+    if(rid>=0&&activePrisons>0&&alive&&prisonRegionBody[rid]){
       n.pburst=Math.max(0,(n.pburst||0)-dt);
       const node=prisonRegionNode[rid];
       if(!n.wasPrison&&n.pburst<=0){
@@ -953,7 +964,7 @@ function updateEnemies(dt){
     const e=enemies[i];
     e.flash-=dt;e.hitT-=dt;
     const rid=prisonMask[K(Math.floor(e.x),Math.floor(e.y))];
-    const inPrison=rid>=0&&activePrisons>0;
+    const inPrison=rid>=0&&activePrisons>0&&prisonRegionBody[rid];
     e.pburst=Math.max(0,(e.pburst||0)-dt);
     if(inPrison){
       const node=prisonRegionNode[rid];
@@ -1096,7 +1107,7 @@ function updateEnemies(dt){
     if(e.hp<=0){
       kills++;
       const rk=prisonMask[K(Math.floor(e.x),Math.floor(e.y))];
-      if(activePrisons>0&&rk>=0){
+      if(activePrisons>0&&rk>=0&&prisonRegionBody[rk]){
         prisonKills++;
         if(prisonRegionNode[rk])nodePrisonKills++;else plainPrisonKills++;
       }
@@ -1157,7 +1168,7 @@ function updateSpawner(dt){
 }
 
 function cutTail(){
-  if(gameState!=="play"||!alive||paused)return;
+  if(gameState!=="play"||!alive||paused||freeze)return;
   if(cutCd>0)return;
   if(snake.len<=CFG.cutKeep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
   cutCd=RUN.cutCd;
@@ -1406,21 +1417,38 @@ const TUT2=[
    say:"最后一步：吃到 8 节（当前 "+snake.len+"/8），点按 K 断尾——舍掉一半身长，换一条生路。",
    done:()=>cutUsed>=1},
 ];
+function buildTutArena(){
+  for(const[rx,ry,rw,rh]of[[30,17,8,1],[30,23,8,1],[30,18,1,5]])
+    for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
+  computeEnclosure();
+  enemies.push({type:"flower",x:34,y:20,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.5,vx:0,vy:0,shootT:2,warned:false});
+}
 function startTutorial(){
   playMode="tutorial";
   resetRun();
   reset(true);
   tutIdx=-1;
-  for(const[rx,ry,rw,rh]of[[30,18,8,1],[30,22,8,1],[30,19,1,3]])
-    for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
-  computeEnclosure();
-  enemies.push({type:"flower",x:34.5,y:20.5,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.62,vx:0,vy:0,shootT:2,warned:false});
+  buildTutArena();
   charges=1;
   gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
   heldKeys.clear();dirQueue.length=0;moveLock=false;
   document.getElementById("overlay").classList.remove("show");
   document.getElementById("tut").classList.remove("show");
   advanceTut();
+}
+function restartCurrentTut(){
+  playMode="tutorial";
+  resetRun();
+  reset(true);
+  buildTutArena();
+  charges=1;
+  gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
+  heldKeys.clear();dirQueue.length=0;moveLock=false;
+  document.getElementById("overlay").classList.remove("show");
+  document.getElementById("tut").classList.remove("show");
+  const i=Math.max(0,tutIdx);
+  if(TUT2[i]&&TUT2[i].setup)TUT2[i].setup();
+  openTutPanel(i);
 }
 function advanceTut(){
   tutIdx++;
@@ -1429,21 +1457,41 @@ function advanceTut(){
   if(s.setup)s.setup();
   openTutPanel(tutIdx);
 }
+let panelOpts=[],panelSel=0;
+function trackPanelOpts(container){
+  panelOpts=Array.prototype.slice.call(container.querySelectorAll(".npc-opt"));
+  panelSel=0;
+  paintPanelSel();
+}
+function paintPanelSel(){
+  panelOpts.forEach((b,i)=>b.classList.toggle("sel",i===panelSel));
+}
+function selPanel(d){
+  if(!panelOpts.length)return;
+  panelSel=(panelSel+d+panelOpts.length)%panelOpts.length;
+  paintPanelSel();
+}
+function confirmPanel(){
+  if(panelOpts[panelSel])panelOpts[panelSel].click();
+}
 function openTutPanel(i){
-  const s=TUT2[i];
-  panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
-  const p=ensurePanel();p.style.display="flex";
-  document.getElementById("npcName").textContent="我";
-  document.getElementById("npcSub").textContent="自言自语 · 教学 "+(i+1)+"/"+TUT2.length;
-  drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
-  document.getElementById("npcSay").textContent=s.say;
-  const opts=document.getElementById("npcOpts");opts.innerHTML="";
-  const b=document.createElement("button");
-  b.className="npc-opt";
-  b.textContent="知道了，出发！（目标："+s.goalText+"）";
-  b.onclick=()=>{closePanel();banner("教学目标："+s.goalText);};
-  opts.appendChild(b);
-  requestAnimationFrame(()=>p.classList.add("open"));
+  try{
+    const s=TUT2[i];
+    panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
+    const p=ensurePanel();p.style.display="flex";
+    document.getElementById("npcName").textContent="我";
+    document.getElementById("npcSub").textContent="自言自语 · 教学 "+(i+1)+"/"+TUT2.length;
+    drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
+    document.getElementById("npcSay").textContent=s.say;
+    const opts=document.getElementById("npcOpts");opts.innerHTML="";
+    const b=document.createElement("button");
+    b.className="npc-opt";
+    b.textContent="知道了，出发！（目标："+s.goalText+"）";
+    b.onclick=()=>{closePanel();banner("教学目标："+s.goalText);};
+    opts.appendChild(b);
+    trackPanelOpts(opts);
+    requestAnimationFrame(()=>p.classList.add("open"));
+  }catch(e){uiFatal("教学面板:"+(e&&e.message));}
 }
 function finishTutorial(){
   panelOpen=true;freeze=true;
@@ -1461,6 +1509,7 @@ function finishTutorial(){
   home.className="npc-opt";home.textContent="回到首页";
   home.onclick=()=>{const pp=npcPanelEl;pp.classList.remove("open");pp.style.display="none";panelOpen=false;freeze=false;showMenu();};
   opts.appendChild(home);
+  trackPanelOpts(opts);
   requestAnimationFrame(()=>p.classList.add("open"));
 }
 
@@ -1554,6 +1603,7 @@ function openPanel(n,nodeId){
       b.onclick=o.fn;
       opts.appendChild(b);
     }
+    trackPanelOpts(opts);
     requestAnimationFrame(()=>p.classList.add("open"));
   }catch(e){
     uiFatal("NPC面板:"+(e&&e.message)+" @"+((e&&e.stack||"").split("\n")[1]||"").trim());
@@ -1647,7 +1697,7 @@ function startBossFight(){
   resetRun();
   reset(false);
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
-  for(const[rx,ry,rw,rh]of[[BA.x,BA.y,BA.w,1],[BA.x,BA.y+BA.h-1,BA.w,1],[BA.x,BA.y+1,1,BA.h-2],[BA.x+BA.w-1,BA.y+1,1,BA.h-2]])
+  for(const[rx,ry,rw,rh]of[[8,8,2,2],[30,6,2,2],[52,8,2,2],[6,24,2,3],[54,22,2,3],[28,40,2,2],[52,38,2,2],[20,12,2,2],[12,34,2,2],[40,16,2,1],[44,34,2,2],[60,30,2,2]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
   boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
@@ -1703,8 +1753,8 @@ function updateBoss(dt){
     boss.wt-=dt;
     if(boss.wt<=0||Math.hypot(boss.tx-boss.x,boss.ty-boss.y)<1.5){
       boss.wt=3+rnd(3);
-      boss.tx=(BA.x+1+boss.r)+rnd(Math.max(1,(BA.x+BA.w-2-boss.r)-(BA.x+1+boss.r)));
-      boss.ty=(BA.y+1+boss.r)+rnd(Math.max(1,(BA.y+BA.h-2-boss.r)-(BA.y+1+boss.r)));
+      boss.tx=boss.r+4+rnd(Math.max(1,CFG.cols-boss.r*2-10));
+      boss.ty=boss.r+4+rnd(Math.max(1,CFG.rows-boss.r*2-10));
     }
     const dx=boss.tx-boss.x,dy=boss.ty-boss.y,l=Math.hypot(dx,dy)||1;
     boss.vx=dx/l*(boss.phase2?1.45:1.1);
@@ -1777,7 +1827,7 @@ function updateBoss(dt){
     }
   }
   const rid=prisonMask[K(Math.floor(boss.x),Math.floor(boss.y))];
-  if(rid>=0&&activePrisons>0&&alive){
+  if(rid>=0&&activePrisons>0&&alive&&prisonRegionBody[rid]){
     boss.pburst=Math.max(0,(boss.pburst||0)-dt);
     const node=prisonRegionNode[rid];
     if(!boss.wasPrison&&boss.pburst<=0){
@@ -1793,7 +1843,7 @@ function updateBoss(dt){
   for(const s of bossStakes){
     if(s.dead)continue;
     const sr=prisonMask[K(Math.floor(s.x),Math.floor(s.y))];
-    if(sr>=0){s.cap+=dt;s.hot=true;}
+    if(sr>=0&&prisonRegionBody[sr]){s.cap+=dt;s.hot=true;}
     else{s.cap=Math.max(0,s.cap-dt*.6);s.hot=false;}
     if(s.cap>=s.need){
       s.dead=true;
@@ -1875,10 +1925,16 @@ addEventListener("keydown",ev=>{
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))ev.preventDefault();
   if(k==="r"){
     if(playMode==="intro"){endIntro();return;}
-    if(playMode==="tutorial")startTutorial();
+    if(playMode==="tutorial"){if(gameState==="dead")restartCurrentTut();else startTutorial();}
     else if(playMode==="campaign"&&gameState!=="victory"&&levelIdx<LEVELS.length)startLevel();
     else startGame();
     return;
+  }
+  if(gameState==="intro"){if(k===" "||k==="j"){advanceIntro();return;}}
+  if(panelOpen&&gameState==="play"){
+    if(k==="arrowup"||k==="w"){ev.preventDefault();selPanel(-1);return;}
+    if(k==="arrowdown"||k==="s"){ev.preventDefault();selPanel(1);return;}
+    if(k===" "||k==="j"||k==="enter"||k==="arrowright"||k==="d"){ev.preventDefault();confirmPanel();return;}
   }
   if(gameState!=="play"&&gameState!=="intro")return;
   if(MOVE_KEYS[k]){
@@ -1926,7 +1982,7 @@ document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="dead"){
     if(playMode==="campaign")startLevel();
     else if(playMode==="boss")startBossFight();
-    else if(playMode==="tutorial")startTutorial();
+    else if(playMode==="tutorial")restartCurrentTut();
     else startGame();
     return;
   }
@@ -1934,6 +1990,7 @@ document.getElementById("ovBtn").onclick=()=>{
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
+  if(gameState==="dead"&&playMode==="tutorial"){showMenu();return;}
   startTutorial();
 };
 document.getElementById("ovBtn5").onclick=()=>{
@@ -1985,8 +2042,13 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试教学":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
-  document.getElementById("ovBtn2").style.display="none";
+    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
+  if(playMode==="tutorial"){
+    document.getElementById("ovBtn2").textContent="回到首页";
+    document.getElementById("ovBtn2").style.display="";
+  }else{
+    document.getElementById("ovBtn2").style.display="none";
+  }
   document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
   document.getElementById("ovBtn5").style.display="none";
   document.getElementById("overlay").classList.add("show");
@@ -2054,6 +2116,7 @@ function render(){
   if(prisonRegions){
     const pulse=.10+.06*Math.sin(gameTime*5);
     for(let id=0;id<prisonRegions.length;id++){
+      if(!prisonRegionBody[id])continue;
       const node=prisonRegionNode[id];
       ctx.fillStyle=node?"rgba(255,215,110,"+pulse+")":"rgba(255,80,80,"+pulse+")";
       for(const i of prisonRegions[id]){
