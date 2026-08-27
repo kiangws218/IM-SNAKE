@@ -43,7 +43,10 @@ const DIALOG_TREES={
     cry:{
       say:"哇———哇———！！",
       effect:"cry",
-      options:[{t:"……",action:"end"}],
+      options:[
+        {t:"吃掉",action:"eat"},
+        {t:"离开",action:"end"},
+      ],
     },
   },
 };

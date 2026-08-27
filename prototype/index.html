@@ -75,6 +75,12 @@
   .pick-btn:hover{ background:#2c2d44;border-color:#ffd76e; }
   .pick-btn b{ color:#ffd76e;display:block;margin-bottom:3px;letter-spacing:1px; }
   .pick-btn span{ color:var(--dim); }
+  .boss-btn{
+    background:#1a1c2e;border:2px solid #ffd76e;border-radius:10px;
+    font-size:15px;padding:14px 16px;
+  }
+  .boss-btn b{ color:#ffd76e;font-size:17px;text-shadow:0 1px 2px #000; }
+  .boss-btn span{ color:#cfcbe6; }
   #npcPanel{
     position:fixed;top:50%;right:-380px;transform:translateY(-50%);
     width:340px;max-width:88vw;height:64vh;z-index:25;
@@ -253,6 +259,7 @@ let kills, beansEaten, prisonFormed, gameTime, spawnT, beanT;
 let distMoved, spitHits, projRecycled, cutUsed, nodesPlaced, prisonKills, flowersKilled;
 let plainPrisonKills, nodePrisonKills;
 let boss=null,bossStakes=[],victoryRetry="menu";
+const BA={x:5,y:8,w:52,h:32};
 let obstacles, reachMask, prisonMask, prisonRegions, activePrisons, prevPrisons;
 let prisonRegionNode=[], activeNodePrisons=0;
 
@@ -1640,6 +1647,8 @@ function startBossFight(){
   resetRun();
   reset(false);
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
+  for(const[rx,ry,rw,rh]of[[BA.x,BA.y,BA.w,1],[BA.x,BA.y+BA.h-1,BA.w,1],[BA.x,BA.y+1,1,BA.h-2],[BA.x+BA.w-1,BA.y+1,1,BA.h-2]])
+    for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
   boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
     phase2:false,patT:2.2,patIdx:0,sumT:9,stun:0,spin:0,flash:0,vx:0,vy:0,
@@ -1661,12 +1670,12 @@ function showBossSelect(){
   document.getElementById("ovBtns").style.display="none";
   const box=document.getElementById("pickList");box.innerHTML="";
   const b=document.createElement("button");
-  b.className="pick-btn";
+  b.className="pick-btn boss-btn";
   b.innerHTML="<b>巨岩茧母 · 磐</b><span>点击开始挑战</span>";
   b.onclick=()=>{box.innerHTML="";document.getElementById("ovBtns").style.display="";startBossFight();};
   box.appendChild(b);
   const back=document.createElement("button");
-  back.className="pick-btn";back.innerHTML="<b>← 返回</b>";
+  back.className="pick-btn boss-btn";back.innerHTML="<b>← 返回</b>";
   back.onclick=()=>{box.innerHTML="";document.getElementById("ovBtns").style.display="";showMenu();};
   box.appendChild(back);
   document.getElementById("overlay").classList.add("show");
@@ -1694,8 +1703,8 @@ function updateBoss(dt){
     boss.wt-=dt;
     if(boss.wt<=0||Math.hypot(boss.tx-boss.x,boss.ty-boss.y)<1.5){
       boss.wt=3+rnd(3);
-      boss.tx=boss.r+2+rnd(Math.max(1,CFG.cols-boss.r*2-4));
-      boss.ty=boss.r+2+rnd(Math.max(1,CFG.rows-boss.r*2-4));
+      boss.tx=(BA.x+1+boss.r)+rnd(Math.max(1,(BA.x+BA.w-2-boss.r)-(BA.x+1+boss.r)));
+      boss.ty=(BA.y+1+boss.r)+rnd(Math.max(1,(BA.y+BA.h-2-boss.r)-(BA.y+1+boss.r)));
     }
     const dx=boss.tx-boss.x,dy=boss.ty-boss.y,l=Math.hypot(dx,dy)||1;
     boss.vx=dx/l*(boss.phase2?1.45:1.1);
