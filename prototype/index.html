@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.34</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.35</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -116,14 +116,15 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.34（玩家设置 / 自定义键位）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.35（本地双人合作）</span></h1>
 <div id="hud">
-  <span class="chip">❤ <span id="hearts"></span></span>
+  <span class="chip"><b id="p1Tag"></b> ❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
   <span class="chip">豆伤 <b id="dmg" style="color:#ffd76e"></b></span>
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
   <span class="chip">断尾 <span class="bar"><i id="cdCut" style="background:#e86a8a"></i></span></span>
   <span class="chip">节点 <span id="nodes"></span></span>
+  <span id="coopHud" style="display:none"><span class="chip" style="color:#7fd1e8"><b>P2</b> ❤ <span id="p2Hearts"></span></span> <span class="chip">身长 <b id="p2Len"></b></span> <span class="chip">豆伤 <b id="p2Dmg" style="color:#7fd1e8"></b></span> <span class="chip">火力 <span class="bar"><i id="p2Fire" style="background:#7fd1e8"></i></span></span> <span class="chip">断尾 <span class="bar"><i id="p2Cut" style="background:#4389a8"></i></span></span> <span class="chip">节点 <span id="p2Nodes"></span></span></span>
   <span id="stat"></span>
 </div>
 <div id="tut"><b id="tutTitle"></b><span id="tutText"></span></div>
@@ -133,6 +134,7 @@
 　<b>站桩吐豆</b> 长按<kbd>J</kbd>/<kbd>空格</kbd>
 　<b>断尾</b> 点按<kbd>K</kbd>/<kbd>Shift</kbd>
 　<b>放节点</b> <kbd>F</kbd>
+　<b>P2 默认</b> <kbd>方向键</kbd> / <kbd>小键盘 0·1·2</kbd>（所有键位均可在设置中修改）
 　<b>暂停</b> <kbd>P</kbd>/<kbd>Esc</kbd>
 　<b>重来</b> <kbd>R</kbd><br>
   吃豆变长 · 站桩时定住连射高速豆子（身长即弹匣），豆子碰壁反弹减速后可吃回 · <b>F 在蛇头处放置固定环形节点，蛇身完全通过后自动回收充能</b> · 用身体围住敌人形成窒息监狱（红色区域），小心敌人啃毁节点 · 头部是唯一弱点，撞墙或咬到尾巴即死 · 金色小环=节点充能拾取物 · <b>断尾切掉2节后的身体并折损一半</b>
@@ -151,6 +153,7 @@
 <script src="player-core.js"></script>
 <script src="input.js"></script>
 <script src="settings.js"></script>
+<script src="coop-mode.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -182,10 +185,10 @@ const RUN_DEFAULTS={
   speedMult:1, contactDmg:0
 };
 let RUN=Object.assign({},RUN_DEFAULTS);
-function resetRun(){RUN=Object.assign({},RUN_DEFAULTS);}
+function resetRun(){RUN=Object.assign({},RUN_DEFAULTS);CoopMode.resetRun();}
 const api={
-  heal(n){hearts=Math.min(RUN.maxHearts,(hearts||0)+n);},
-  grow(n){snake.len=Math.max(CFG.minLen,snake.len+n);computeSegs();}
+  heal(n){hearts=Math.min(RUN.maxHearts,(hearts||0)+n);CoopMode.heal(n);},
+  grow(n){snake.len=Math.max(CFG.minLen,snake.len+n);computeSegs();CoopMode.grow(n);}
 };
 
 /* ===== 扩展系统：虚拟输入 / 地形区域 / 机关 / 开场（v0.16） ===== */
@@ -250,7 +253,7 @@ let danger=null, hurtFlash=0;
 let gameState="menu", playMode="sandbox", tutIdx=-1;
 let levelIdx=0, curGoal=null, curCaps, curBeanTarget, levelStartT=0;
 let carry={len:4,charges:1};
-let hearts, invuln, cutCd, alive, paused, shake, biteAcc;
+let hearts, invuln, cutCd, alive, primaryDown, paused, shake, biteAcc;
 let kills, beansEaten, prisonFormed, gameTime, spawnT, beanT;
 let distMoved, spitHits, projRecycled, cutUsed, nodesPlaced, prisonKills, flowersKilled;
 let plainPrisonKills, nodePrisonKills;
@@ -261,6 +264,16 @@ let prisonRegionNode=[], activeNodePrisons=0;
 const K=(x,y)=>y*CFG.cols+x;
 const inB=(x,y)=>x>=0&&y>=0&&x<CFG.cols&&y<CFG.rows;
 const rnd=n=>Math.floor(Math.random()*n);
+function playerViews(){
+  const out=[];
+  if(alive&&!primaryDown)out.push({id:1,x:snake.fx,y:snake.fy,snake,segPos,occSet,dir,hearts,invuln,alive:true});
+  const p2=CoopMode.view();if(p2)out.push(p2);return out;
+}
+function nearestPlayer(x,y){
+  let best=null,dist=Infinity;for(const p of playerViews()){const d=Math.hypot(p.x-x,p.y-y);if(d<dist){dist=d;best=p;}}return best;
+}
+function bodyHas(key){return occSet.has(key)||CoopMode.bodyHas(key);}
+function hurtPlayerById(id,reason){if(id===2)CoopMode.hurt(reason);else hurtPlayer(reason);}
 
 function buildObstacles(){
   obstacles=new Set();
@@ -276,7 +289,7 @@ function buildObstacles(){
 
 function isFree(x,y){
   if(!inB(x,y)||obstacles.has(K(x,y)))return false;
-  if(occSet.has(K(x,y)))return false;
+  if(bodyHas(K(x,y)))return false;
   if(groundBeans.some(b=>b.x===x&&b.y===y))return false;
   if(enemies.some(e=>Math.floor(e.x)===x&&Math.floor(e.y)===y))return false;
   return true;
@@ -301,7 +314,7 @@ function circleVsSolids(px,py,r,skipBody){
     let solid=false;
     if(!inB(cx,cy))solid=true;
     else if(obstacles.has(K(cx,cy)))solid=true;
-    else if(!skipBody&&occSet.has(K(cx,cy)))solid=true;
+    else if(!skipBody&&bodyHas(K(cx,cy)))solid=true;
     if(!solid)continue;
     if(cellCircleOverlap(px,py,r,cx,cy)){
       const penX=(r+.5)-Math.abs(px-(cx+.5)),penY=(r+.5)-Math.abs(py-(cy+.5));
@@ -353,7 +366,8 @@ function updateFlyingBeans(dt){
 }
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
-function beanDamage(){
+function beanDamage(owner){
+  if(owner===2)return CoopMode.damage();
   const base=1+Math.floor(snake.len/5)+RUN.dmgBonus;
   return Math.max(1,Math.round(base*(TEMPBUFF.t>0?TEMPBUFF.mult:1)));
 }
@@ -364,7 +378,7 @@ function reset(forTutorial){
   dir={x:1,y:0};dirQueue=[];
   snake={fx:6.5,fy:sy+.5,len:CFG.initLen,path:[],pathLen:0};
   for(let i=1;i<=CFG.initLen+3;i++)snake.path.push({x:6.5-i,y:sy+.5});
-  hearts=RUN.maxHearts;invuln=0;cutCd=0;alive=true;paused=false;shake=0;biteAcc=0;
+  hearts=RUN.maxHearts;invuln=0;cutCd=0;alive=true;primaryDown=false;paused=false;shake=0;biteAcc=0;
   danger=null;hurtFlash=0;
   firing=false;fireT=0;
   segPos=[];occSet=new Set();
@@ -377,6 +391,7 @@ function reset(forTutorial){
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
   plainPrisonKills=0;nodePrisonKills=0;
   computeSegs();
+  CoopMode.reset();
   cam.x=Math.max(0,Math.min(CFG.cols-VIEW_W,snake.fx-VIEW_W/2));
   cam.y=Math.max(0,Math.min(CFG.rows-VIEW_H,snake.fy-VIEW_H/2));
   computeEnclosure();
@@ -402,6 +417,7 @@ function computeEnclosure(){
   const block=new Uint8Array(total);
   for(const o of obstacles)block[o]=1;
   for(const c of occSet)block[c]=1;
+  for(const c of CoopMode.bodyCells())block[c]=1;
   const vis=new Uint8Array(total),q=[];
   for(let x=0;x<CFG.cols;x++)for(const y of[0,CFG.rows-1])if(!block[K(x,y)]&&!vis[K(x,y)]){vis[K(x,y)]=1;q.push(K(x,y));}
   for(let y=0;y<CFG.rows;y++)for(const x of[0,CFG.cols-1])if(!block[K(x,y)]&&!vis[K(x,y)]){vis[K(x,y)]=1;q.push(K(x,y));}
@@ -485,7 +501,7 @@ function updateMovement(dt){
     if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)){
       danger=null;
     }else{
-      if(danger.timer<=0)die(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");
+      if(danger.timer<=0)defeatPrimary(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");
       return;
     }
   }
@@ -581,17 +597,17 @@ function stanceShot(){
     const tx=snake.fx+dir.x*k,ty=snake.fy+dir.y*k;
     if(!hitWall(tx,ty,.3)&&circleVsSolids(tx,ty,.3,true)===null){sx=tx;sy=ty;break;}
   }
-  projs.push({x:sx,y:sy,vx:dir.x*spd,vy:dir.y*spd,life:CFG.beanLife,grace:.22,trail:[]});
+  projs.push({owner:1,x:sx,y:sy,vx:dir.x*spd,vy:dir.y*spd,life:CFG.beanLife,grace:.22,trail:[]});
   shake=Math.max(shake,.08);
 }
 
 function placeNode(){
-  if(gameState!=="play"||!alive||paused)return;
+  if(gameState!=="play"||!alive||primaryDown||paused)return;
   const cx=Math.floor(snake.fx),cy=Math.floor(snake.fy);
   if(charges<=0){ftext(snake.fx,snake.fy-1,"没有节点充能！","#ff5d5d");return;}
   if(mapNodes.some(n=>n.x===cx&&n.y===cy))return;
   const maxHp=CFG.nodeHp+RUN.nodeHpBonus;
-  mapNodes.push({x:cx,y:cy,hp:maxHp,maxHp,covered:true,bob:0});
+  mapNodes.push({owner:1,x:cx,y:cy,hp:maxHp,maxHp,covered:true,bob:0});
   charges--;
   nodesPlaced++;
   ftext(cx+.5,cy-.5,"放置节点","#ffd76e");
@@ -601,10 +617,10 @@ function updateMapNodes(dt){
   for(let i=mapNodes.length-1;i>=0;i--){
     const n=mapNodes[i];
     n.bob+=dt;
-    const covered=occSet.has(K(n.x,n.y));
+    const covered=n.owner===2?CoopMode.bodyHas(K(n.x,n.y)):occSet.has(K(n.x,n.y));
     if(n.covered&&!covered){
       mapNodes.splice(i,1);
-      charges=Math.min(CFG.nodeMax,charges+1);
+      if(n.owner===2)CoopMode.refundCharge();else charges=Math.min(CFG.nodeMax,charges+1);
       ftext(n.x+.5,n.y+.2,"节点回收 +1","#8fe36b");
       puff(n.x+.5,n.y+.5,"#ffd76e");
       continue;
@@ -614,8 +630,9 @@ function updateMapNodes(dt){
 }
 
 function updateCamera(dt){
-  const tx=Math.max(0,Math.min(CFG.cols-VIEW_W,snake.fx-VIEW_W/2));
-  const ty=Math.max(0,Math.min(CFG.rows-VIEW_H,snake.fy-VIEW_H/2));
+  const ps=playerViews(),cx=ps.length?ps.reduce((v,p)=>v+p.x,0)/ps.length:snake.fx,cy=ps.length?ps.reduce((v,p)=>v+p.y,0)/ps.length:snake.fy;
+  const tx=Math.max(0,Math.min(CFG.cols-VIEW_W,cx-VIEW_W/2));
+  const ty=Math.max(0,Math.min(CFG.rows-VIEW_H,cy-VIEW_H/2));
   const k=1-Math.exp(-9*dt);
   cam.x+=(tx-cam.x)*k;cam.y+=(ty-cam.y)*k;
 }
@@ -677,7 +694,7 @@ function updateProjs(dt){
     for(let j=enemies.length-1;j>=0;j--){
       const e=enemies[j];
       if(Math.hypot(p.x-e.x,p.y-e.y)<e.r+.25){
-        const d=beanDamage();
+        const d=beanDamage(p.owner);
         e.hp-=d;e.flash=.15;spitHits++;
         const sp0=Math.hypot(p.vx,p.vy)||1;
         e.hitDir={x:p.vx/sp0,y:p.vy/sp0};
@@ -692,7 +709,7 @@ function updateProjs(dt){
     }
     for(const n of npcs){
       if(Math.hypot(p.x-n.x,p.y-n.y)<n.r+.25){
-        const d=beanDamage();
+        const d=beanDamage(p.owner);
         n.hp-=d;n.flash=.15;spitHits++;
         ftext(n.x,n.y-.5,"-"+d,"#ffd76e");
         if(n.kind==="merchant")ftextThrottled(n);
@@ -712,7 +729,7 @@ function updateProjs(dt){
       if((p.bossCd||0)>0)p.bossCd-=dt;
       const bd2=Math.hypot(p.x-boss.x,p.y-boss.y);
       if(bd2<boss.r+.25&&(p.bossCd||0)<=0){
-        let d=beanDamage()*(boss.shield>0?.25:1);
+        let d=beanDamage(p.owner)*(boss.shield>0?.25:1);
         spitHits++;
         if(boss.shield>0){const s2=Math.min(boss.shield,d);boss.shield-=s2;d-=s2;}
         boss.hp-=d;boss.flash=.1;
@@ -742,7 +759,7 @@ function updateSeeds(dt){
     if(hit){
       if(hit.axis==="x"){s.vx*=-1;s.x+=Math.sign(s.vx)*.05;}
       else{s.vy*=-1;s.y+=Math.sign(s.vy)*.05;}
-      if(occSet.has(K(hit.cx,hit.cy)))s.refl=true;
+      if(bodyHas(K(hit.cx,hit.cy)))s.refl=true;
       puff(s.x,s.y,"#b55088");
     }
     if(boss&&s.refl&&Math.hypot(s.x-boss.x,s.y-boss.y)<boss.r+.3){
@@ -752,10 +769,9 @@ function updateSeeds(dt){
       for(let k=0;k<6;k++)particles.push({x:s.x,y:s.y,vx:(Math.random()-.5)*7,vy:(Math.random()-.5)*7,t:.35,col:"#4fa3ff"});
       seeds.splice(i,1);continue;
     }
-    if(alive&&Math.hypot(s.x-snake.fx,s.y-snake.fy)<.58){
-      hurtPlayer("被种子击中");
-      seeds.splice(i,1);continue;
-    }
+    let struck=false;
+    for(const target of playerViews())if(Math.hypot(s.x-target.x,s.y-target.y)<.58){hurtPlayerById(target.id,target.id===2?"P2 被种子击中":"被种子击中");struck=true;break;}
+    if(struck){seeds.splice(i,1);continue;}
     if(s.life<=0)seeds.splice(i,1);
   }
 }
@@ -765,7 +781,13 @@ function hurtPlayer(reason){
   hearts--;invuln=CFG.iframe;shake=.3;
   hurtFlash=.28;
   ftext(snake.fx,snake.fy-.8,"-1❤","#ff5d5d");
-  if(hearts<=0)die(reason);
+  if(hearts<=0)defeatPrimary(reason);
+}
+
+function defeatPrimary(reason){
+  if(primaryDown)return;
+  if(CoopMode.active()){primaryDown=true;hearts=0;firing=false;fireKey=false;heldKeys.clear();danger=null;segPos.length=0;occSet.clear();ftext(snake.fx,snake.fy-1,"P1 倒下！","#ff5d5d");computeEnclosure();return;}
+  die(reason);
 }
 
 function moveActor(e,dt){
@@ -786,7 +808,7 @@ function spawnNPC(kind){
   for(let t=0;t<80;t++){
     const x=rnd(CFG.cols),y=rnd(CFG.rows);
     if(!reachMask[K(x,y)]||!isFree(x,y))continue;
-    if(Math.hypot(x+.5-snake.fx,y+.5-snake.fy)<9)continue;
+    const near=nearestPlayer(x+.5,y+.5);if(near&&Math.hypot(x+.5-near.x,y+.5-near.y)<9)continue;
     npcs.push({kind,x:x+.5,y:y+.5,r:T.r,hp:T.hp,maxHp:T.hp,flash:0,inside:false,crying:false});
     return;
   }
@@ -810,7 +832,7 @@ function updateNPCs(dt){
     }
     if(n.hp<=0){dieNPC(n);continue;}
     if(alive&&!panelOpen&&gameState==="play"){
-      const d=Math.hypot(n.x-snake.fx,n.y-snake.fy);
+      const near=nearestPlayer(n.x,n.y),d=near?Math.hypot(n.x-near.x,n.y-near.y):Infinity;
       if(d<0.85&&!n.inside)openPanel(n);
       else if(d>1.25)n.inside=false;
     }
@@ -867,7 +889,7 @@ function spawnEnemy(type,ax,ay){
       x=Math.round(ax+Math.cos(a)*d);y=Math.round(ay+Math.sin(a)*d);
     }else{x=rnd(CFG.cols);y=rnd(CFG.rows);}
     if(!inB(x,y)||!reachMask[K(x,y)]||!isFree(x,y))continue;
-    if(Math.hypot(x+.5-snake.fx,y+.5-snake.fy)<4)continue;
+    const near=nearestPlayer(x+.5,y+.5);if(near&&Math.hypot(x+.5-near.x,y+.5-near.y)<4)continue;
     const e={type,x:x+.5,y:y+.5,flash:0,hitT:0,hp:T.hp,max:T.hp,r:T.r,
       vx:0,vy:0,wanderT:0,squash:rnd(6)};
     if(type==="rat")Object.assign(e,{state:"seek",eatT:0,fleeT:0,carried:0,wt:0,tx:x,ty:y});
@@ -893,21 +915,17 @@ function updateEnemies(dt){
       if(Math.random()<dt*2)puff(e.x,e.y,"#ff8f5e");
     }
     if(RUN.contactDmg>0&&e.hitT<=0){
-      for(let si=2;si<segPos.length;si++){
-        const s=segPos[si];
-        if(Math.hypot(e.x-s.x,e.y-s.y)<e.r+.4){
-          e.hp-=RUN.contactDmg*dt;e.hitT=.25;
-          if(Math.random()<dt*3)ftext(e.x,e.y-.7,"-"+RUN.contactDmg,"#ffb3c1");
-          break;
-        }
-      }
+      let touched=false;for(const target of playerViews()){for(let si=2;si<target.segPos.length;si++){
+        const s=target.segPos[si];if(Math.hypot(e.x-s.x,e.y-s.y)<e.r+.4){touched=true;break;}
+      }if(touched)break;}
+      if(touched){e.hp-=RUN.contactDmg*dt;e.hitT=.25;if(Math.random()<dt*3)ftext(e.x,e.y-.7,"-"+RUN.contactDmg,"#ffb3c1");}
     }
     const T=ENEMY_TYPES[e.type];
     if(T.kind==="chaser"){
       e.wanderT-=dt;
       if(e.wanderT<=0){
         e.wanderT=.5;
-        if(alive)steerTo(e,snake.fx,snake.fy,T.speed);else{e.vx=0;e.vy=0;}
+        const target=nearestPlayer(e.x,e.y);if(target)steerTo(e,target.x,target.y,T.speed);else{e.vx=0;e.vy=0;}
       }
       moveActor(e,dt);
       e.squash=(e.squash||0)+dt*6;
@@ -942,17 +960,16 @@ function updateEnemies(dt){
       e.shootT-=dt;e.vx=0;e.vy=0;
       if(e.shootT<=T.telegraph&&!e.warned)e.warned=true;
       if(e.shootT<=0&&alive){
-        e.shootT=T.cadence;e.warned=false;
-        const dx=snake.fx-e.x,dy=snake.fy-e.y,l=Math.hypot(dx,dy)||1;
-        seeds.push({x:e.x,y:e.y,vx:dx/l*T.bulletSpeed,vy:dy/l*T.bulletSpeed,life:CFG.seedLife});
+        e.shootT=T.cadence;e.warned=false;const target=nearestPlayer(e.x,e.y);
+        if(target){const dx=target.x-e.x,dy=target.y-e.y,l=Math.hypot(dx,dy)||1;seeds.push({x:e.x,y:e.y,vx:dx/l*T.bulletSpeed,vy:dy/l*T.bulletSpeed,life:CFG.seedLife});}
       }
     }
     else if(T.kind==="charger"){
       if(e.state==="windup"){
         e.stT-=dt;e.vx=0;e.vy=0;
         if(e.stT<=0){
-          const dx=snake.fx-e.x,dy=snake.fy-e.y,l=Math.hypot(dx,dy)||1;
-          e.vx=dx/l*T.chargeSpeed;e.vy=dy/l*T.chargeSpeed;
+          const target=nearestPlayer(e.x,e.y);if(!target){e.state="idle";continue;}
+          const dx=target.x-e.x,dy=target.y-e.y,l=Math.hypot(dx,dy)||1;e.vx=dx/l*T.chargeSpeed;e.vy=dy/l*T.chargeSpeed;
           e.state="charge";
         }
       }else if(e.state==="charge"){
@@ -963,10 +980,9 @@ function updateEnemies(dt){
           e.state="stun";e.stT=T.stun;
           shake=Math.max(shake,.25);puff(e.x,e.y,"#7a4a2b");
         }else{
-          const hdx=snake.fx-e.x,hdy=snake.fy-e.y;
-          if(alive&&invuln<=0&&Math.hypot(hdx,hdy)<e.r+.38){
-            hurtPlayer("被野猪撞飞");
-            e.state="stun";e.stT=T.stun;e.vx=0;e.vy=0;
+          const target=nearestPlayer(e.x,e.y),hdx=target?target.x-e.x:99,hdy=target?target.y-e.y:99;
+          if(target&&Math.hypot(hdx,hdy)<e.r+.38){
+            hurtPlayerById(target.id,target.id===2?"P2 被野猪撞飞":"被野猪撞飞");e.state="stun";e.stT=T.stun;e.vx=0;e.vy=0;
           }
         }
       }else if(e.state==="stun"){
@@ -980,7 +996,7 @@ function updateEnemies(dt){
           steerTo(e,e.tx,e.ty,T.walk);
         }
         moveActor(e,dt);
-        const dx=snake.fx-e.x,dy=snake.fy-e.y,d=Math.hypot(dx,dy)||1;
+        const target=nearestPlayer(e.x,e.y),dx=(target?target.x:e.x)-e.x,dy=(target?target.y:e.y)-e.y,d=Math.hypot(dx,dy)||1;
         const l1=Math.hypot(e.vx,e.vy)||1;
         const al=(e.vx/l1)*(dx/d)+(e.vy/l1)*(dy/d);
         if(d>2&&d<9&&al>.93){e.state="windup";e.stT=T.windup;e.vx=0;e.vy=0;}
@@ -994,7 +1010,7 @@ function updateEnemies(dt){
             const b=groundBeans[bi];
             if(Math.hypot(b.x+.5-e.x,b.y+.5-e.y)<T.boomR)groundBeans.splice(bi,1);
           }
-          if(alive&&Math.hypot(snake.fx-e.x,snake.fy-e.y)<T.boomR)hurtPlayer("被炸飞");
+          for(const target of playerViews())if(Math.hypot(target.x-e.x,target.y-e.y)<T.boomR)hurtPlayerById(target.id,target.id===2?"P2 被炸飞":"被炸飞");
           shake=Math.max(shake,.45);
           for(let k=0;k<16;k++){
             const a=k/16*Math.PI*2;
@@ -1004,16 +1020,15 @@ function updateEnemies(dt){
           enemies.splice(i,1);continue;
         }
       }else{
-        steerTo(e,snake.fx,snake.fy,T.speed);
+        const target=nearestPlayer(e.x,e.y);if(target)steerTo(e,target.x,target.y,T.speed);else{e.vx=0;e.vy=0;}
         moveActor(e,dt);
-        if(alive&&Math.hypot(snake.fx-e.x,snake.fy-e.y)<1.6){e.state="fuse";e.stT=T.fuse;e.vx=0;e.vy=0;}
+        if(target&&Math.hypot(target.x-e.x,target.y-e.y)<1.6){e.state="fuse";e.stT=T.fuse;e.vx=0;e.vy=0;}
       }
     }
-    if(alive&&invuln<=0){
-      if(Math.hypot(e.x-snake.fx,e.y-snake.fy)<e.r+.38){
-        hurtPlayer("被怪物抓住了头");
-        const nl=Math.hypot(e.x-snake.fx,e.y-snake.fy)||1;
-        e.vx=(e.x-snake.fx)/nl*6;e.vy=(e.y-snake.fy)/nl*6;
+    if(alive){
+      const target=nearestPlayer(e.x,e.y);if(target&&Math.hypot(e.x-target.x,e.y-target.y)<e.r+.38){
+        hurtPlayerById(target.id,target.id===2?"P2 被怪物抓住了头":"被怪物抓住了头");
+        const nl=Math.hypot(e.x-target.x,e.y-target.y)||1;e.vx=(e.x-target.x)/nl*6;e.vy=(e.y-target.y)/nl*6;
       }
     }
     if(e.hp<=0){
@@ -1026,7 +1041,7 @@ function updateEnemies(dt){
       if(e.type==="flower")flowersKilled++;
       const drop=T.drops+(e.type==="rat"?e.carried:0);
       if(drop>0)burstBeans(Math.floor(e.x),Math.floor(e.y),drop,e.hitDir?e.hitDir.x:undefined,e.hitDir?e.hitDir.y:undefined,.5);
-      if(Math.random()<CFG.nodeDropChance&&charges<CFG.nodeMax){
+      if(Math.random()<CFG.nodeDropChance&&(charges<CFG.nodeMax||CoopMode.needsCharge())){
         const np=findFreeNear(Math.floor(e.x),Math.floor(e.y),1);
         if(np){pickups.push({x:np.x,y:np.y});ftext(np.x+.5,np.y,"节点掉落！","#ffd76e");}
       }
@@ -1080,7 +1095,7 @@ function updateSpawner(dt){
 }
 
 function cutTail(){
-  if(gameState!=="play"||!alive||paused)return;
+  if(gameState!=="play"||!alive||primaryDown||paused)return;
   if(cutCd>0)return;
   if(snake.len<=CFG.cutKeep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
   cutCd=RUN.cutCd;
@@ -1262,6 +1277,7 @@ function levelClear(){
   gameState="between";
   firing=false;
   carry={len:snake.len,charges:charges};
+  CoopMode.captureCarry();
   document.getElementById("tut").classList.remove("show");
   if(levelIdx>=LEVELS.length-1){victory();return;}
   document.getElementById("ovTitle").textContent="关卡完成！";
@@ -1269,7 +1285,7 @@ function levelClear(){
     "下一关："+LEVELS[levelIdx+1].name+"<br>选择一项强化带入战斗";
   document.getElementById("ovBtns").style.display="none";
   showPick(u=>{
-    u.apply(RUN,api);
+    u.apply(RUN,api);CoopMode.captureCarry();
     document.getElementById("ovBtns").style.display="";
     levelIdx++;startLevel();
   });
@@ -1620,11 +1636,11 @@ function updateBoss(dt){
     boss.vy=dy/l*(boss.phase2?1.45:1.1);
     moveActor(boss,dt);
   }
-  if(alive){
-    boss.crushCd=Math.max(0,(boss.crushCd||0)-dt);
+  boss.crushCd=Math.max(0,(boss.crushCd||0)-dt);
+  if(alive&&!primaryDown){
     const hd=Math.hypot(boss.x-snake.fx,boss.y-snake.fy);
     if(hd<boss.r+.38){
-      die("被巨茧碾压");
+      defeatPrimary("被巨茧碾压");
     }else if(boss.crushCd<=0){
       let hitIdx=-1;
       for(let i=1;i<segPos.length;i++){
@@ -1648,6 +1664,11 @@ function updateBoss(dt){
       }
     }
   }
+  if(alive&&CoopMode.active()){
+    const p2=CoopMode.view(),hd=Math.hypot(boss.x-p2.x,boss.y-p2.y);
+    if(hd<boss.r+.38)CoopMode.defeat("P2 被巨茧碾压");
+    else if((boss.crushCd||0)<=0){let hitIdx=-1;for(let i=1;i<p2.segPos.length;i++)if(Math.hypot(p2.segPos[i].x-boss.x,p2.segPos[i].y-boss.y)<boss.r+.3){hitIdx=i;break;}if(hitIdx>0){CoopMode.trimAt(hitIdx,boss);boss.crushCd=.8;}}
+  }
   if(alive&&boss.stun<=0){
     boss.waveT=(boss.waveT==null?2:boss.waveT)-dt;
     if(boss.waveT<=0&&boss.burst===0){
@@ -1666,7 +1687,7 @@ function updateBoss(dt){
             seeds.push({x:boss.x,y:boss.y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:CFG.seedLife+2});
           }
         }else{
-          const base=Math.atan2(snake.fy-boss.y,snake.fx-boss.x);
+          const target=nearestPlayer(boss.x,boss.y)||{x:snake.fx,y:snake.fy};const base=Math.atan2(target.y-boss.y,target.x-boss.x);
           const n=boss.phase2?5:4;
           for(let k=0;k<n;k++){
             const a=base+(k-(n-1)/2)*.16;
@@ -1872,7 +1893,7 @@ function die(reason){
   if(!alive)return;
   alive=false;
   gameState="dead";
-  firing=false;
+  firing=false;CoopMode.clearInput();
   document.getElementById("tut").classList.remove("show");
   document.getElementById("ovTitle").textContent="游戏结束";
   document.getElementById("ovText").innerHTML=
@@ -1890,11 +1911,12 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.34 · 玩家设置 / 自定义键位版<br><br>"+
+    "玩法原型 v0.35 · 本地双人合作版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
-    "P 暂停 ｜ R 重开 ｜ M 静音";
+    (InputMap.getPlayerCount()===2?"P2：方向键移动 ｜ 小键盘 0 吐豆 · 1 断尾 · 2 节点<br>":"")+
+    "P 暂停 ｜ R 重开 ｜ M 静音 ｜ 设置中可自定义全部键位";
   document.getElementById("ovBtn").textContent="开始闯关";
   document.getElementById("ovBtn2").textContent="教学关卡";
   document.getElementById("ovBtn2").style.display="";
@@ -2010,7 +2032,7 @@ function render(){
     ctx.strokeStyle="rgba(255,215,110,.35)";ctx.lineWidth=2;ctx.setLineDash([6,6]);
     ctx.beginPath();ctx.arc(px,py+bob,CFG.nodePassR*T,0,7);ctx.stroke();
     ctx.setLineDash([]);
-    ctx.strokeStyle="#ffd76e";ctx.lineWidth=5;
+    ctx.strokeStyle=n.owner===2?"#7fd1e8":"#ffd76e";ctx.lineWidth=5;
     ctx.beginPath();ctx.arc(px,py+bob,T*.44,0,7);ctx.stroke();
     ctx.fillStyle="#20212f";ctx.fillRect(n.x*T,n.y*T-8,T,5);
     ctx.fillStyle=n.hp>3?"#ffd76e":"#ff5d5d";
@@ -2093,7 +2115,7 @@ function render(){
         ctx.closePath();ctx.fill();
       }
     }
-    const pdx=snake.fx-boss.x,pdy=snake.fy-boss.y,pl=Math.hypot(pdx,pdy)||1;
+    const target=nearestPlayer(boss.x,boss.y)||{x:snake.fx,y:snake.fy};const pdx=target.x-boss.x,pdy=target.y-boss.y,pl=Math.hypot(pdx,pdy)||1;
     for(const s2 of[-1,1]){
       const ex=bx+s2*R*.34,ey=by-R*.3;
       ctx.fillStyle="#ffe762";
@@ -2281,6 +2303,8 @@ function render(){
     }
   }
 
+  CoopMode.draw(ctx,T);
+
   for(const s of seeds){
     ctx.fillStyle="#b55088";
     ctx.beginPath();ctx.arc(s.x*T,s.y*T,T*.26,0,7);ctx.fill();
@@ -2331,16 +2355,25 @@ function goalText(){
 function updateHud(){
   document.getElementById("pauseMenu").style.display=
     (paused&&alive&&gameState==="play")?"flex":"none";
-  document.getElementById("hearts").textContent="❤".repeat(Math.max(0,hearts));
+  const coop=CoopMode.hud();
+  document.getElementById("p1Tag").textContent=coop.enabled?"P1":"";
+  document.getElementById("hearts").textContent=primaryDown?"倒下":"❤".repeat(Math.max(0,hearts));
   document.getElementById("len").textContent=snake.len;
-  document.getElementById("dmg").textContent=beanDamage();
+  document.getElementById("dmg").textContent=beanDamage(1);
+  document.getElementById("coopHud").style.display=coop.enabled?"inline":"none";
+  if(coop.enabled){
+    document.getElementById("p2Hearts").textContent=coop.alive?"❤".repeat(Math.max(0,coop.hearts)):"倒下";
+    document.getElementById("p2Len").textContent=coop.len;document.getElementById("p2Dmg").textContent=coop.dmg;
+    document.getElementById("p2Fire").style.width=coop.fire+"%";document.getElementById("p2Cut").style.width=Math.max(0,coop.cut)+"%";
+    document.getElementById("p2Nodes").textContent="◆".repeat(coop.charges)+"◇".repeat(Math.max(0,CFG.nodeMax-coop.charges));
+  }
   document.getElementById("cdSpit").style.width=(firing?100:0)+"%";
   document.getElementById("cdCut").style.width=((1-cutCd/RUN.cutCd)*100)+"%";
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
   document.getElementById("stat").textContent=
     (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":"")+
-    "击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
+    (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 
 let last=performance.now();
@@ -2358,8 +2391,8 @@ function loop(now){
     hurtFlash=Math.max(0,hurtFlash-dt);
     cutCd=Math.max(0,cutCd-dt);
     shake=Math.max(0,shake-dt);
-    updateMovement(dt);
-    const wantFire=(fireKey||VInput.fire)&&alive&&!paused;
+    if(!primaryDown)updateMovement(dt);
+    const wantFire=(fireKey||VInput.fire)&&alive&&!primaryDown&&!paused;
     if(wantFire&&!firing){firing=true;stanceShot();fireT=1/(CFG.snakeSpeed*RUN.spitRateMult);}
     if(!wantFire)firing=false;
     if(firing){
@@ -2370,6 +2403,7 @@ function loop(now){
         fireT+=shotInt;
       }
     }
+    CoopMode.update(dt);
     updateMapNodes(dt);
     updateFlyingBeans(dt);
     updateMechs(dt);

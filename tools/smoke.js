@@ -2,7 +2,8 @@
 /* 冒烟测试：无头跑通 加载→闯关→射击→布点→沙盒→教学 全链路
  * 用法：node tools/smoke.js prototype/index.html   （必须全绿才允许提交） */
 const fs=require("fs"),path=require("path");
-const htmlPath=path.resolve(process.argv[2]||"prototype/index.html");
+const args=process.argv.slice(2),coopMode=args.includes("--coop");
+const htmlPath=path.resolve(args.find(a=>!a.startsWith("--"))||"prototype/index.html");
 if(!fs.existsSync(htmlPath)){console.error("找不到 "+htmlPath);process.exit(1);}
 const html=fs.readFileSync(htmlPath,"utf8");
 let code="";
@@ -37,6 +38,8 @@ global.document={
   createElement(tag){return mkEl("<"+tag+">");},
   body:mkEl("body"),
 };
+let storedControls=coopMode?JSON.stringify({playerCount:2,bindings:{1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",cut:"KeyK",node:"KeyF"},2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",cut:"Numpad1",node:"Numpad2"}}}):null;
+global.localStorage={getItem(){return storedControls},setItem(k,v){storedControls=v}};
 const listeners={};
 global.addEventListener=(ev,fn)=>{(listeners[ev]=listeners[ev]||[]).push(fn)};
 let rafCb=null,simTime=0;
@@ -50,6 +53,21 @@ try{
     document,addEventListener,performance,requestAnimationFrame);
   console.log("[load] OK");
   frames(5);
+  if(coopMode){
+    els["ovBtn3"].onclick();frames(30);
+    const coop=global.CoopMode&&global.CoopMode.state,p=coop&&coop.p;
+    if(!coop||!coop.enabled||!p||!p.alive)throw new Error("P2 was not created");
+    const y0=p.snake.fy;fire({key:"ArrowUp",code:"ArrowUp",preventDefault(){},repeat:false},"keydown");frames(25);fire({key:"ArrowUp",code:"ArrowUp",preventDefault(){}},"keyup");
+    if(!(p.snake.fy<y0-.2))throw new Error("P2 movement input did not move the player");
+    const len0=p.snake.len;fire({key:"0",code:"Numpad0",preventDefault(){},repeat:false},"keydown");frames(8);fire({key:"0",code:"Numpad0",preventDefault(){}},"keyup");
+    if(!(p.snake.len<len0))throw new Error("P2 fire did not consume body ammo");
+    const charge0=p.charges;fire({key:"2",code:"Numpad2",preventDefault(){},repeat:false},"keydown");
+    if(p.charges!==charge0-1)throw new Error("P2 node placement did not consume its own charge");
+    frames(20);console.log("[coop P2 move + fire + node] OK");
+    const runningStat=els["stat"].textContent;global.CoopMode.defeat("P2 test down");frames(70);
+    if(p.alive||els["stat"].textContent===runningStat)throw new Error("P1 did not continue after P2 went down");
+    console.log("[coop one player down + teammate continues] OK");els["pauseHome"].onclick();frames(2);
+  }
   els["ovBtn"].onclick();
   frames(30);
   console.log("[campaign start L1 + 30 frames] OK");
