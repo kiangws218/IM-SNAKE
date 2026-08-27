@@ -14,7 +14,7 @@
     const len=saved?Math.max(CFG.minLen,Math.min(saved.len,120)):CFG.initLen;
     const nodeCount=saved?Math.min(CFG.nodeMax,saved.charges):1;
     S.p=PlayerCore.create(2,{x:6.5,y:sy+.5,dx:1,dy:0,len,hearts:RUN.maxHearts,charges:nodeCount,color:"#4389a8",light:"#7fd1e8"});
-    compute();
+    S.p.fireStreak=0;compute();
   }
   function resetRun(){S.carry=null;}
   function captureCarry(){if(S.enabled&&S.p)S.carry={len:S.p.alive?S.p.snake.len:CFG.initLen,charges:S.p.alive?S.p.charges:1};}
@@ -29,7 +29,7 @@
   }
   function damage(){
     if(!S.p)return 1;
-    const base=1+Math.floor(S.p.snake.len/5)+RUN.dmgBonus;
+    const base=4+RUN.dmgBonus;
     return Math.max(1,Math.round(base*(TEMPBUFF.t>0?TEMPBUFF.mult:1)));
   }
   function combo(){
@@ -98,16 +98,16 @@
     p.snake.len--;const spd=CFG.spitSpeed*RUN.spitSpeedMult;
     let sx=p.snake.fx+p.dir.x*.9,sy=p.snake.fy+p.dir.y*.9;
     for(const k of[.9,1.4,1.9,2.4,2.9]){const tx=p.snake.fx+p.dir.x*k,ty=p.snake.fy+p.dir.y*k;if(!hitWall(tx,ty,.3)&&circleVsSolids(tx,ty,.3,true)===null){sx=tx;sy=ty;break;}}
-    projs.push({owner:2,x:sx,y:sy,vx:p.dir.x*spd,vy:p.dir.y*spd,life:CFG.beanLife,grace:.22,trail:[]});shake=Math.max(shake,.08);
+    projs.push({owner:2,x:sx,y:sy,vx:p.dir.x*spd,vy:p.dir.y*spd,life:CFG.beanLife,grace:.22,trail:[],streak:p.fireStreak||0});if(p.fireStreak<CFG.ricCap)p.fireStreak++;shake=Math.max(shake,.08);
   }
   function updateFire(dt){
     const p=S.p,want=p.fireHeld&&p.alive&&!paused;
-    if(want&&!p.firing){p.firing=true;stanceShot();p.fireT=1/(CFG.snakeSpeed*RUN.spitRateMult);}
-    if(!want)p.firing=false;
-    if(p.firing){p.fireT-=dt;const shotInt=1/(CFG.snakeSpeed*RUN.spitRateMult);while(p.fireT<=0&&p.firing){stanceShot();p.fireT+=shotInt;}}
+    if(want&&!p.firing){p.firing=true;stanceShot();p.fireT=1/(CFG.spitRate*RUN.spitRateMult);}
+    if(!want){p.firing=false;p.fireStreak=0;}
+    if(p.firing){p.fireT-=dt;const shotInt=1/(CFG.spitRate*RUN.spitRateMult);while(p.fireT<=0&&p.firing){stanceShot();p.fireT+=shotInt;}}
   }
   function cutTail(){
-    if(!active()||gameState!=="play"||paused)return;const p=S.p;if(p.cutCd>0)return;
+    if(!active()||gameState!=="play"||paused||freeze)return;const p=S.p;if(p.cutCd>0)return;
     if(p.snake.len<=CFG.cutKeep){ftext(p.snake.fx,p.snake.fy-1,"P2 没有可断的尾！","#ff5d5d");return;}
     p.cutCd=RUN.cutCd;cutUsed++;const cutN=p.snake.len-CFG.cutKeep,recover=Math.floor(cutN*CFG.cutRecover);
     const tail=p.segPos[p.snake.len-1]||{x:p.snake.fx,y:p.snake.fy};p.snake.len=CFG.cutKeep;
@@ -115,7 +115,7 @@
     ftext(tail.x,tail.y-.6,"P2 -"+(cutN-recover)+" 节","#7fd1e8");shake=.25;puff(tail.x,tail.y,"#7fd1e8");compute();computeEnclosure();
   }
   function placeNode(){
-    if(!active()||gameState!=="play"||paused)return;const p=S.p,cx=Math.floor(p.snake.fx),cy=Math.floor(p.snake.fy);
+    if(!active()||gameState!=="play"||paused||freeze)return;const p=S.p,cx=Math.floor(p.snake.fx),cy=Math.floor(p.snake.fy);
     if(p.charges<=0){ftext(p.snake.fx,p.snake.fy-1,"P2 没有节点充能！","#ff5d5d");return;}
     if(mapNodes.some(n=>n.x===cx&&n.y===cy))return;const maxHp=CFG.nodeHp+RUN.nodeHpBonus;
     mapNodes.push({owner:2,x:cx,y:cy,hp:maxHp,maxHp,covered:true,bob:0});p.charges--;nodesPlaced++;
@@ -156,7 +156,7 @@
     if(!S.enabled||!S.p)return{enabled:false};const p=S.p;
     return{enabled:true,alive:p.alive,hearts:p.hearts,len:p.snake.len,dmg:damage(),charges:p.charges,fire:p.firing?100:0,cut:(1-p.cutCd/RUN.cutCd)*100};
   }
-  function clearInput(){if(!S.p)return;S.p.held.clear();S.p.fireHeld=false;S.p.firing=false;}
+  function clearInput(){if(!S.p)return;S.p.held.clear();S.p.fireHeld=false;S.p.firing=false;S.p.fireStreak=0;}
   function keydown(ev){
     if(InputMap.getPlayerCount()!==2)return;const action=InputMap.actionFor(2,ev);if(!action)return;
     if(ev.preventDefault)ev.preventDefault();if(gameState!=="play"||!active())return;

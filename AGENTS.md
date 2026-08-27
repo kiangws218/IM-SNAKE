@@ -46,10 +46,13 @@
 
 ## 当前状态与下一步
 
-- ✅ 地基完成（v0.12）：数据驱动拆分 + 战役流程 + 三选一强化骨架
-- ⏳ 待制作人试玩验证 3 个示例关手感
-- **下一里程碑 M1（范围锁定）**：教学关融入战役流 + 章节 2 内容 + 貔貅王 BOSS 原型
-- 待定：音效合成版（prototype/index-sfx.html，冻结中）；剧情基调未定
+- ✅ 地基 + NPC 系统 + BOSS 战完成（v0.28）：巨岩茧母·磐（菜单 ⚔ Boss挑战 进入）
+- 🐛 **已知未修 BUG（交接优先处理）**：移动端与可蒂交互时，右侧面板滑入但内容全空（头像/名字/台词/选项均无）。
+  - 已加排查工具：`window.__IMS` 调试钩子（暴露 npcs/snake/gameState/paused/freeze/alive/moveLock/openPanel/closePanel）；openPanel 已包 try/catch + uiFatal 红条（真机崩溃会直接显示）
+  - 无头复现（`node tools/diag-npc.js`）：门控变量全部正常（play/false/false/true/false）、无异常抛出，但 openPanel 从未触发、且 snake.fx 冻结在出生点 6.50——**疑似 loop 的 play 分支未执行，或 rAF 链首帧就断了**
+  - 排查建议：①在 loop() 首尾加帧计数器确认 rAF 链是否存活 ②在 play 块首尾各加探针 ③真机复现看红条是否出现（区分"没调用"还是"调用即崩"）
+- ⏳ 选关界面已实现但暂时隐藏（ovBtn4 display:none，架构保留，去掉那行即恢复）
+- ⏳ 待定：音效合成版（prototype/index-sfx.html，冻结中）；剧情基调未定（STORY_INTRO.md 有三基调分析）
 
 ## 提交纪律
 
