@@ -101,6 +101,7 @@
     <select id="fLv"><option value="">全部等级</option><option>1</option><option>2</option><option>3</option></select>
     <input id="fSearch" placeholder="搜索名称 / 效果 / 前置…">
     <span id="stat"></span>
+    <span id="srcStatus" style="color:var(--dim);font-size:11px"></span>
   </div>
 </header>
 <main id="list"></main>
@@ -164,17 +165,30 @@ function migrateCard(c){
   return c;
 }
 function load(){
+  let source="默认卡组";
+  let hadData=false;
   try{
     const raw=localStorage.getItem(LS_KEY);
-    if(raw){db=JSON.parse(raw);}
+    if(raw){db=JSON.parse(raw);hadData=true;source="本地存档(v3)";}
     else{
       const old=localStorage.getItem("imsnake_cards_v2");
-      if(old){db=JSON.parse(old);}
-      else{db=null;}
+      if(old){
+        db=JSON.parse(old);hadData=true;source="迁移自 v2";
+        try{localStorage.removeItem("imsnake_cards_v2");}catch(e){}
+      }else{
+        db=null;
+      }
     }
-  }catch(e){showErr("读取存档失败："+e.message);}
-  if(!db||!Array.isArray(db.cards))db={meta:{version:3,note:""},cards:[]};
-  db.cards=db.cards.map(migrateCard);
+  }catch(e){showErr("读取存档失败："+e.message);db=null;}
+  if(!db||!Array.isArray(db.cards)){
+    db={meta:{version:3,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
+    source=hadData?"存档异常，已恢复默认":"默认卡组";
+  }else{
+    db.cards=db.cards.map(migrateCard);
+  }
+  try{localStorage.setItem(LS_KEY,JSON.stringify(db));}catch(e){showErr("写入存档失败："+e.message);}
+  const st=document.getElementById("srcStatus");
+  if(st)st.textContent="来源："+source+" · "+db.cards.length+" 张";
 }
 function save(){
   try{localStorage.setItem(LS_KEY,JSON.stringify(db));}catch(e){showErr("保存失败："+e.message);return;}
