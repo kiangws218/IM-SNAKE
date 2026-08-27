@@ -45,6 +45,7 @@
   .b-lv{background:#23243a;color:var(--gold)}
   .desc{font-size:12px;color:#cfcbe6;min-height:34px}
   .desc b{color:var(--gold)}
+  .note{font-size:11px;color:#ffd7a0;background:rgba(255,215,110,.08);border-left:2px solid var(--gold);padding:4px 8px;border-radius:4px;white-space:pre-wrap}
   .pars{font-size:11px;color:var(--dim);line-height:1.7}
   .pars em{color:#7fd1e8;font-style:normal}
   .links{font-size:11px;color:var(--dim);line-height:1.8}
@@ -109,7 +110,7 @@
     <button type="button" data-tab="snake">🐍 蛇身</button>
     <button type="button" data-tab="monsters">👾 怪物</button>
     <button type="button" data-tab="npcs">🧙 NPC</button>
-    <button type="button" data-tab="interact">💬 互动</button>
+    <button type="button" data-tab="drops">💎 掉落物</button>
   </div>
   <div class="row actions">
     <button type="button" class="primary" id="btnAdd" data-in-cards>＋ 新增卡牌</button>
@@ -133,7 +134,7 @@
 <section class="tabsec" id="sec-snake"></section>
 <section class="tabsec" id="sec-monsters"></section>
 <section class="tabsec" id="sec-npcs"></section>
-<section class="tabsec" id="sec-interact"></section>
+<section class="tabsec" id="sec-drops"></section>
 
 <div id="mask"><div id="modal"><h2 id="mTitle">编辑卡牌</h2><div id="mForm"></div></div></div>
 <div id="popup" style="display:none"></div>
@@ -227,19 +228,27 @@ const DEFAULT_NPCS={
   merchant:{name:"路边商人",hp:26,r:.55,foodValue:1,respawn:30,drop:"curseOrb"},
   keti:{name:"可蒂",hp:14,r:.42,foodValue:2,respawn:0,drop:"beans:3"},
 };
-const DEFAULT_INTERACT={
-  merchant:[{label:"交易",action:"trade",arg:""},{label:"离开",action:"leave",arg:""}],
-  keti:[{label:"对话",action:"dialog",arg:"start"},{label:"离开",action:"leave",arg:""}],
+const DEFAULT_DROPS={
+  bean:{id:"bean",name:"豆",desc:"恢复 1 节身长（普通掉落）"},
 };
-const ACTION_NAMES={trade:"交易",dialog:"对话",leave:"离开",eat:"吃掉",end:"结束"};
 
-const LS_KEY="imsnake_cards_v4";
-let db={meta:{version:4,note:""},cards:[],snake:{},monsters:{},npcs:{},interact:{}};
+const LS_KEY="imsnake_cards_v5";
+let db={meta:{version:5,note:""},cards:[],snake:{},monsters:{},npcs:{},drops:{}};
 
 function migrateCard(c){
   if(c.vals&&!c.params){c.params={x:{1:c.vals[1]||0,2:c.vals[2]||0,3:c.vals[3]||0}};delete c.vals;}
   if(!c.params)c.params={};
+  if(c.note===undefined)c.note="";
   return c;
+}
+function migrateMonsters(ms){
+  Object.values(ms).forEach(m=>{
+    if(!Array.isArray(m.drops)){
+      const n=+m.drops||0;
+      m.drops=n?[{id:"bean",count:n}]:[];
+    }
+  });
+  return ms;
 }
 function load(){
   let source="默认配置",hadData=false;
@@ -247,7 +256,7 @@ function load(){
     const raw=localStorage.getItem(LS_KEY);
     if(raw){db=JSON.parse(raw);hadData=true;source="本地存档";}
     else{
-      for(const oldKey of["imsnake_cards_v3","imsnake_cards_v2"]){
+      for(const oldKey of["imsnake_cards_v4","imsnake_cards_v3","imsnake_cards_v2"]){
         const old=localStorage.getItem(oldKey);
         if(old){db=JSON.parse(old);hadData=true;source="迁移自旧版";try{localStorage.removeItem(oldKey);}catch(e){}break;}
       }
@@ -257,9 +266,10 @@ function load(){
   if(!Array.isArray(db.cards))db.cards=[];
   db.cards=db.cards.map(migrateCard);
   db.snake=Object.assign({},DEFAULT_SNAKE,db.snake||{});
-  db.monsters=Object.assign({},DEFAULT_MONSTERS,db.monsters||{});
+  db.monsters=migrateMonsters(Object.assign({},DEFAULT_MONSTERS,db.monsters||{}));
   db.npcs=Object.assign({},DEFAULT_NPCS,db.npcs||{});
-  db.interact=Object.assign({},DEFAULT_INTERACT,db.interact||{});
+  db.drops=Object.assign({},DEFAULT_DROPS,db.drops||{});
+  delete db.interact;
   if(!db.cards.length){db.cards=JSON.parse(JSON.stringify(DEFAULT_CARDS));source=hadData?"存档卡牌为空，已恢复默认":"默认配置";}
   try{localStorage.setItem(LS_KEY,JSON.stringify(db));}catch(e){showErr("写入存档失败："+e.message);}
   document.getElementById("srcStatus").textContent="来源："+source+" · "+db.cards.length+" 张卡";
@@ -305,6 +315,7 @@ function render(){
         "<span class='badge b-cat'>"+catName(c.cat)+"</span>"+
         "<span class='badge b-lv'>Lv"+c.lv+"</span></div>"+
         "<div class='desc'>"+esc(subDesc(c))+"</div>"+
+        (c.note?"<div class='note'>📝 "+esc(c.note)+"</div>":"")+
         "<div class='pars'>"+parSummary(c)+"</div>"+
         "<div class='links'>前置："+linkList(c.pre)+"<br>互斥："+linkList(c.mut)+"</div>"+
         "<div class='ops'><button type='button' data-edit='"+c.id+"'>编辑</button><button type='button' class='del' data-del='"+c.id+"'>删除</button></div>";
@@ -403,6 +414,7 @@ function openModal(id){
         field("等级",mkSelect("inpLv",[[1,"Lv1"],[2,"Lv2"],[3,"Lv3"]],c?(c.lv||1):1))+
       '</div>'+
       field("效果描述（用 {参数名} 引用数值，如：豆伤+{x}）",'<textarea id="inpDesc">'+esc(c?c.desc:"")+'</textarea>')+
+      field("备注（你的要求 / 说明，纯文字）",'<textarea id="inpNote">'+esc(c?(c.note||""):"")+'</textarea>')+
       '<div class="field"><label>参数数值（按等级设置）</label><div id="paramBox"></div><button type="button" id="btnAddParam">＋ 新增参数</button></div>'+
       field("前置卡牌（需先拥有其一）",mkMulti("inpPre",c?(c.pre||[]):[]))+
       field("互斥卡牌（不可同时拥有）",mkMulti("inpMut",c?(c.mut||[]):[]))+
@@ -414,8 +426,9 @@ function openModal(id){
         const name=el("inpName").value.trim();if(!name){toast("名称不能为空");return;}
         const cat=el("inpCat").value,rar=el("inpRar").value,lv=parseInt(el("inpLv").value,10)||1;
         const desc=el("inpDesc").value.trim(),params=collectParams();
-        if(c){c.name=name;c.cat=cat;c.rar=rar;c.lv=lv;c.desc=desc;c.params=params;}
-        else{db.cards.push({id:"c_"+Date.now().toString(36),name,cat,rar,lv,params,desc,pre:[],mut:[]});}
+        const note=el("inpNote").value.trim();
+        if(c){c.name=name;c.cat=cat;c.rar=rar;c.lv=lv;c.desc=desc;c.params=params;c.note=note;}
+        else{db.cards.push({id:"c_"+Date.now().toString(36),name,cat,rar,lv,params,desc,pre:[],mut:[],note});}
         save();render();closeModal();
       }catch(e){showErr("保存卡牌失败："+e.message);}
     };
@@ -456,43 +469,70 @@ function renderSnake(){
 /* ============ 怪物页 ============ */
 function renderMonsters(){
   const s=el("sec-monsters");
-  s.innerHTML="<div class='panel'><h2>怪物</h2><div class='sub'>「分裂」格式：mini_slime:2（死后分裂 2 只小史莱姆）</div><table class='mtab'><thead><tr><th>名称</th><th>类型</th><th class='narrow'>HP</th><th class='narrow'>速度</th><th class='narrow'>半径</th><th class='narrow'>掉豆</th><th>分裂</th><th style='width:40px'></th></tr></thead><tbody id='monBody'></tbody></table><button type='button' class='madd' id='monAdd'>＋ 新增怪物</button></div>";
+  s.innerHTML="<div class='panel'><h2>怪物</h2><div class='sub'>「分裂」格式：mini_slime:2（死后分裂 2 只小史莱姆）；掉落物在下方栏位选择</div><table class='mtab'><thead><tr><th>名称</th><th>类型</th><th class='narrow'>HP</th><th class='narrow'>速度</th><th class='narrow'>半径</th><th>分裂</th><th style='width:40px'></th></tr></thead><tbody id='monBody'></tbody></table><button type='button' class='madd' id='monAdd'>＋ 新增怪物</button></div>";
   const body=el("monBody");body.innerHTML="";
   Object.keys(db.monsters).forEach(key=>renderMonRow(body,key));
   el("monAdd").onclick=function(){
     const key="mon_"+Date.now().toString(36);
-    db.monsters[key]={name:"新怪物",kind:"chaser",hp:5,speed:1,r:.5,drops:2,split:""};
+    db.monsters[key]={name:"新怪物",kind:"chaser",hp:5,speed:1,r:.5,drops:[],split:""};
     renderMonRow(body,key);save();
   };
+}
+function dropName(id){const d=db.drops[id];return d?d.name:id;}
+function dropEditor(key){
+  const m=db.monsters[key];
+  const wrap=document.createElement("span");
+  const paint=()=>{
+    wrap.innerHTML="";
+    (m.drops||[]).forEach((d,i)=>{
+      const chip=document.createElement("span");
+      chip.style.cssText="display:inline-flex;align-items:center;gap:4px;background:#20212f;border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin:2px 6px 2px 0;font-size:11px;color:#cfcbe6";
+      chip.innerHTML=esc(dropName(d.id))+" ×"+d.count+" <a style='color:var(--red);cursor:pointer'>✕</a>";
+      chip.querySelector("a").onclick=()=>{m.drops.splice(i,1);save();paint();};
+      wrap.appendChild(chip);
+    });
+    const sel=document.createElement("select");
+    sel.style.cssText="background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px;font:inherit";
+    Object.keys(db.drops).forEach(did=>{const o=document.createElement("option");o.value=did;o.textContent=db.drops[did].name;sel.appendChild(o);});
+    const cnt=document.createElement("input");
+    cnt.type="number";cnt.min=1;cnt.value=1;
+    cnt.style.cssText="width:52px;background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:4px;font:inherit";
+    const add=document.createElement("button");add.type="button";add.className="madd";add.textContent="添加";
+    add.style.padding="4px 10px";add.style.margin="0 0 0 6px";
+    add.onclick=()=>{
+      const did=sel.value,n=Math.max(1,parseInt(cnt.value,10)||1);
+      const ex=m.drops.find(d=>d.id===did);
+      if(ex)ex.count+=n;else m.drops.push({id:did,count:n});
+      save();paint();
+    };
+    wrap.appendChild(sel);wrap.appendChild(cnt);wrap.appendChild(add);
+  };
+  paint();
+  return wrap;
 }
 function renderMonRow(body,key){
   const m=db.monsters[key];
   const tr=document.createElement("tr");
-  const num=(k,w)=>'<td><input class="narrow" type="number" step="any" data-k="'+k+'" value="'+(m[k]!==undefined?m[k]:"")+'"></td>';
-  let extra="";
-  (MON_FIELDS[m.kind]||[]).forEach(f=>{extra+=num(f);});
+  const num=(k)=>'<td><input class="narrow" type="number" step="any" data-k="'+k+'" value="'+(m[k]!==undefined?m[k]:"")+'"></td>';
   tr.innerHTML="<td><input type='text' data-k='name' value='"+esc(m.name)+"'></td>"+
     "<td><select data-k='kind'>"+Object.keys(KINDS).map(k=>"<option value='"+k+"'"+(m.kind===k?" selected":"")+">"+KINDS[k]+"</option>").join("")+"</select></td>"+
-    num("hp")+num("speed")+num("r")+num("drops")+
+    num("hp")+num("speed")+num("r")+
     "<td><input type='text' data-k='split' value='"+esc(m.split||"")+"'></td>"+
     "<td><button type='button' class='del' data-del='"+key+"'>删</button></td>";
-  // 类型特有字段（追加在新列不美观，改为行内小字块）
-  const extraDiv=document.createElement("tr");
-  extraDiv.className="extra";
-  extraDiv.innerHTML="<td colspan='8' style='font-size:11px;color:var(--dim)'>特殊参数："+
-    Object.keys(KINDS).length; // placeholder replaced below
-  // 简化：把特殊字段做成第二行
   const fields=(MON_FIELDS[m.kind]||[]);
   const cells=fields.map(f=>{
     const lbl={walk:"闲逛速",windup:"蓄力",chargeSpeed:"冲速",stun:"眩晕",fuse:"引信",boomR:"爆炸半径",eatTime:"进食",cadence:"间隔",telegraph:"前摇",bulletSpeed:"弹速"}[f]||f;
     return "<span style='margin-right:8px'>"+lbl+" <input type='number' step='any' data-k='"+f+"' value='"+(m[f]!==undefined?m[f]:"")+"' style='width:64px;background:#101120;border:1px solid var(--line);border-radius:5px;padding:3px;color:var(--fg)'></span>";
   }).join("");
-  extraDiv.innerHTML="<td colspan='8' style='font-size:11px'>"+cells+"</td>";
+  const extraDiv=document.createElement("tr");
+  extraDiv.innerHTML="<td colspan='7' style='font-size:11px'>"+cells+"</td>";
+  const dropTr=document.createElement("tr");
+  dropTr.innerHTML="<td colspan='7' style='font-size:11px'>掉落物：</td>";
+  dropTr.children[0].appendChild(dropEditor(key));
   body.appendChild(tr);
   body.appendChild(extraDiv);
-  tr.querySelector('[data-k="kind"]').onchange=function(){
-    m.kind=this.value;renderMonsters();save();
-  };
+  body.appendChild(dropTr);
+  tr.querySelector('[data-k="kind"]').onchange=function(){m.kind=this.value;renderMonsters();save();};
   tr.querySelectorAll("input[data-k], select[data-k]").forEach(inp=>{
     inp.addEventListener("change",function(){
       const k=this.getAttribute("data-k");
@@ -545,49 +585,45 @@ function renderNpcs(){
   s.appendChild(add);
 }
 
-/* ============ 互动页 ============ */
-function renderInteract(){
-  const s=el("sec-interact");s.innerHTML="";
-  Object.keys(db.interact).forEach(kind=>{
-    const opts=db.interact[kind]||[];
-    const p=document.createElement("div");
-    p.className="panel";
-    p.innerHTML="<h2>"+esc((db.npcs[kind]&&db.npcs[kind].name)||kind)+" 的互动选项 <span style='color:var(--dim);font-size:11px'>（「吃掉」为红字固定项，不在此列）</span></h2>";
-    const box=document.createElement("div");box.className="mlist";box.style.maxHeight="none";
-    p.appendChild(box);
-    const renderOpts=()=>{
-      box.innerHTML="";
-      opts.forEach((o,i)=>{
-        const row=document.createElement("div");
-        row.className="prow";
-        row.innerHTML="<input class='pname' style='width:120px' data-i='"+i+"' data-f='label' value='"+esc(o.label)+"'>"+
-          "<select data-i='"+i+"' data-f='action' style='width:90px;background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:5px'>"+
-          Object.keys(ACTION_NAMES).map(a=>"<option value='"+a+"'"+(o.action===a?" selected":"")+">"+ACTION_NAMES[a]+"</option>").join("")+
-          "</select>"+
-          "<input data-i='"+i+"' data-f='arg' value='"+esc(o.arg||"")+"' placeholder='参数(节点id等)' style='flex:1;background:#101120;border:1px solid var(--line);border-radius:5px;padding:5px;color:var(--fg)'>"+
-          "<button type='button' class='pdel' data-i='"+i+"'>✕</button>";
-        box.appendChild(row);
-      });
-      box.querySelectorAll("[data-f]").forEach(inp=>{
-        inp.addEventListener("change",function(){
-          const i=+this.getAttribute("data-i"),f=this.getAttribute("data-f");
-          if(f==="action")opts[i].action=this.value;
-          else if(f==="label")opts[i].label=this.value;
-          else opts[i].arg=this.value;
-          save();
-        });
-      });
-      box.querySelectorAll(".pdel").forEach(btn=>btn.onclick=function(){
-        opts.splice(+this.getAttribute("data-i"),1);save();renderOpts();
-      });
+/* ============ 掉落物页 ============ */
+function renderDrops(){
+  const s=el("sec-drops");
+  s.innerHTML="<div class='panel'><h2>掉落物</h2><div class='sub'>怪物掉落引用这些掉落物；效果目前为纯文字描述</div><div class='grid' id='dropGrid'></div><button type='button' class='madd' id='dropAdd' style='margin-top:10px'>＋ 新增掉落物</button></div>";
+  const g=el("dropGrid");g.innerHTML="";
+  Object.keys(db.drops).forEach(id=>{
+    const d=db.drops[id];
+    const card=document.createElement("div");
+    card.className="card";card.style.setProperty("--rr","#7fd1e8");
+    card.innerHTML="<div class='top'><h3 style='color:#7fd1e8'>"+esc(d.name)+"</h3><span class='badge b-lv'>"+esc(id)+"</span></div>"+
+      "<div class='desc'>"+esc(d.desc||"")+"</div>"+
+      "<div class='ops'><button type='button' data-edit='"+id+"'>编辑</button><button type='button' class='del' data-del='"+id+"'>删除</button></div>";
+    card.querySelector("[data-edit]").onclick=()=>openDropModal(id);
+    card.querySelector("[data-del]").onclick=function(){
+      if(!confirm("删除掉落物「"+d.name+"」？引用它的怪物会保留空引用。"))return;
+      delete db.drops[id];save();renderDrops();
     };
-    renderOpts();
-    const add=document.createElement("button");add.type="button";add.className="madd";add.style.marginTop="8px";
-    add.textContent="＋ 新增选项";
-    add.onclick=function(){opts.push({label:"新选项",action:"leave",arg:""});save();renderOpts();};
-    p.appendChild(add);
-    s.appendChild(p);
+    g.appendChild(card);
   });
+  el("dropAdd").onclick=function(){
+    const id="drop_"+Date.now().toString(36);
+    db.drops[id]={id,name:"新掉落物",desc:""};
+    openDropModal(id);
+  };
+}
+function openDropModal(id){
+  const d=db.drops[id];if(!d)return;
+  el("mTitle").textContent="掉落物："+d.name;
+  el("mForm").innerHTML=
+    '<div class="field"><label>名称</label><input id="dName" value="'+esc(d.name)+'"></div>'+
+    '<div class="field"><label>效果（纯文字描述）</label><textarea id="dDesc">'+esc(d.desc||"")+'</textarea></div>'+
+    '<div class="dbtn"><button type="button" class="ghost" id="btnCancel">取消</button><button type="button" id="btnSave">保存</button></div>';
+  el("btnCancel").onclick=closeModal;
+  el("btnSave").onclick=function(){
+    d.name=el("dName").value.trim()||"未命名";
+    d.desc=el("dDesc").value.trim();
+    save();renderDrops();closeModal();
+  };
+  el("mask").classList.add("show");
 }
 
 /* ============ 全局 ============ */
@@ -608,16 +644,17 @@ function importJSON(file){
       if(!Array.isArray(j.cards))throw new Error("缺少 cards 数组");
       db=j;db.cards=db.cards.map(migrateCard);
       db.snake=Object.assign({},DEFAULT_SNAKE,db.snake||{});
-      db.monsters=Object.assign({},DEFAULT_MONSTERS,db.monsters||{});
+      db.monsters=migrateMonsters(Object.assign({},DEFAULT_MONSTERS,db.monsters||{}));
       db.npcs=Object.assign({},DEFAULT_NPCS,db.npcs||{});
-      db.interact=Object.assign({},DEFAULT_INTERACT,db.interact||{});
+      db.drops=Object.assign({},DEFAULT_DROPS,db.drops||{});
+      delete db.interact;
       save();renderAll();
       toast("导入成功 ("+db.cards.length+" 张卡)");
     }catch(e){toast("导入失败："+e.message);}
   };
   r.readAsText(file);
 }
-function renderAll(){render();renderSnake();renderMonsters();renderNpcs();renderInteract();}
+function renderAll(){render();renderSnake();renderMonsters();renderNpcs();renderDrops();}
 
 el("btnAdd").onclick=function(){openModal(null);};
 el("btnExport").onclick=exportJSON;
@@ -625,7 +662,7 @@ el("btnImport").onclick=function(){el("fileImport").click();};
 el("fileImport").onchange=function(e){if(e.target.files[0])importJSON(e.target.files[0]);e.target.value="";};
 el("btnReset").onclick=function(){
   if(!confirm("恢复默认配置？当前所有编辑会丢失。"))return;
-  db={meta:{version:4,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS)),snake:Object.assign({},DEFAULT_SNAKE),monsters:Object.assign({},DEFAULT_MONSTERS),npcs:Object.assign({},DEFAULT_NPCS),interact:Object.assign({},DEFAULT_INTERACT)};
+  db={meta:{version:5,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS)),snake:Object.assign({},DEFAULT_SNAKE),monsters:Object.assign({},DEFAULT_MONSTERS),npcs:Object.assign({},DEFAULT_NPCS),drops:Object.assign({},DEFAULT_DROPS)};
   save();renderAll();
 };
 Object.keys(CATS).forEach(function(k){el("fCat").insertAdjacentHTML("beforeend","<option value='"+k+"'>"+CATS[k]+"</option>");});
@@ -637,7 +674,7 @@ el("tabs").addEventListener("click",function(e){
   const b=e.target.closest("[data-tab]");if(!b)return;
   el("tabs").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
   const tab=b.getAttribute("data-tab");
-  ["cards","snake","monsters","npcs","interact"].forEach(t=>el("sec-"+t).classList.toggle("on",t===tab));
+  ["cards","snake","monsters","npcs","drops"].forEach(t=>el("sec-"+t).classList.toggle("on",t===tab));
   document.querySelectorAll("[data-in-cards]").forEach(x=>x.style.display=(tab==="cards"?"":"none"));
 });
 
