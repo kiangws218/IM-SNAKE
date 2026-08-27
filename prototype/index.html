@@ -181,7 +181,7 @@ cv.width=VIEW_W*CFG.tile; cv.height=VIEW_H*CFG.tile;
 const cam={x:0,y:0};
 
 const RUN_DEFAULTS={
-  spitRateMult:1, spitSpeedMult:1, dmgBonus:0, maxHearts:6, nodeHpBonus:0,
+  spitRateMult:1, spitSpeedMult:1, dmgBonus:0, maxHearts:3, nodeHpBonus:0,
   prisonDps:20, prisonBonus:3, cutCd:10, pickupR:.6, greedy:0,
   speedMult:1, contactDmg:0
 };
@@ -359,7 +359,7 @@ function updateFlyingBeans(dt){
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
 function beanDamage(){
-  const base=3+RUN.dmgBonus;
+  const base=1+RUN.dmgBonus;
   return Math.max(1,Math.round(base*(TEMPBUFF.t>0?TEMPBUFF.mult:1)));
 }
 

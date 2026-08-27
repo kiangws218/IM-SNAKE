@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>I SNAKED · 卡牌管理台</title>
+<style>
+  :root{
+    --bg:#0e0f1a;--panel:#171827;--line:#2c2d44;--fg:#e8e6f0;--dim:#8b88a3;
+    --red:#ff5d5d;--gold:#ffd76e;--purple:#c77dff;--blue:#4fa3ff;--green:#63c74d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);font:14px/1.5 ui-monospace,Consolas,"Courier New",monospace;padding:16px}
+  header{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:14px}
+  h1{font-size:18px;color:var(--gold);letter-spacing:2px}
+  h1 small{color:var(--dim);font-size:11px;letter-spacing:0}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+  .actions button,.filters select,.filters input{
+    background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    padding:7px 12px;font:inherit;cursor:pointer;
+  }
+  .actions button:hover{border-color:var(--gold)}
+  .actions button.primary{background:#ffd76e;color:#1a1023;border-color:#ffd76e;font-weight:bold}
+  .filters input{flex:1;min-width:160px}
+  #stat{color:var(--dim);font-size:12px;margin-left:auto}
+  #stat b{color:var(--fg)}
+  #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    border-top:4px solid var(--rr);position:relative;display:flex;flex-direction:column;gap:6px;
+  }
+  .card .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card h3{font-size:15px;color:var(--rr)}
+  .badge{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:bold;letter-spacing:1px}
+  .b-rar{color:#1a1023}
+  .b-cat{background:#23243a;color:var(--dim)}
+  .b-lv{background:#23243a;color:var(--gold)}
+  .vals{font-size:12px;color:var(--fg)}
+  .vals b{color:var(--gold)}
+  .desc{font-size:12px;color:#cfcbe6;min-height:32px}
+  .links{font-size:11px;color:var(--dim)}
+  .links span{color:#7fd1e8}
+  .ops{margin-top:auto;display:flex;gap:8px;justify-content:flex-end}
+  .ops button{background:#20212f;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 12px;font:inherit;cursor:pointer}
+  .ops button.del{color:var(--red);border-color:#7a2d35}
+  dialog{
+    background:var(--panel);color:var(--fg);border:1px solid var(--gold);border-radius:12px;
+    width:min(600px,94vw);padding:20px;
+  }
+  dialog::backdrop{background:rgba(8,8,16,.7)}
+  dialog h2{color:var(--gold);margin-bottom:12px}
+  .field{margin-bottom:10px}
+  .field label{display:block;font-size:11px;color:var(--dim);margin-bottom:4px}
+  .field input,.field textarea,.field select{
+    width:100%;background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    padding:7px 10px;font:inherit;
+  }
+  .field textarea{resize:vertical;min-height:52px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .mlist{display:flex;flex-wrap:wrap;gap:6px;max-height:96px;overflow:auto;padding:4px}
+  .mlist label{font-size:12px;background:#20212f;border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer}
+  .mlist input{margin-right:4px}
+  .dbtn{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+  .dbtn button{background:#ffd76e;color:#1a1023;border:none;border-radius:6px;padding:9px 20px;font:bold 13px inherit;cursor:pointer}
+  .dbtn button.ghost{background:#20212f;color:var(--fg)}
+  #toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:50;
+    background:#2f3d2f;color:#b5e8b5;padding:8px 18px;border-radius:8px;font-size:13px;
+    opacity:0;transition:opacity .25s;pointer-events:none;
+  }
+  #toast.show{opacity:1}
+  .empty{color:var(--dim);text-align:center;padding:40px;grid-column:1/-1}
+</style>
+</head>
+<body>
+<header>
+  <h1>I SNAKED · 卡牌管理台 <small>改完自动保存，导出 JSON 给开发者即可同步游戏</small></h1>
+  <div class="row actions">
+    <button class="primary" id="btnAdd">＋ 新增卡牌</button>
+    <button id="btnExport">⭳ 导出 JSON</button>
+    <button id="btnImport">⭱ 导入 JSON</button>
+    <button id="btnReset">↺ 恢复默认卡组</button>
+    <input type="file" id="fileImport" accept=".json,application/json" hidden>
+  </div>
+  <div class="row filters">
+    <select id="fCat"><option value="">全部类别</option></select>
+    <select id="fRar"><option value="">全部稀有度</option></select>
+    <select id="fLv"><option value="">全部等级</option><option>1</option><option>2</option><option>3</option></select>
+    <input id="fSearch" placeholder="搜索名称 / 效果 / 前置…">
+    <span id="stat"></span>
+  </div>
+</header>
+<main id="list"></main>
+<dialog id="modal"><h2 id="mTitle">编辑卡牌</h2><form id="mForm"></form></dialog>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const CATS={attack:"攻击",siege:"围困",survival:"生存",economy:"经济",mobility:"机动",special:"特殊"};
+const RARS=[
+  {id:"green",name:"绿",color:"#63c74d"},
+  {id:"blue",name:"蓝",color:"#4fa3ff"},
+  {id:"purple",name:"紫",color:"#c77dff"},
+  {id:"gold",name:"金",color:"#ffd76e"},
+  {id:"red",name:"红",color:"#ff5d5d"},
+];
+const RAR_ORDER={green:0,blue:1,purple:2,gold:3,red:4};
+
+const DEFAULT_CARDS=[
+  // ===== 绿 普通 =====
+  {id:"c_beanpack",name:"小份豆包",cat:"economy",rar:"green",lv:1,vals:{1:2,2:3,3:4},desc:"立刻 +2/+3/+4 节身长",pre:[],mut:[]},
+  {id:"c_magnet",name:"磁力唇",cat:"economy",rar:"green",lv:1,vals:{1:.2,2:.3,3:.4},desc:"拾取半径 +0.2/0.3/0.4 格",pre:[],mut:[]},
+  {id:"c_gale",name:"疾风豆袋",cat:"mobility",rar:"green",lv:1,vals:{1:.25,2:.4,3:.55},desc:"弹速 +25%/40%/55%",pre:[],mut:[]},
+  {id:"c_scavenger",name:"拾荒本能",cat:"economy",rar:"green",lv:1,vals:{1:.35,2:.5,3:.7},desc:"拾取半径+、吃豆额外+1节概率+",pre:[],mut:[]},
+  {id:"c_thrifty",name:"节流吐纳",cat:"survival",rar:"green",lv:1,vals:{1:.15,2:.25,3:.35},desc:"吐豆频率-15%/25%/35%，心上限+1",pre:[],mut:[]},
+  // ===== 蓝 稀有 =====
+  {id:"c_quickmouth",name:"快嘴秘方",cat:"attack",rar:"blue",lv:1,vals:{1:.25,2:.4,3:.55},desc:"吐豆频率 +25%/40%/55%",pre:[],mut:[]},
+  {id:"c_grindstone",name:"磨牙石",cat:"attack",rar:"blue",lv:1,vals:{1:1,2:2,3:3},desc:"豆子伤害 +1/+2/+3",pre:[],mut:[]},
+  {id:"c_hardnode",name:"硬壳节点罐头",cat:"siege",rar:"blue",lv:1,vals:{1:4,2:7,3:10},desc:"节点耐久 +4/+7/+10",pre:[],mut:[]},
+  {id:"c_greedy",name:"贪婪胃囊",cat:"economy",rar:"blue",lv:1,vals:{1:.3,2:.45,3:.6},desc:"吃豆额外+1节概率 +30%/45%/60%",pre:[],mut:[]},
+  {id:"c_thorns",name:"身怀利鳞",cat:"siege",rar:"blue",lv:1,vals:{1:2,2:3,3:5},desc:"身体接触伤害 +2/+3/+5 每秒",pre:[],mut:[]},
+  {id:"c_heart",name:"心之糖",cat:"survival",rar:"blue",lv:1,vals:{1:1,2:1,3:2},desc:"心上限 +1/+1/+2 并回 1 心",pre:[],mut:[]},
+  // ===== 紫 史诗 =====
+  {id:"c_pressure",name:"重压之环",cat:"siege",rar:"purple",lv:1,vals:{1:2,2:3,3:5},desc:"窒息监狱伤害 +2/+3/+5 每秒",pre:[],mut:[]},
+  {id:"c_quickcut",name:"迅捷断尾",cat:"survival",rar:"purple",lv:1,vals:{1:.35,2:.5,3:.6},desc:"断尾冷却 -35%/50%/60%",pre:[],mut:[]},
+  {id:"c_venom",name:"毒牙",cat:"attack",rar:"purple",lv:1,vals:{1:1,2:1,3:2},desc:"豆伤+1/+1/+2 且弹速+15%",pre:[],mut:[]},
+  {id:"c_swift",name:"迅捷游走",cat:"mobility",rar:"purple",lv:1,vals:{1:.15,2:.25,3:.35},desc:"移动速度 +15%/25%/35%",pre:[],mut:[]},
+  // ===== 金 传说 =====
+  {id:"c_ring3",name:"三环共振",cat:"siege",rar:"gold",lv:1,vals:{1:4,2:6,3:9},desc:"每多一座监狱，全体监狱 +4/+6/+9 每秒",pre:["c_pressure"],mut:[]},
+  {id:"c_flesh",name:"血肉引擎",cat:"survival",rar:"gold",lv:1,vals:{1:0,2:0,3:0},desc:"断尾冷却归零，但回收率 -15%",pre:["c_quickcut"],mut:["c_evermag"]},
+  {id:"c_spineless",name:"无脊椎",cat:"siege",rar:"gold",lv:1,vals:{1:0,2:0,3:0},desc:"可斜插穿越自身（无限节点豁免）",pre:["c_hardnode"],mut:[]},
+  {id:"c_frenzy",name:"狂暴唾液",cat:"attack",rar:"gold",lv:1,vals:{1:.5,2:.7,3:1},desc:"吐豆频率 +50%/70%/100%，移速 -12%",pre:["c_quickmouth"],mut:[]},
+  // ===== 红 神话 =====
+  {id:"c_evermag",name:"永动弹匣",cat:"attack",rar:"red",lv:1,vals:{1:0,2:0,3:0},desc:"吐豆不再消耗身长",pre:["c_quickmouth","c_grindstone"],mut:["c_flesh"]},
+  {id:"c_glass",name:"玻璃大炮",cat:"attack",rar:"red",lv:1,vals:{1:3,2:4,3:6},desc:"豆伤 +3/+4/+6，心上限 -2",pre:["c_grindstone"],mut:["c_heart","c_thickskin"]},
+  {id:"c_thickskin",name:"铁头功",cat:"survival",rar:"red",lv:1,vals:{1:2,2:2,3:3},desc:"心上限 +2/+2/+3",pre:["c_heart"],mut:["c_glass"]},
+  {id:"c_blood",name:"嗜血契约",cat:"special",rar:"red",lv:1,vals:{1:2,2:3,3:4},desc:"豆伤+，心上限-1（诅咒）",pre:[],mut:["c_thickskin"]},
+];
+
+const LS_KEY="imsnake_cards_v2";
+let db={meta:{version:2,note:""},cards:[]};
+
+function load(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(raw){db=JSON.parse(raw);return;}
+  }catch(e){}
+  db={meta:{version:2,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
+}
+function save(){
+  localStorage.setItem(LS_KEY,JSON.stringify(db));
+  toast("已保存 ("+db.cards.length+" 张)");
+}
+function rarById(id){return RARS.find(r=>r.id===id)||RARS[0];}
+function catName(id){return CATS[id]||id;}
+function cardById(id){return db.cards.find(c=>c.id===id);}
+function id2name(id){const c=cardById(id);return c?c.name:id;}
+
+function render(){
+  const cat=el("fCat").value,rar=el("fRar").value,lv=el("fLv").value,q=el("fSearch").value.toLowerCase();
+  const list=db.cards.filter(c=>
+    (!cat||c.cat===cat)&&(!rar||c.rar===rar)&&(!lv||String(c.lv)===lv)&&
+    (!q||(c.name+c.desc).toLowerCase().includes(q)||(c.pre||[]).concat(c.mut||[]).some(x=>id2name(x).toLowerCase().includes(q)))
+  ).sort((a,b)=>RAR_ORDER[a.rar]-RAR_ORDER[b.rar]||a.name.localeCompare(b.name));
+  const box=el("list");box.innerHTML="";
+  if(!list.length){box.innerHTML="<div class='empty'>没有匹配的卡牌</div>";}
+  list.forEach(c=>{
+    const R=rarById(c.rar);
+    const d=document.createElement("div");
+    d.className="card";d.style.setProperty("--rr",R.color);
+    const v=c.vals||{};
+    d.innerHTML=
+      "<div class='top'><h3>"+esc(c.name)+"</h3>"+
+      "<span class='badge b-rar' style='background:"+R.color+"'>"+R.name+"</span>"+
+      "<span class='badge b-cat'>"+catName(c.cat)+"</span>"+
+      "<span class='badge b-lv'>Lv"+c.lv+"</span></div>"+
+      "<div class='vals'>数值：Lv1 <b>"+fmt(v[1])+"</b> ｜ Lv2 <b>"+fmt(v[2])+"</b> ｜ Lv3 <b>"+fmt(v[3])+"</b></div>"+
+      "<div class='desc'>"+esc(c.desc)+"</div>"+
+      "<div class='links'>前置："+(c.pre||[]).map(id2name).join("、")||"—"+"<br>互斥："+(c.mut||[]).map(id2name).join("、")||"—"+"</div>"+
+      "<div class='ops'><button data-edit='"+c.id+"'>编辑</button><button class='del' data-del='"+c.id+"'>删除</button></div>";
+    box.appendChild(d);
+  });
+  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(b.dataset.edit));
+  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    if(!confirm("删除「"+cardById(b.dataset.del).name+"」？"))return;
+    db.cards=db.cards.filter(x=>x.id!==b.dataset.del);
+    db.cards.forEach(x=>{x.pre=(x.pre||[]).filter(p=>p!==b.dataset.del);x.mut=(x.mut||[]).filter(p=>p!==b.dataset.del);});
+    save();render();updateStat();
+  });
+  updateStat();
+}
+function updateStat(){
+  const n=db.cards.length;
+  const parts=RARS.map(r=>r.name+"<b>"+db.cards.filter(c=>c.rar===r.id).length+"</b>").join(" ｜ ");
+  el("stat").innerHTML="共 <b>"+n+"</b> 张 ｜ "+parts;
+}
+
+function openModal(id){
+  const c=id?cardById(id):null;
+  el("mTitle").textContent=c?"编辑："+c.name:"新增卡牌";
+  const f=el("mForm");f.innerHTML="";
+  const field=(label,html)=>'<div class="field"><label>'+label+'</label>'+html+'</div>';
+  f.innerHTML=
+    field("名称",'<input id="inpName" value="'+esc(c?c.name:"")+'">')+
+    '<div class="grid3">'+
+      field("类别",mkSelect("inpCat",Object.entries(CATS).map(([k,v])=>[k,v]),c?c.cat:"attack"))+
+      field("稀有度",mkSelect("inpRar",RARS.map(r=>[r.id,r.name]),c?c.rar:"green"))+
+      field("等级",mkSelect("inpLv",[[1,"Lv1"],[2,"Lv2"],[3,"Lv3"]],c?(c.lv||1):1))+
+    '</div>'+
+    '<div class="grid3">'+
+      field("数值 Lv1",'<input type="number" id="inpV1" value="'+(c&&c.vals?(c.vals[1]??""):"")+'">')+
+      field("数值 Lv2",'<input type="number" id="inpV2" value="'+(c&&c.vals?(c.vals[2]??""):"")+'">')+
+      field("数值 Lv3",'<input type="number" id="inpV3" value="'+(c&&c.vals?(c.vals[3]??""):"")+'">')+
+    '</div>'+
+    field("效果描述",'<textarea id="inpDesc">'+esc(c?c.desc:"")+'</textarea>')+
+    field("前置卡牌（需先拥有其一，同类别）",mkMulti("inpPre",c?(c.pre||[]):[]))+
+    field("互斥卡牌（不可同时拥有）",mkMulti("inpMut",c?(c.mut||[]):[]));
+  const btn=document.createElement("div");
+  btn.className="dbtn";
+  btn.innerHTML="<button class='ghost' id='btnCancel'>取消</button><button id='btnSave'>保存</button>";
+  f.appendChild(btn);
+  el("btnCancel").onclick=()=>el("modal").close();
+  el("btnSave").onclick=()=>{
+    const name=el("inpName").value.trim();
+    if(!name){toast("名称不能为空");return;}
+    const vals={1:parseFloat(el("inpV1").value)||0,2:parseFloat(el("inpV2").value)||0,3:parseFloat(el("inpV3").value)||0};
+    const pre=readMulti("inpPre"),mut=readMulti("inpMut");
+    if(c){
+      Object.assign(c,{name,cat:el("inpCat").value,rar:el("inpRar").value,lv:parseInt(el("inpLv").value),vals,desc:el("inpDesc").value.trim(),pre,mut});
+    }else{
+      let nid="c_"+Date.now().toString(36);
+      db.cards.push({id:nid,name,cat:el("inpCat").value,rar:el("inpRar").value,lv:parseInt(el("inpLv").value),vals,desc:el("inpDesc").value.trim(),pre,mut});
+    }
+    save();render();el("modal").close();
+  };
+  el("modal").showModal();
+}
+function mkSelect(id,opts,sel){
+  return "<select id='"+id+"'>"+opts.map(([v,t])=>"<option value='"+v+"'"+(String(sel)===String(v)?" selected":"")+">"+t+"</option>").join("")+"</select>";
+}
+function mkMulti(id,sel){
+  const box="<div class='mlist' id='"+id+"'>";
+  const opts=db.cards.filter(x=>true).sort((a,b)=>a.name.localeCompare(b.name))
+    .map(x=>"<label><input type='checkbox' value='"+x.id+"'"+(sel.includes(x.id)?" checked":"")+">"+x.name+"</label>");
+  return box+(opts.join("")||"<span style='color:var(--dim)'>（暂无卡牌）</span>")+"</div>";
+}
+function readMulti(id){
+  return Array.from(el(id).querySelectorAll("input:checked")).map(i=>i.value);
+}
+function el(id){return document.getElementById(id);}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));}
+function fmt(v){return v===undefined?"—":(Math.abs(v)<1?v:v);}
+
+let toastT=null;
+function toast(msg){
+  const t=el("toast");t.textContent=msg;t.classList.add("show");
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),1600);
+}
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download="imsnake-cards.json";a.click();
+  URL.revokeObjectURL(a.href);
+  toast("已导出 imsnake-cards.json");
+}
+function importJSON(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const j=JSON.parse(r.result);
+      if(!Array.isArray(j.cards))throw new Error("缺少 cards 数组");
+      db=j;save();render();
+      toast("导入成功 ("+db.cards.length+" 张)");
+    }catch(e){toast("导入失败："+e.message);}
+  };
+  r.readAsText(file);
+}
+
+el("btnAdd").onclick=()=>openModal(null);
+el("btnExport").onclick=exportJSON;
+el("btnImport").onclick=()=>el("fileImport").click();
+el("fileImport").onchange=e=>{if(e.target.files[0])importJSON(e.target.files[0]);e.target.value="";};
+el("btnReset").onclick=()=>{
+  if(!confirm("恢复默认卡组？当前编辑会丢失。"))return;
+  db={meta:{version:2,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
+  save();render();
+};
+Object.entries(CATS).forEach(([k,v])=>el("fCat").insertAdjacentHTML("beforeend","<option value='"+k+"'>"+v+"</option>"));
+RARS.forEach(r=>el("fRar").insertAdjacentHTML("beforeend","<option value='"+r.id+"'>"+r.name+"</option>"));
+["fCat","fRar","fLv","fSearch"].forEach(id=>el(id).addEventListener("change",render));
+el("fSearch").addEventListener("input",render);
+
+load();render();
+</script>
+</body>
+</html>
