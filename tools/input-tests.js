@@ -1,13 +1,26 @@
 #!/usr/bin/env node
 const fs=require("fs"),vm=require("vm"),path=require("path");
+let stored=null;
 const code=fs.readFileSync(path.resolve(__dirname,"..","prototype","input.js"),"utf8");
-const box={globalThis:{}};vm.createContext(box);vm.runInContext(code,box);
-const I=box.globalThis.InputMap;
+const root={localStorage:{getItem(){return stored},setItem(k,v){stored=v}}};
+const box={globalThis:root};vm.createContext(box);vm.runInContext(code,box);
+const I=root.InputMap;
 function eq(actual,expected,label){if(actual!==expected)throw new Error(label+": expected "+expected+", got "+actual);}
 eq(I.actionFor(1,{code:"KeyW"}),"up","P1 WASD");
-eq(I.actionFor(1,{key:"ArrowLeft"}),"left","P1 arrows fallback");
-eq(I.actionFor(1,{key:" "}),"fire","synthetic mobile fire");
-eq(I.actionFor(1,{key:"Shift"}),"cut","synthetic mobile cut");
+eq(I.actionFor(1,{key:"ArrowLeft"}),"left","solo arrow alias");
+eq(I.actionFor(1,{key:" "}),"fire","solo space alias");
+eq(I.actionFor(1,{key:"Shift"}),"cut","solo shift alias");
+if(!I.needsPlayerChoice())throw new Error("first-run player choice was skipped");
+I.setPlayerCount(2);
+eq(I.actionFor(1,{key:"ArrowLeft"}),null,"P1/P2 isolation");
+eq(I.actionFor(2,{key:"ArrowLeft"}),"left","P2 arrows");
 eq(I.actionFor(2,{code:"Numpad0"}),"fire","P2 fire");
-eq(I.actionFor(2,{code:"KeyW"}),null,"P2 isolation");
+const hit=I.conflict("KeyW",2,"fire",2);
+if(!hit||hit.player!==1||hit.action!=="up")throw new Error("binding conflict not detected");
+I.setBinding(2,"fire","KeyQ");
+eq(I.actionFor(2,{code:"KeyQ"}),"fire","custom binding");
+if(!stored||!stored.includes("KeyQ"))throw new Error("bindings were not persisted");
+eq(I.keyLabel("ArrowUp"),"↑","key label");
+I.resetBindings();
+eq(I.actionFor(2,{code:"Numpad0"}),"fire","default reset");
 console.log("INPUT ACTION TESTS PASSED");

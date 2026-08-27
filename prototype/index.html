@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.31</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.34</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -116,7 +116,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.31（商人加价/监狱判定修复）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.34（玩家设置 / 自定义键位）</span></h1>
 <div id="hud">
   <span class="chip">❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -141,8 +141,8 @@
   <summary>▶ 数值调参面板（改完立即生效，用于玩法验证）</summary>
   <div class="grid" id="tune"></div>
 </details>
-<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button></div><div id="pickList"></div></div>
-<div id="pauseMenu"><h2>已暂停</h2><button id="pauseResume">继 续</button><button id="pauseHome">返回首页</button></div>
+<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
+<div id="pauseMenu"><h2>已暂停</h2><button id="pauseResume">继 续</button><button id="pauseSettings">设 置</button><button id="pauseHome">返回首页</button></div>
 
 <script src="levels.js"></script>
 <script src="upgrades.js"></script>
@@ -150,6 +150,7 @@
 <script src="enemies.js"></script>
 <script src="player-core.js"></script>
 <script src="input.js"></script>
+<script src="settings.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -1724,6 +1725,7 @@ function bossDefeated(){
   document.getElementById("ovBtn3").style.display="none";
   document.getElementById("ovBtn4").style.display="none";
   document.getElementById("ovBtn5").style.display="none";
+  document.getElementById("ovBtn7").style.display="none";
   document.getElementById("overlay").classList.add("show");
 }
 
@@ -1881,13 +1883,14 @@ function die(reason){
   document.getElementById("ovBtn2").style.display="none";
   document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
   document.getElementById("ovBtn5").style.display="none";
+  document.getElementById("ovBtn7").style.display="none";
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.31 · 商人加价/监狱判定修复版<br><br>"+
+    "玩法原型 v0.34 · 玩家设置 / 自定义键位版<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -1900,6 +1903,8 @@ function showMenu(){
   document.getElementById("ovBtn4").style.display="none";
   document.getElementById("ovBtn5").textContent="⚔ Boss挑战";
   document.getElementById("ovBtn5").style.display="";
+  document.getElementById("ovBtn7").textContent="设置";
+  document.getElementById("ovBtn7").style.display="";
   document.getElementById("pickList").innerHTML="";
   document.getElementById("tut").classList.remove("show");
   document.getElementById("overlay").classList.add("show");
@@ -2390,7 +2395,7 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 
-buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
+buildPanel();GameSettings.init();reset(false);showMenu();requestAnimationFrame(loop);
 </script>
 <script src="mobile.js"></script>
 <script src="intro.js"></script>

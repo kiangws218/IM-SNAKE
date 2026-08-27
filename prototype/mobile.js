@@ -69,8 +69,8 @@
     addEventListener("orientationchange",()=>setTimeout(()=>{fitCanvas();layout();},300));
     statusChip();
     if(hasTouch&&mode!=="kb")gear();
-    if(mode==="touch")buildTouch();
-    else if(mode==="kb"){touchMode=false;}
+    if(mode==="touch"){buildTouch();if(globalThis.GameSettings)GameSettings.onInputChosen("touch");}
+    else if(mode==="kb"){touchMode=false;if(globalThis.GameSettings)GameSettings.onInputChosen("kb");}
     else buildChooser();
     addEventListener("resize",portraitHint);
     portraitHint();
@@ -117,6 +117,8 @@
     if(c)c.remove();
     statusChip();
     if(m==="touch")buildTouch();
+    else touchMode=false;
+    if(globalThis.GameSettings)GameSettings.onInputChosen(m);
     fitCanvas();layout();portraitHint();
   }
 
