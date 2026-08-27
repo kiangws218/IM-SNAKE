@@ -26,10 +26,10 @@
   .filters input{flex:1;min-width:160px}
   #stat{color:var(--dim);font-size:12px;margin-left:auto}
   #stat b{color:var(--fg)}
-  #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+  #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
   .card{
     background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
-    border-top:4px solid var(--rr);position:relative;display:flex;flex-direction:column;gap:6px;
+    border-top:4px solid var(--rr);display:flex;flex-direction:column;gap:6px;
   }
   .card .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .card h3{font-size:15px;color:var(--rr)}
@@ -37,9 +37,10 @@
   .b-rar{color:#1a1023}
   .b-cat{background:#23243a;color:var(--dim)}
   .b-lv{background:#23243a;color:var(--gold)}
-  .vals{font-size:12px;color:var(--fg)}
-  .vals b{color:var(--gold)}
-  .desc{font-size:12px;color:#cfcbe6;min-height:32px}
+  .desc{font-size:12px;color:#cfcbe6;min-height:34px}
+  .desc b{color:var(--gold)}
+  .pars{font-size:11px;color:var(--dim);line-height:1.7}
+  .pars em{color:#7fd1e8;font-style:normal}
   .links{font-size:11px;color:var(--dim)}
   .links span{color:#7fd1e8}
   .ops{margin-top:auto;display:flex;gap:8px;justify-content:flex-end}
@@ -49,7 +50,7 @@
   #mask.show{display:flex}
   #modal{
     background:var(--panel);color:var(--fg);border:1px solid var(--gold);border-radius:12px;
-    width:min(620px,96vw);max-height:90vh;overflow:auto;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.6);
+    width:min(640px,96vw);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.6);
   }
   #modal h2{color:var(--gold);margin-bottom:12px;font-size:16px}
   .field{margin-bottom:10px}
@@ -58,8 +59,16 @@
     width:100%;background:#101120;color:var(--fg);border:1px solid var(--line);border-radius:6px;
     padding:7px 10px;font:inherit;
   }
-  .field textarea{resize:vertical;min-height:52px}
+  .field textarea{resize:vertical;min-height:56px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .prow{
+    display:flex;gap:6px;align-items:center;margin-bottom:6px;background:#20212f;
+    border:1px solid var(--line);border-radius:8px;padding:6px;
+  }
+  .prow .pname{width:70px;text-align:center;font-weight:bold;color:var(--gold)}
+  .prow input[type=number]{width:0;flex:1;min-width:0}
+  .prow .pdel{background:none;border:none;color:var(--red);font:bold 14px inherit;cursor:pointer;padding:2px 6px}
+  #btnAddParam{background:#23243a;color:#7fd1e8;border:1px dashed #3a3b5c;border-radius:6px;padding:6px 14px;font:inherit;cursor:pointer;width:100%}
   .mlist{display:flex;flex-wrap:wrap;gap:6px;max-height:96px;overflow:auto;padding:4px}
   .mlist label{font-size:12px;background:#20212f;border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer}
   .mlist input{margin-right:4px}
@@ -78,7 +87,7 @@
 <body>
 <div id="errbar"></div>
 <header>
-  <h1>I SNAKED · 卡牌管理台 <small>改完自动保存，导出 JSON 给开发者即可同步游戏</small></h1>
+  <h1>I SNAKED · 卡牌管理台 <small>描述用 {参数名} 引用数值 · 改完自动保存 · 导出 JSON 同步游戏</small></h1>
   <div class="row actions">
     <button type="button" class="primary" id="btnAdd">＋ 新增卡牌</button>
     <button type="button" id="btnExport">⭳ 导出 JSON</button>
@@ -116,41 +125,56 @@ const RARS=[
 ];
 const RAR_ORDER={green:0,blue:1,purple:2,gold:3,red:4};
 
+/* 卡牌 = {id,name,cat,rar,lv,params:{名:{1,2,3}},desc(可含{名}占位),pre,mut} */
 const DEFAULT_CARDS=[
-  {id:"c_beanpack",name:"小份豆包",cat:"economy",rar:"green",lv:1,vals:{1:2,2:3,3:4},desc:"立刻 +2/+3/+4 节身长",pre:[],mut:[]},
-  {id:"c_magnet",name:"磁力唇",cat:"economy",rar:"green",lv:1,vals:{1:.2,2:.3,3:.4},desc:"拾取半径 +0.2/0.3/0.4 格",pre:[],mut:[]},
-  {id:"c_gale",name:"疾风豆袋",cat:"mobility",rar:"green",lv:1,vals:{1:.25,2:.4,3:.55},desc:"弹速 +25%/40%/55%",pre:[],mut:[]},
-  {id:"c_scavenger",name:"拾荒本能",cat:"economy",rar:"green",lv:1,vals:{1:.35,2:.5,3:.7},desc:"拾取半径+、吃豆额外+1节概率+",pre:[],mut:[]},
-  {id:"c_thrifty",name:"节流吐纳",cat:"survival",rar:"green",lv:1,vals:{1:.15,2:.25,3:.35},desc:"吐豆频率-15%/25%/35%，心上限+1",pre:[],mut:[]},
-  {id:"c_quickmouth",name:"快嘴秘方",cat:"attack",rar:"blue",lv:1,vals:{1:.25,2:.4,3:.55},desc:"吐豆频率 +25%/40%/55%",pre:[],mut:[]},
-  {id:"c_grindstone",name:"磨牙石",cat:"attack",rar:"blue",lv:1,vals:{1:1,2:2,3:3},desc:"豆子伤害 +1/+2/+3",pre:[],mut:[]},
-  {id:"c_hardnode",name:"硬壳节点罐头",cat:"siege",rar:"blue",lv:1,vals:{1:4,2:7,3:10},desc:"节点耐久 +4/+7/+10",pre:[],mut:[]},
-  {id:"c_greedy",name:"贪婪胃囊",cat:"economy",rar:"blue",lv:1,vals:{1:.3,2:.45,3:.6},desc:"吃豆额外+1节概率 +30%/45%/60%",pre:[],mut:[]},
-  {id:"c_thorns",name:"身怀利鳞",cat:"siege",rar:"blue",lv:1,vals:{1:2,2:3,3:5},desc:"身体接触伤害 +2/+3/+5 每秒",pre:[],mut:[]},
-  {id:"c_heart",name:"心之糖",cat:"survival",rar:"blue",lv:1,vals:{1:1,2:1,3:2},desc:"心上限 +1/+1/+2 并回 1 心",pre:[],mut:[]},
-  {id:"c_pressure",name:"重压之环",cat:"siege",rar:"purple",lv:1,vals:{1:2,2:3,3:5},desc:"窒息监狱伤害 +2/+3/+5 每秒",pre:[],mut:[]},
-  {id:"c_quickcut",name:"迅捷断尾",cat:"survival",rar:"purple",lv:1,vals:{1:.35,2:.5,3:.6},desc:"断尾冷却 -35%/50%/60%",pre:[],mut:[]},
-  {id:"c_venom",name:"毒牙",cat:"attack",rar:"purple",lv:1,vals:{1:1,2:1,3:2},desc:"豆伤+1/+1/+2 且弹速+15%",pre:[],mut:[]},
-  {id:"c_swift",name:"迅捷游走",cat:"mobility",rar:"purple",lv:1,vals:{1:.15,2:.25,3:.35},desc:"移动速度 +15%/25%/35%",pre:[],mut:[]},
-  {id:"c_ring3",name:"三环共振",cat:"siege",rar:"gold",lv:1,vals:{1:4,2:6,3:9},desc:"每多一座监狱，全体监狱 +4/+6/+9 每秒",pre:["c_pressure"],mut:[]},
-  {id:"c_flesh",name:"血肉引擎",cat:"survival",rar:"gold",lv:1,vals:{1:0,2:0,3:0},desc:"断尾冷却归零，但回收率 -15%",pre:["c_quickcut"],mut:["c_evermag"]},
-  {id:"c_spineless",name:"无脊椎",cat:"siege",rar:"gold",lv:1,vals:{1:0,2:0,3:0},desc:"可斜插穿越自身（无限节点豁免）",pre:["c_hardnode"],mut:[]},
-  {id:"c_frenzy",name:"狂暴唾液",cat:"attack",rar:"gold",lv:1,vals:{1:.5,2:.7,3:1},desc:"吐豆频率 +50%/70%/100%，移速 -12%",pre:["c_quickmouth"],mut:[]},
-  {id:"c_evermag",name:"永动弹匣",cat:"attack",rar:"red",lv:1,vals:{1:0,2:0,3:0},desc:"吐豆不再消耗身长",pre:["c_quickmouth","c_grindstone"],mut:["c_flesh"]},
-  {id:"c_glass",name:"玻璃大炮",cat:"attack",rar:"red",lv:1,vals:{1:3,2:4,3:6},desc:"豆伤 +3/+4/+6，心上限 -2",pre:["c_grindstone"],mut:["c_heart","c_thickskin"]},
-  {id:"c_thickskin",name:"铁头功",cat:"survival",rar:"red",lv:1,vals:{1:2,2:2,3:3},desc:"心上限 +2/+2/+3",pre:["c_heart"],mut:["c_glass"]},
-  {id:"c_blood",name:"嗜血契约",cat:"special",rar:"red",lv:1,vals:{1:2,2:3,3:4},desc:"豆伤+，心上限-1（诅咒）",pre:[],mut:["c_thickskin"]},
+  {id:"c_beanpack",name:"小份豆包",cat:"economy",rar:"green",lv:1,params:{x:{1:2,2:3,3:4}},desc:"立刻 +{x} 节身长",pre:[],mut:[]},
+  {id:"c_magnet",name:"磁力唇",cat:"economy",rar:"green",lv:1,params:{x:{1:.2,2:.3,3:.4}},desc:"拾取半径 +{x} 格",pre:[],mut:[]},
+  {id:"c_gale",name:"疾风豆袋",cat:"mobility",rar:"green",lv:1,params:{x:{1:.25,2:.4,3:.55}},desc:"弹速 +{x}",pre:[],mut:[]},
+  {id:"c_scavenger",name:"拾荒本能",cat:"economy",rar:"green",lv:1,params:{x:{1:.2,2:.3,3:.4},y:{1:.15,2:.25,3:.4}},desc:"拾取半径+{x}，吃豆额外+1节概率+{y}",pre:[],mut:[]},
+  {id:"c_thrifty",name:"节流吐纳",cat:"survival",rar:"green",lv:1,params:{x:{1:.15,2:.25,3:.35}},desc:"吐豆频率-{x}，心上限+1",pre:[],mut:[]},
+  {id:"c_quickmouth",name:"快嘴秘方",cat:"attack",rar:"blue",lv:1,params:{x:{1:.25,2:.4,3:.55}},desc:"吐豆频率 +{x}",pre:[],mut:[]},
+  {id:"c_grindstone",name:"磨牙石",cat:"attack",rar:"blue",lv:1,params:{x:{1:1,2:2,3:3}},desc:"豆子伤害 +{x}",pre:[],mut:[]},
+  {id:"c_hardnode",name:"硬壳节点罐头",cat:"siege",rar:"blue",lv:1,params:{x:{1:4,2:7,3:10}},desc:"节点耐久 +{x}",pre:[],mut:[]},
+  {id:"c_greedy",name:"贪婪胃囊",cat:"economy",rar:"blue",lv:1,params:{x:{1:.3,2:.45,3:.6}},desc:"吃豆额外+1节概率 +{x}",pre:[],mut:[]},
+  {id:"c_thorns",name:"身怀利鳞",cat:"siege",rar:"blue",lv:1,params:{x:{1:2,2:3,3:5}},desc:"身体接触伤害 +{x} 每秒",pre:[],mut:[]},
+  {id:"c_heart",name:"心之糖",cat:"survival",rar:"blue",lv:1,params:{x:{1:1,2:1,3:2}},desc:"心上限 +{x} 并回 1 心",pre:[],mut:[]},
+  {id:"c_pressure",name:"重压之环",cat:"siege",rar:"purple",lv:1,params:{x:{1:2,2:3,3:5}},desc:"窒息监狱伤害 +{x} 每秒",pre:[],mut:[]},
+  {id:"c_quickcut",name:"迅捷断尾",cat:"survival",rar:"purple",lv:1,params:{x:{1:.35,2:.5,3:.6}},desc:"断尾冷却 -{x}",pre:[],mut:[]},
+  {id:"c_venom",name:"毒牙",cat:"attack",rar:"purple",lv:1,params:{x:{1:1,2:1,3:2},y:{1:.15,2:.15,3:.2}},desc:"豆伤+{x}，弹速+{y}",pre:[],mut:[]},
+  {id:"c_swift",name:"迅捷游走",cat:"mobility",rar:"purple",lv:1,params:{x:{1:.15,2:.25,3:.35}},desc:"移动速度 +{x}",pre:[],mut:[]},
+  {id:"c_ring3",name:"三环共振",cat:"siege",rar:"gold",lv:1,params:{x:{1:4,2:6,3:9}},desc:"每多一座监狱，全体监狱 +{x} 每秒",pre:["c_pressure"],mut:[]},
+  {id:"c_flesh",name:"血肉引擎",cat:"survival",rar:"gold",lv:1,params:{x:{1:.15,2:.2,3:.25}},desc:"断尾冷却归零，回收率 -{x}",pre:["c_quickcut"],mut:["c_evermag"]},
+  {id:"c_spineless",name:"无脊椎",cat:"siege",rar:"gold",lv:1,params:{},desc:"可斜插穿越自身（无限节点豁免）",pre:["c_hardnode"],mut:[]},
+  {id:"c_frenzy",name:"狂暴唾液",cat:"attack",rar:"gold",lv:1,params:{x:{1:.5,2:.7,3:1},y:{1:.12,2:.12,3:.12}},desc:"吐豆频率 +{x}，移速 -{y}",pre:["c_quickmouth"],mut:[]},
+  {id:"c_evermag",name:"永动弹匣",cat:"attack",rar:"red",lv:1,params:{},desc:"吐豆不再消耗身长",pre:["c_quickmouth","c_grindstone"],mut:["c_flesh"]},
+  {id:"c_glass",name:"玻璃大炮",cat:"attack",rar:"red",lv:1,params:{x:{1:3,2:4,3:6}},desc:"豆伤 +{x}，心上限 -2",pre:["c_grindstone"],mut:["c_heart","c_thickskin"]},
+  {id:"c_thickskin",name:"铁头功",cat:"survival",rar:"red",lv:1,params:{x:{1:2,2:2,3:3}},desc:"心上限 +{x}",pre:["c_heart"],mut:["c_glass"]},
+  {id:"c_blood",name:"嗜血契约",cat:"special",rar:"red",lv:1,params:{x:{1:2,2:3,3:4}},desc:"豆伤+{x}，心上限-1（诅咒）",pre:[],mut:["c_thickskin"]},
 ];
 
-const LS_KEY="imsnake_cards_v2";
-let db={meta:{version:2,note:""},cards:[]};
+const LS_KEY="imsnake_cards_v3";
+let db={meta:{version:3,note:""},cards:[]};
 
+function migrateCard(c){
+  if(c.vals&&!c.params){
+    c.params={x:{1:c.vals[1]||0,2:c.vals[2]||0,3:c.vals[3]||0}};
+    delete c.vals;
+  }
+  if(!c.params)c.params={};
+  return c;
+}
 function load(){
   try{
     const raw=localStorage.getItem(LS_KEY);
-    if(raw){db=JSON.parse(raw);return;}
+    if(raw){db=JSON.parse(raw);}
+    else{
+      const old=localStorage.getItem("imsnake_cards_v2");
+      if(old){db=JSON.parse(old);}
+      else{db=null;}
+    }
   }catch(e){showErr("读取存档失败："+e.message);}
-  db={meta:{version:2,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
+  if(!db||!Array.isArray(db.cards))db={meta:{version:3,note:""},cards:[]};
+  db.cards=db.cards.map(migrateCard);
 }
 function save(){
   try{localStorage.setItem(LS_KEY,JSON.stringify(db));}catch(e){showErr("保存失败："+e.message);return;}
@@ -162,7 +186,21 @@ function cardById(id){return db.cards.find(c=>c.id===id);}
 function id2name(id){const c=cardById(id);return c?c.name:id;}
 function el(id){return document.getElementById(id);}
 function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));}
-function fmt(v){return v===undefined?"—":(Math.abs(v)<1?v:v);}
+function fmt(v){return v===undefined?"—":(Math.abs(v)<1?+v.toFixed(3):v);}
+function subDesc(c){
+  let s=c.desc||"";
+  for(const n of Object.keys(c.params||{})){
+    const v=(c.params[n]||{})[c.lv];
+    s=s.split("{"+n+"}").join(fmt(v));
+  }
+  return s;
+}
+function parSummary(c){
+  return Object.keys(c.params||{}).map(n=>{
+    const p=c.params[n]||{};
+    return "<em>"+esc(n)+"</em> Lv1 "+fmt(p[1])+" ｜ Lv2 "+fmt(p[2])+" ｜ Lv3 "+fmt(p[3]);
+  }).join("<br>");
+}
 
 function render(){
   try{
@@ -177,14 +215,13 @@ function render(){
       const R=rarById(c.rar);
       const d=document.createElement("div");
       d.className="card";d.style.setProperty("--rr",R.color);
-      const v=c.vals||{};
       d.innerHTML=
         "<div class='top'><h3>"+esc(c.name)+"</h3>"+
         "<span class='badge b-rar' style='background:"+R.color+"'>"+R.name+"</span>"+
         "<span class='badge b-cat'>"+catName(c.cat)+"</span>"+
         "<span class='badge b-lv'>Lv"+c.lv+"</span></div>"+
-        "<div class='vals'>数值：Lv1 <b>"+fmt(v[1])+"</b> ｜ Lv2 <b>"+fmt(v[2])+"</b> ｜ Lv3 <b>"+fmt(v[3])+"</b></div>"+
-        "<div class='desc'>"+esc(c.desc)+"</div>"+
+        "<div class='desc'>"+esc(subDesc(c))+"</div>"+
+        "<div class='pars'>"+parSummary(c)+"</div>"+
         "<div class='links'>前置："+((c.pre||[]).map(id2name).join("、")||"—")+"<br>互斥："+((c.mut||[]).map(id2name).join("、")||"—")+"</div>"+
         "<div class='ops'><button type='button' data-edit='"+c.id+"'>编辑</button><button type='button' class='del' data-del='"+c.id+"'>删除</button></div>";
       box.appendChild(d);
@@ -219,6 +256,58 @@ function readMulti(id){
 }
 function closeModal(){el("mask").classList.remove("show");}
 
+function renderParams(params){
+  const box=el("paramBox");box.innerHTML="";
+  const names=Object.keys(params||{});
+  if(!names.length){
+    box.innerHTML="<div style='color:var(--dim);font-size:12px'>暂无参数——用「＋ 新增参数」添加，并在描述里写 {参数名}</div>";
+  }
+  names.forEach(n=>{
+    const p=params[n]||{};
+    const row=document.createElement("div");
+    row.className="prow";
+    row.innerHTML=
+      "<input class='pname' value='"+esc(n)+"'>"+
+      "<input type='number' data-lv='1' value='"+(p[1]!==undefined?p[1]:"")+"'>"+
+      "<input type='number' data-lv='2' value='"+(p[2]!==undefined?p[2]:"")+"'>"+
+      "<input type='number' data-lv='3' value='"+(p[3]!==undefined?p[3]:"")+"'>"+
+      "<button type='button' class='pdel'>✕</button>";
+    row.querySelector(".pdel").onclick=()=>{row.remove();};
+    box.appendChild(row);
+  });
+  el("btnAddParam").onclick=function(){
+    const row=document.createElement("div");
+    row.className="prow";
+    const used=[];
+    box.querySelectorAll(".pname").forEach(i=>used.push(i.value.trim()));
+    let name="x";
+    for(const c of"xyzαβγabc"){
+      if(used.indexOf(c)<0){name=c;break;}
+    }
+    row.innerHTML=
+      "<input class='pname' value='"+name+"'>"+
+      "<input type='number' data-lv='1' value=''>"+
+      "<input type='number' data-lv='2' value=''>"+
+      "<input type='number' data-lv='3' value=''>"+
+      "<button type='button' class='pdel'>✕</button>";
+    row.querySelector(".pdel").onclick=()=>{row.remove();};
+    box.appendChild(row);
+  };
+}
+function collectParams(){
+  const params={};
+  el("paramBox").querySelectorAll(".prow").forEach(row=>{
+    const n=row.querySelector(".pname").value.trim();
+    if(!n)return;
+    params[n]={
+      1:parseFloat(row.querySelector('[data-lv="1"]').value)||0,
+      2:parseFloat(row.querySelector('[data-lv="2"]').value)||0,
+      3:parseFloat(row.querySelector('[data-lv="3"]').value)||0
+    };
+  });
+  return params;
+}
+
 function openModal(id){
   try{
     const c=id?cardById(id):null;
@@ -226,7 +315,6 @@ function openModal(id){
     el("mTitle").textContent=c?"编辑："+c.name:"新增卡牌";
     const f=el("mForm");f.innerHTML="";
     const field=(label,html)=>'<div class="field"><label>'+label+'</label>'+html+'</div>';
-    const v=c&&c.vals?c.vals:{};
     f.innerHTML=
       field("名称",'<input id="inpName" value="'+esc(c?c.name:"")+'">')+
       '<div class="grid3">'+
@@ -234,32 +322,25 @@ function openModal(id){
         field("稀有度",mkSelect("inpRar",RARS.map(r=>[r.id,r.name]),c?c.rar:"green"))+
         field("等级",mkSelect("inpLv",[[1,"Lv1"],[2,"Lv2"],[3,"Lv3"]],c?(c.lv||1):1))+
       '</div>'+
-      '<div class="grid3">'+
-        field("数值 Lv1",'<input type="number" id="inpV1" value="'+(v[1]!==undefined?v[1]:"")+'">')+
-        field("数值 Lv2",'<input type="number" id="inpV2" value="'+(v[2]!==undefined?v[2]:"")+'">')+
-        field("数值 Lv3",'<input type="number" id="inpV3" value="'+(v[3]!==undefined?v[3]:"")+'">')+
-      '</div>'+
-      field("效果描述",'<textarea id="inpDesc">'+esc(c?c.desc:"")+'</textarea>')+
+      field("效果描述（用 {参数名} 引用数值，如：豆伤+{x}）",'<textarea id="inpDesc">'+esc(c?c.desc:"")+'</textarea>')+
+      '<div class="field"><label>参数数值（按等级设置，名称随意）</label><div id="paramBox"></div>'+
+        '<button type="button" id="btnAddParam">＋ 新增参数</button></div>'+
       field("前置卡牌（需先拥有其一）",mkMulti("inpPre",c?(c.pre||[]):[]))+
       field("互斥卡牌（不可同时拥有）",mkMulti("inpMut",c?(c.mut||[]):[]))+
       '<div class="dbtn"><button type="button" class="ghost" id="btnCancel">取消</button><button type="button" id="btnSave">保存</button></div>';
+    renderParams(c?(c.params||{}):{});
     el("btnCancel").onclick=closeModal;
     el("btnSave").onclick=function(){
       try{
         const name=el("inpName").value.trim();
         if(!name){toast("名称不能为空");return;}
-        const vals={
-          1:parseFloat(el("inpV1").value)||0,
-          2:parseFloat(el("inpV2").value)||0,
-          3:parseFloat(el("inpV3").value)||0
-        };
-        const pre=readMulti("inpPre"),mut=readMulti("inpMut");
         const cat=el("inpCat").value,rar=el("inpRar").value,lv=parseInt(el("inpLv").value,10)||1;
         const desc=el("inpDesc").value.trim();
+        const params=collectParams();
         if(c){
-          c.name=name;c.cat=cat;c.rar=rar;c.lv=lv;c.vals=vals;c.desc=desc;c.pre=pre;c.mut=mut;
+          c.name=name;c.cat=cat;c.rar=rar;c.lv=lv;c.desc=desc;c.params=params;
         }else{
-          db.cards.push({id:"c_"+Date.now().toString(36),name,cat,rar,lv,vals,desc,pre,mut});
+          db.cards.push({id:"c_"+Date.now().toString(36),name,cat,rar,lv,params,desc,pre:[],mut:[]});
         }
         save();render();closeModal();
       }catch(e){showErr("保存卡牌失败："+e.message);}
@@ -286,7 +367,7 @@ function importJSON(file){
     try{
       const j=JSON.parse(r.result);
       if(!Array.isArray(j.cards))throw new Error("缺少 cards 数组");
-      db=j;save();render();
+      db=j;db.cards=db.cards.map(migrateCard);save();render();
       toast("导入成功 ("+db.cards.length+" 张)");
     }catch(e){toast("导入失败："+e.message);}
   };
@@ -299,7 +380,7 @@ el("btnImport").onclick=function(){el("fileImport").click();};
 el("fileImport").onchange=function(e){if(e.target.files[0])importJSON(e.target.files[0]);e.target.value="";};
 el("btnReset").onclick=function(){
   if(!confirm("恢复默认卡组？当前编辑会丢失。"))return;
-  db={meta:{version:2,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
+  db={meta:{version:3,note:""},cards:JSON.parse(JSON.stringify(DEFAULT_CARDS))};
   save();render();
 };
 Object.keys(CATS).forEach(function(k){el("fCat").insertAdjacentHTML("beforeend","<option value='"+k+"'>"+CATS[k]+"</option>");});
