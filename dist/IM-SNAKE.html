@@ -879,7 +879,7 @@ function updateFlyingBeans(dt){
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
 function beanDamage(){
-  const base=1+Math.floor(snake.len/5)+RUN.dmgBonus;
+  const base=3+RUN.dmgBonus;
   return Math.max(1,Math.round(base*(TEMPBUFF.t>0?TEMPBUFF.mult:1)));
 }
 
