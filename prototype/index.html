@@ -1505,41 +1505,53 @@ function drawPortraitInto(cvs,kind,crying){
     }
   }
 }
+function uiFatal(msg){
+  const b=document.createElement("div");
+  b.style.cssText="position:fixed;top:0;left:0;right:0;z-index:999;background:#7a1020;color:#fff;"+
+    "font:11px Consolas;padding:6px;white-space:pre-wrap;";
+  b.textContent="[界面错误] "+msg;
+  document.body.appendChild(b);
+}
 function openPanel(n,nodeId){
-  if(!n||!npcs.includes(n)){closePanel();return;}
-  panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
-  const T=NPC_TYPES[n.kind];
-  const p=ensurePanel();
-  p.style.display="flex";
-  document.getElementById("npcName").textContent=T.name;
-  document.getElementById("npcSub").textContent=T.sub||"";
-  drawPortraitInto(document.getElementById("npcPortrait"),n.kind,n.crying);
-  const say=document.getElementById("npcSay");
-  const opts=document.getElementById("npcOpts");opts.innerHTML="";
-  let list=[];
-  if(nodeId){
-    const node=DIALOG_TREES[n.kind][nodeId];
-    say.textContent=node.say;
-    if(node.effect==="cry"&&!n.cried){n.cried=true;n.crying=true;}
-    list=(node.options||[]).map(o=>({label:o.t,
-      fn:()=>{
-        if(!npcs.includes(n))return closePanel();
-        if(o.action==="eat")return eatNPC(n);
-        if(o.action==="end")return closePanel();
-        return openPanel(n,o.next);
-      }}));
-  }else{
-    say.textContent=(n.hp<n.maxHp&&T.hurtGreet)?T.hurtGreet:(T.greet||"……");
-    list=T.options.map(o=>({label:o.label,fn:()=>handleOption(n,o)}));
+  try{
+    if(!n||!npcs.includes(n)){closePanel();return;}
+    panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
+    const T=NPC_TYPES[n.kind];
+    const p=ensurePanel();
+    p.style.display="flex";
+    document.getElementById("npcName").textContent=T.name;
+    document.getElementById("npcSub").textContent=T.sub||"";
+    drawPortraitInto(document.getElementById("npcPortrait"),n.kind,n.crying);
+    const say=document.getElementById("npcSay");
+    const opts=document.getElementById("npcOpts");opts.innerHTML="";
+    let list=[];
+    if(nodeId){
+      const node=DIALOG_TREES[n.kind][nodeId];
+      say.textContent=node.say;
+      if(node.effect==="cry"&&!n.cried){n.cried=true;n.crying=true;}
+      list=(node.options||[]).map(o=>({label:o.t,
+        fn:()=>{
+          if(!npcs.includes(n))return closePanel();
+          if(o.action==="eat")return eatNPC(n);
+          if(o.action==="end")return closePanel();
+          return openPanel(n,o.next);
+        }}));
+    }else{
+      say.textContent=(n.hp<n.maxHp&&T.hurtGreet)?T.hurtGreet:(T.greet||"……");
+      list=T.options.map(o=>({label:o.label,fn:()=>handleOption(n,o)}));
+    }
+    for(const o of list){
+      const b=document.createElement("button");
+      b.className="npc-opt"+(o.label.indexOf("吃掉")>=0?" red":"");
+      b.textContent=o.label;
+      b.onclick=o.fn;
+      opts.appendChild(b);
+    }
+    requestAnimationFrame(()=>p.classList.add("open"));
+  }catch(e){
+    uiFatal("NPC面板:"+(e&&e.message)+" @"+((e&&e.stack||"").split("\n")[1]||"").trim());
+    panelOpen=false;freeze=false;
   }
-  for(const o of list){
-    const b=document.createElement("button");
-    b.className="npc-opt"+(o.label.indexOf("吃掉")>=0?" red":"");
-    b.textContent=o.label;
-    b.onclick=o.fn;
-    opts.appendChild(b);
-  }
-  requestAnimationFrame(()=>p.classList.add("open"));
 }
 function handleOption(n,o){
   if(!npcs.includes(n))return closePanel();
@@ -2478,6 +2490,13 @@ function loop(now){
 }
 
 buildPanel();reset(false);showMenu();requestAnimationFrame(loop);
+if(typeof window!=="undefined")window.__IMS={
+  get npcs(){return npcs;},get snake(){return snake;},get panelOpen(){return panelOpen;},
+  get gameState(){return gameState;},get paused(){return paused;},
+  get freeze(){return freeze;},set freeze(v){freeze=v;},
+  get alive(){return alive;},get moveLock(){return moveLock;},
+  openPanel,closePanel,openCurseCard,CURSED_POOL
+};
 </script>
 <script src="mobile.js"></script>
 <script src="intro.js"></script>
