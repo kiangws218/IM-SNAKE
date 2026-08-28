@@ -139,7 +139,44 @@
     for(let i=hitIdx;i<oldLen;i++){const s=p.segPos[i];if(!s)break;const a=Math.atan2(s.y-b.y,s.x-b.x)+(Math.random()-.5)*.7,spd=7+Math.random()*4;flyingBeans.push({x:s.x,y:s.y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,t:.9});}
     shake=Math.max(shake,.4);ftext(p.snake.fx,p.snake.fy-1,"P2 -"+lost+" 节！","#7fd1e8");puff(p.snake.fx,p.snake.fy,"#7fd1e8");compute();computeEnclosure();
   }
-  function update(dt){if(!active())return;const p=S.p;p.invuln=Math.max(0,p.invuln-dt);p.cutCd=Math.max(0,p.cutCd-dt);updateMovement(dt);if(active())updateFire(dt);}
+  function ensureSafeSpawn(){
+    if(!S.p)return true;
+    const p=S.p,old={x:p.snake.fx,y:p.snake.fy,dir:{x:p.dir.x,y:p.dir.y},path:p.snake.path.map(q=>({x:q.x,y:q.y}))};
+    const px=Math.floor(old.x),py=Math.floor(old.y),candidates=[];
+    for(let y=0;y<CFG.rows;y++)for(let x=0;x<CFG.cols;x++)
+      candidates.push({x,y,d:Math.abs(x-px)+Math.abs(y-py)});
+    candidates.sort((a,b)=>a.d-b.d);
+    for(const c of candidates){
+      p.snake.fx=c.x+.5;p.snake.fy=c.y+.5;p.dir={x:1,y:0};p.snake.path=[];
+      for(let i=1;i<=p.snake.len+3;i++)p.snake.path.push({x:p.snake.fx-i,y:p.snake.fy});
+      compute();
+      const wallHit=p.segPos.some(s=>hitWall(s.x,s.y,.34));
+      const playerHit=typeof alive!=="undefined"&&alive&&!primaryDown&&
+        p.segPos.some(a=>segPos.some(b=>Math.hypot(a.x-b.x,a.y-b.y)<.72));
+      if(!wallHit&&!playerHit)return true;
+    }
+    p.snake.fx=old.x;p.snake.fy=old.y;p.dir=old.dir;p.snake.path=old.path;compute();
+    return false;
+  }
+
+  function checkPlayerBodyCollision(){
+    const p=S.p,primaryUp=typeof alive!=="undefined"&&alive&&!primaryDown;
+    if(!primaryUp)return;
+    const p1Hit=p.segPos.slice(1).some(b=>Math.hypot(snake.fx-b.x,snake.fy-b.y)<.62);
+    const p2Hit=p.segPos.length>0&&segPos.slice(1).some(b=>Math.hypot(p.snake.fx-b.x,p.snake.fy-b.y)<.62);
+    if(p1Hit)defeatPrimary("撞上了 P2 的身体");
+    if(p2Hit)defeat("撞上了 P1 的身体");
+  }
+
+  function update(dt){
+    if(!active())return;
+    const p=S.p;
+    p.invuln=Math.max(0,p.invuln-dt);
+    p.cutCd=Math.max(0,p.cutCd-dt);
+    updateMovement(dt);
+    if(active())updateFire(dt);
+    checkPlayerBodyCollision();
+  }
 
   function draw(ctx,T){
     if(!active())return;const p=S.p;
@@ -166,6 +203,6 @@
   function keyup(ev){if(!S.p)return;const action=InputMap.actionFor(2,ev);if(!action)return;S.p.held.delete(action);if(action==="fire")S.p.fireHeld=false;if(MOVE[action])pushCombo();}
   addEventListener("keydown",keydown);addEventListener("keyup",keyup);addEventListener("blur",clearInput);
 
-  root.CoopMode={state:S,enabled,active,reset,resetRun,captureCarry,update,draw,hud,view,bodyHas,bodyCells,damage,hurt,hitBySeed,defeat,trimAt,
+  root.CoopMode={state:S,enabled,active,reset,resetRun,captureCarry,ensureSafeSpawn,update,draw,hud,view,bodyHas,bodyCells,damage,hurt,hitBySeed,defeat,trimAt,
     cutTail,placeNode,refundCharge,needsCharge,heal,grow,clearInput};
 })(typeof window!=="undefined"?window:globalThis);

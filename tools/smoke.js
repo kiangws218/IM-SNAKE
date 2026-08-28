@@ -52,13 +52,19 @@ try{
   new Function("document","addEventListener","performance","requestAnimationFrame",code)(
     document,addEventListener,performance,requestAnimationFrame);
   console.log("[load] OK");
+  els["ovBtn5"].onclick();
+  if(!els["pickList"].children.length)throw new Error("Boss challenge selection did not open");
+  els["pickList"].children[0].onclick();frames(5);
+  if(!global.__IMS.alive)throw new Error("Boss spawn is unsafe");
+  if(coopMode&&!global.CoopMode.state.p.alive)throw new Error("P2 boss spawn is unsafe");
+  els["pauseHome"].onclick();frames(2);
   frames(5);
   if(coopMode){
     els["ovBtn3"].onclick();frames(30);
     const coop=global.CoopMode&&global.CoopMode.state,p=coop&&coop.p;
     if(!coop||!coop.enabled||!p||!p.alive)throw new Error("P2 was not created");
-    const y0=p.snake.fy;fire({key:"ArrowUp",code:"ArrowUp",preventDefault(){},repeat:false},"keydown");frames(25);fire({key:"ArrowUp",code:"ArrowUp",preventDefault(){}},"keyup");
-    if(!(p.snake.fy<y0-.2))throw new Error("P2 movement input did not move the player");
+    const y0=p.snake.fy;fire({key:"ArrowDown",code:"ArrowDown",preventDefault(){},repeat:false},"keydown");frames(25);fire({key:"ArrowDown",code:"ArrowDown",preventDefault(){}},"keyup");
+    if(!(p.snake.fy>y0+.2))throw new Error("P2 movement input did not move the player");
     const len0=p.snake.len;fire({key:"0",code:"Numpad0",preventDefault(){},repeat:false},"keydown");frames(8);fire({key:"0",code:"Numpad0",preventDefault(){}},"keyup");
     if(!(p.snake.len<len0))throw new Error("P2 fire did not consume body ammo");
     const charge0=p.charges;fire({key:"2",code:"Numpad2",preventDefault(){},repeat:false},"keydown");
@@ -85,7 +91,14 @@ try{
   console.log("[sandbox 120 frames] OK");
   els["ovBtn2"].onclick();
   frames(600);
-  console.log("[tutorial 600 frames] OK");
+  global.__IMS.closePanel();
+  global.__IMS.snake.fy=.5;
+  fire({key:"w",code:"KeyW",preventDefault(){},repeat:false},"keydown");frames(40);fire({key:"w",code:"KeyW",preventDefault(){}},"keyup");
+  if(global.__IMS.gameState!=="dead")throw new Error("Tutorial death flow did not reach retry screen");
+  els["ovBtn"].onclick();frames(2);
+  if(!global.__IMS.panelOpen||global.__IMS.gameState!=="play")throw new Error("Tutorial retry did not reopen its section dialog");
+  global.__IMS.closePanel();els["pauseHome"].onclick();frames(2);
+  console.log("[tutorial death + retry] OK");
 }catch(err){
   console.error("RUNTIME ERROR:",err.stack);
   process.exit(1);
