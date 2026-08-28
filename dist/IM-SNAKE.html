@@ -2578,7 +2578,7 @@ function startBossFight(){
   resetRun();
   reset(false);
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
-  for(const[rx,ry,rw,rh]of[[8,8,2,2],[30,6,2,2],[52,8,2,2],[6,24,2,3],[54,22,2,3],[28,40,2,2],[52,38,2,2],[20,12,2,2],[12,34,2,2],[40,16,2,1],[44,34,2,2],[60,30,2,2]])
+  for(const[rx,ry,rw,rh]of[[8,8,2,2],[30,6,2,2],[52,8,2,2],[54,22,2,3],[28,40,2,2],[52,38,2,2],[20,12,2,2],[12,34,2,2],[40,16,2,1],[44,34,2,2],[60,30,2,2],[16,30,2,2]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
   boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
@@ -2872,7 +2872,7 @@ document.getElementById("ovBtn").onclick=()=>{
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
-  if(gameState==="dead"&&playMode==="tutorial"){showMenu();return;}
+  if(gameState==="dead"){showMenu();return;}
   startTutorial();
 };
 document.getElementById("ovBtn5").onclick=()=>{
@@ -2925,12 +2925,8 @@ function die(reason){
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
     playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
-  if(playMode==="tutorial"){
-    document.getElementById("ovBtn2").textContent="回到首页";
-    document.getElementById("ovBtn2").style.display="";
-  }else{
-    document.getElementById("ovBtn2").style.display="none";
-  }
+  document.getElementById("ovBtn2").textContent="回到首页";
+  document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
   document.getElementById("ovBtn5").style.display="none";
   document.getElementById("ovBtn7").style.display="none";
