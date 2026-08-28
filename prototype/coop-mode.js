@@ -41,6 +41,10 @@
   function pathHead(){return PlayerCore.pathHead(S.p);}
   function selfBite(x,y,r){return PlayerCore.selfBite(S.p,x,y,r||.62,Math.max(2,CFG.neckGuard),nearNode);}
   function enterDanger(type){S.p.danger={type,timer:.5};shake=Math.max(shake,.18);}
+  function primaryBodyHit(x,y){
+    return typeof alive!=="undefined"&&alive&&!primaryDown&&
+      segPos.slice(1).some(s=>Math.hypot(x-s.x,y-s.y)<.62);
+  }
 
   function updateMovement(dt){
     const p=S.p;applyQueue();
@@ -48,8 +52,8 @@
       p.danger.timer-=dt;
       const spd=CFG.snakeSpeed*(p.held.size>0&&!p.firing?CFG.speedBoost:1);
       const step=Math.max(spd*dt,.05),nx=p.snake.fx+p.dir.x*step,ny=p.snake.fy+p.dir.y*step;
-      if(!hitWall(nx,ny,.26)&&!selfBite(nx,ny,.5))p.danger=null;
-      else{if(p.danger.timer<=0)defeat(p.danger.type==="wall"?"P2 撞上了墙":"P2 咬到了自己的尾巴");return;}
+      if(!hitWall(nx,ny,.26)&&!selfBite(nx,ny,.5)&&!primaryBodyHit(nx,ny))p.danger=null;
+      else{if(p.danger.timer<=0)defeat(p.danger.type==="wall"?"P2 撞上了墙":p.danger.type==="player"?"撞上了 P1 的身体":"P2 咬到了自己的尾巴");return;}
     }
     if(p.firing||!p.alive)return;
     let spd=CFG.snakeSpeed*(p.held.size>0?CFG.speedBoost:1)*RUN.speedMult;
@@ -153,10 +157,16 @@
       const wallHit=p.segPos.some(s=>hitWall(s.x,s.y,.34));
       const playerHit=typeof alive!=="undefined"&&alive&&!primaryDown&&
         p.segPos.some(a=>segPos.some(b=>Math.hypot(a.x-b.x,a.y-b.y)<.72));
-      if(!wallHit&&!playerHit)return true;
+      const laneHit=!spawnLaneClear(p.snake.fx,p.snake.fy,3);
+      if(!wallHit&&!playerHit&&!laneHit)return true;
     }
     p.snake.fx=old.x;p.snake.fy=old.y;p.dir=old.dir;p.snake.path=old.path;compute();
     return false;
+  }
+
+  function enterPrimaryDanger(){
+    danger={type:"player",timer:.5};
+    shake=Math.max(shake,.18);
   }
 
   function checkPlayerBodyCollision(){
@@ -164,8 +174,8 @@
     if(!primaryUp)return;
     const p1Hit=p.segPos.slice(1).some(b=>Math.hypot(snake.fx-b.x,snake.fy-b.y)<.62);
     const p2Hit=p.segPos.length>0&&segPos.slice(1).some(b=>Math.hypot(p.snake.fx-b.x,p.snake.fy-b.y)<.62);
-    if(p1Hit)defeatPrimary("撞上了 P2 的身体");
-    if(p2Hit)defeat("撞上了 P1 的身体");
+    if(p1Hit&&!danger)enterPrimaryDanger();
+    if(p2Hit&&!p.danger)enterDanger("player");
   }
 
   function update(dt){
@@ -183,8 +193,9 @@
     for(let i=p.segPos.length-1;i>=0;i--){
       const s=p.segPos[i],x=s.x*T,y=s.y*T;
       if(i===0){
-        let col=p.light;if(p.invuln>0&&Math.sin(gameTime*30)>0)col="#ffffff";ctx.fillStyle=col;roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
+        let col=p.light;if(p.danger&&Math.sin(gameTime*40)>0)col="#ff5d5d";else if(p.invuln>0&&Math.sin(gameTime*30)>0)col="#ffffff";ctx.fillStyle=col;roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
         ctx.fillStyle="#1a1023";const ex=p.dir.x*4,ey=p.dir.y*4;ctx.fillRect(x-6+ex,y-6+ey,4,5);ctx.fillRect(x+2+ex,y-6+ey,4,5);
+        if(p.danger){ctx.fillStyle="#ff5d5d";ctx.font="bold 16px Consolas";ctx.fillText("!",x,y-T*.9);}
         ctx.textAlign="center";ctx.font="bold 10px Consolas";ctx.fillStyle="#bdefff";ctx.fillText("P2",x,y-T*.75);
       }else{const shade=.75+.25*(1-i/p.segPos.length);ctx.fillStyle=rgb(55,120+shade*45,165+shade*35);roundRect(x-T/2+2.5,y-T/2+2.5,T-5,T-5,5);ctx.fill();}
     }

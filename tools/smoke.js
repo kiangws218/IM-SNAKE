@@ -54,7 +54,7 @@ try{
   console.log("[load] OK");
   els["ovBtn5"].onclick();
   if(!els["pickList"].children.length)throw new Error("Boss challenge selection did not open");
-  els["pickList"].children[0].onclick();frames(5);
+  els["pickList"].children[0].onclick();frames(180);
   if(!global.__IMS.alive)throw new Error("Boss spawn is unsafe");
   if(coopMode&&!global.CoopMode.state.p.alive)throw new Error("P2 boss spawn is unsafe");
   els["pauseHome"].onclick();frames(2);
