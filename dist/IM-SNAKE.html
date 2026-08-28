@@ -150,7 +150,7 @@
   <summary>▶ 数值调参面板（改完立即生效，用于玩法验证）</summary>
   <div class="grid" id="tune"></div>
 </details>
-<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
+<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">剧情模式</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
 <div id="pauseMenu"><h2>已暂停</h2><button id="pauseResume">继 续</button><button id="pauseSettings">设 置</button><button id="pauseHome">返回首页</button></div>
 
 <script>
@@ -944,6 +944,10 @@ const SANDBOX_CAPS={
   function pathHead(){return PlayerCore.pathHead(S.p);}
   function selfBite(x,y,r){return PlayerCore.selfBite(S.p,x,y,r||.62,Math.max(2,CFG.neckGuard),nearNode);}
   function enterDanger(type){S.p.danger={type,timer:.5};shake=Math.max(shake,.18);}
+  function primaryBodyHit(x,y){
+    return typeof alive!=="undefined"&&alive&&!primaryDown&&
+      segPos.slice(1).some(s=>Math.hypot(x-s.x,y-s.y)<.62);
+  }
 
   function updateMovement(dt){
     const p=S.p;applyQueue();
@@ -951,8 +955,8 @@ const SANDBOX_CAPS={
       p.danger.timer-=dt;
       const spd=CFG.snakeSpeed*(p.held.size>0&&!p.firing?CFG.speedBoost:1);
       const step=Math.max(spd*dt,.05),nx=p.snake.fx+p.dir.x*step,ny=p.snake.fy+p.dir.y*step;
-      if(!hitWall(nx,ny,.26)&&!selfBite(nx,ny,.5))p.danger=null;
-      else{if(p.danger.timer<=0)defeat(p.danger.type==="wall"?"P2 撞上了墙":"P2 咬到了自己的尾巴");return;}
+      if(!hitWall(nx,ny,.26)&&!selfBite(nx,ny,.5)&&!primaryBodyHit(nx,ny))p.danger=null;
+      else{if(p.danger.timer<=0)defeat(p.danger.type==="wall"?"P2 撞上了墙":p.danger.type==="player"?"撞上了 P1 的身体":"P2 咬到了自己的尾巴");return;}
     }
     if(p.firing||!p.alive)return;
     let spd=CFG.snakeSpeed*(p.held.size>0?CFG.speedBoost:1)*RUN.speedMult;
@@ -1042,15 +1046,59 @@ const SANDBOX_CAPS={
     for(let i=hitIdx;i<oldLen;i++){const s=p.segPos[i];if(!s)break;const a=Math.atan2(s.y-b.y,s.x-b.x)+(Math.random()-.5)*.7,spd=7+Math.random()*4;flyingBeans.push({x:s.x,y:s.y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,t:.9});}
     shake=Math.max(shake,.4);ftext(p.snake.fx,p.snake.fy-1,"P2 -"+lost+" 节！","#7fd1e8");puff(p.snake.fx,p.snake.fy,"#7fd1e8");compute();computeEnclosure();
   }
-  function update(dt){if(!active())return;const p=S.p;p.invuln=Math.max(0,p.invuln-dt);p.cutCd=Math.max(0,p.cutCd-dt);updateMovement(dt);if(active())updateFire(dt);}
+  function ensureSafeSpawn(){
+    if(!S.p)return true;
+    const p=S.p,old={x:p.snake.fx,y:p.snake.fy,dir:{x:p.dir.x,y:p.dir.y},path:p.snake.path.map(q=>({x:q.x,y:q.y}))};
+    const px=Math.floor(old.x),py=Math.floor(old.y),candidates=[];
+    for(let y=0;y<CFG.rows;y++)for(let x=0;x<CFG.cols;x++)
+      candidates.push({x,y,d:Math.abs(x-px)+Math.abs(y-py)});
+    candidates.sort((a,b)=>a.d-b.d);
+    for(const c of candidates){
+      p.snake.fx=c.x+.5;p.snake.fy=c.y+.5;p.dir={x:1,y:0};p.snake.path=[];
+      for(let i=1;i<=p.snake.len+3;i++)p.snake.path.push({x:p.snake.fx-i,y:p.snake.fy});
+      compute();
+      const wallHit=p.segPos.some(s=>hitWall(s.x,s.y,.34));
+      const playerHit=typeof alive!=="undefined"&&alive&&!primaryDown&&
+        p.segPos.some(a=>segPos.some(b=>Math.hypot(a.x-b.x,a.y-b.y)<.72));
+      const laneHit=!spawnLaneClear(p.snake.fx,p.snake.fy,3);
+      if(!wallHit&&!playerHit&&!laneHit)return true;
+    }
+    p.snake.fx=old.x;p.snake.fy=old.y;p.dir=old.dir;p.snake.path=old.path;compute();
+    return false;
+  }
+
+  function enterPrimaryDanger(){
+    danger={type:"player",timer:.5};
+    shake=Math.max(shake,.18);
+  }
+
+  function checkPlayerBodyCollision(){
+    const p=S.p,primaryUp=typeof alive!=="undefined"&&alive&&!primaryDown;
+    if(!primaryUp)return;
+    const p1Hit=p.segPos.slice(1).some(b=>Math.hypot(snake.fx-b.x,snake.fy-b.y)<.62);
+    const p2Hit=p.segPos.length>0&&segPos.slice(1).some(b=>Math.hypot(p.snake.fx-b.x,p.snake.fy-b.y)<.62);
+    if(p1Hit&&!danger)enterPrimaryDanger();
+    if(p2Hit&&!p.danger)enterDanger("player");
+  }
+
+  function update(dt){
+    if(!active())return;
+    const p=S.p;
+    p.invuln=Math.max(0,p.invuln-dt);
+    p.cutCd=Math.max(0,p.cutCd-dt);
+    updateMovement(dt);
+    if(active())updateFire(dt);
+    checkPlayerBodyCollision();
+  }
 
   function draw(ctx,T){
     if(!active())return;const p=S.p;
     for(let i=p.segPos.length-1;i>=0;i--){
       const s=p.segPos[i],x=s.x*T,y=s.y*T;
       if(i===0){
-        let col=p.light;if(p.invuln>0&&Math.sin(gameTime*30)>0)col="#ffffff";ctx.fillStyle=col;roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
+        let col=p.light;if(p.danger&&Math.sin(gameTime*40)>0)col="#ff5d5d";else if(p.invuln>0&&Math.sin(gameTime*30)>0)col="#ffffff";ctx.fillStyle=col;roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
         ctx.fillStyle="#1a1023";const ex=p.dir.x*4,ey=p.dir.y*4;ctx.fillRect(x-6+ex,y-6+ey,4,5);ctx.fillRect(x+2+ex,y-6+ey,4,5);
+        if(p.danger){ctx.fillStyle="#ff5d5d";ctx.font="bold 16px Consolas";ctx.fillText("!",x,y-T*.9);}
         ctx.textAlign="center";ctx.font="bold 10px Consolas";ctx.fillStyle="#bdefff";ctx.fillText("P2",x,y-T*.75);
       }else{const shade=.75+.25*(1-i/p.segPos.length);ctx.fillStyle=rgb(55,120+shade*45,165+shade*35);roundRect(x-T/2+2.5,y-T/2+2.5,T-5,T-5,5);ctx.fill();}
     }
@@ -1069,9 +1117,81 @@ const SANDBOX_CAPS={
   function keyup(ev){if(!S.p)return;const action=InputMap.actionFor(2,ev);if(!action)return;S.p.held.delete(action);if(action==="fire")S.p.fireHeld=false;if(MOVE[action])pushCombo();}
   addEventListener("keydown",keydown);addEventListener("keyup",keyup);addEventListener("blur",clearInput);
 
-  root.CoopMode={state:S,enabled,active,reset,resetRun,captureCarry,update,draw,hud,view,bodyHas,bodyCells,damage,hurt,hitBySeed,defeat,trimAt,
+  root.CoopMode={state:S,enabled,active,reset,resetRun,captureCarry,ensureSafeSpawn,update,draw,hud,view,bodyHas,bodyCells,damage,hurt,hitBySeed,defeat,trimAt,
     cutTail,placeNode,refundCharge,needsCharge,heal,grow,clearInput};
 })(typeof window!=="undefined"?window:globalThis);
+</script>
+<script>
+"use strict";
+/* ============================================================
+ * 我蛇了 IM SNAKE — 剧情内容数据
+ * ------------------------------------------------------------
+ * 序章先实现 Arcweave 主流程的可玩切片：
+ * 进入序章 → 教学1 → 对话1 → 教学2 → 对话2 → 教学3 → 可蒂。
+ * 引擎只读取这里的数据，后续剧情可以继续沿用同样的结构扩展。
+ * ============================================================ */
+const STORY_PROLOGUE={
+  name:"序章",
+  stages:[
+    {
+      id:"eat-beans", title:"序章 · 教学 1/7",
+      hint:"先往右走，把通道里的 3 颗豆子全部吃掉",
+      goal:{type:"beans",count:3}, startLen:4,
+      beans:[[12,25],[20,25],[28,25]],
+      level:{
+        obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],
+        waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
+      }
+    },
+    {
+      id:"break-wall", title:"序章 · 教学 2/7",
+      hint:"走到脆弱墙前，长按 J 或空格吐出 3 颗豆子，把墙打开",
+      goal:{type:"gate",count:3}, startLen:7,
+      level:{
+        obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],
+        mechs:[{kind:"gate",x:34,y:24,w:1,h:3,need:3,reward:{type:"beans",n:2}}],
+        waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
+      }
+    },
+    {
+      id:"hit-slime", title:"序章 · 教学 3/7",
+      hint:"前面的史莱姆挡住了路，吐豆命中它 1 次",
+      goal:{type:"hit",count:1}, startLen:6,
+      enemy:{type:"slime",x:45,y:25},
+      level:{
+        obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],
+        waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
+      }
+    },
+    {
+      id:"meet-keti", title:"序章 · 教学 4/7",
+      hint:"远处传来了哭声，继续往右走，找到声音的主人",
+      goal:{type:"meet"}, startLen:6,
+      keti:{x:45.5,y:25.5},
+      level:{
+        obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],
+        waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
+      }
+    }
+  ],
+  dialogues:{
+    afterEat:{
+      speaker:"我",sub:"序章 · 对话 1",portrait:"snake_self",
+      say:"我究竟像这样吃了多久……感觉……有点恶心。要吐了！",
+      options:[{label:"吐出来！",nextStage:1}]
+    },
+    afterWall:{
+      speaker:"我",sub:"序章 · 对话 2",portrait:"snake_self",
+      say:"吐出来舒服多了。但我的身体也变短了。上面有一堵脆弱的墙？似乎可以靠这个破坏它。",
+      options:[{label:"继续往前走",nextStage:2}]
+    },
+    afterSlime:{
+      speaker:"我",sub:"序章 · 对话 3",portrait:"snake_self",
+      say:"豆子真的能打中东西……等等，前面好像有谁在哭。",
+      options:[{label:"去看看",nextStage:3}]
+    }
+  }
+};
 </script>
 <script>
 "use strict";
@@ -1119,6 +1239,7 @@ let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false;
 let curses=[];
 let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false;
+let storyActive=false,storyStage=-1,storyTransitioning=false;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -1307,7 +1428,9 @@ function reset(forTutorial){
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
   flyingBeans=[];curses=[];
-  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;npcPanelEl=null;panelOpen=false;freeze=false;
+  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;
+  const oldPanel=document.getElementById("npcPanel");if(oldPanel&&oldPanel.remove)oldPanel.remove();
+  npcPanelEl=null;panelOpts=[];panelSel=0;panelOpen=false;freeze=false;
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
@@ -1430,10 +1553,10 @@ function updateMovement(dt){
     const spd=CFG.snakeSpeed*(heldKeys.size>0&&!firing?CFG.speedBoost:1);
     const step=Math.max(spd*dt,.05);
     const nx=snake.fx+dir.x*step,ny=snake.fy+dir.y*step;
-    if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)){
+    if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)&&!coopBodyHit(nx,ny)){
       danger=null;
     }else{
-      if(danger.timer<=0)defeatPrimary(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");
+      if(danger.timer<=0)defeatPrimary(danger.type==="wall"?"撞上了墙":danger.type==="player"?"撞上了 P2 的身体":"咬到了自己的尾巴");
       return;
     }
   }
@@ -1463,6 +1586,10 @@ function enterDanger(type){
 }
 function selfBiteProbe(px,py,r){
   return PlayerCore.selfBite({segPos},px,py,r||.62,Math.max(2,CFG.neckGuard),nearNode);
+}
+function coopBodyHit(px,py){
+  const p2=CoopMode.view();
+  return !!(p2&&p2.segPos.slice(1).some(s=>Math.hypot(px-s.x,py-s.y)<.62));
 }
 function path0(){return PlayerCore.pathHead({snake});}
 
@@ -2084,7 +2211,7 @@ function buildFromLevel(L){
   curCaps=Object.assign({slime:0,rat:0,flower:0},L.caps);
   curBeanTarget=L.beans||8;
   curGoal=L.goal;levelStartT=gameTime;
-  if(playMode!=="intro")(L.npcs||["merchant"]).forEach(k=>spawnNPC(k));
+  if(playMode!=="intro")(Array.isArray(L.npcs)?L.npcs:["merchant"]).forEach(k=>spawnNPC(k));
 }
 function startCampaign(){
   if(!introSeen){
@@ -2133,6 +2260,7 @@ function advanceIntro(){
 function endIntro(){
   intro=null;
   const sk=document.getElementById("introSkip");if(sk)sk.remove();
+  if(storyActive){startStoryStage(0);return;}
   startCampaign();
 }
 function updateIntro(dt){
@@ -2152,6 +2280,90 @@ function updateIntro(dt){
       computeSegs();
     }else intro.arrived=true;
   }
+}
+function storyGoalText(){
+  const s=STORY_PROLOGUE.stages[storyStage];if(!s)return"";
+  if(s.goal.type==="beans")return"目标 吃豆 "+Math.min(beansEaten,s.goal.count)+"/"+s.goal.count;
+  if(s.goal.type==="gate"){
+    const m=MECHS.find(x=>x.kind==="gate");
+    return"目标 破坏脆弱墙 "+Math.min(m?m.prog:0,s.goal.count)+"/"+s.goal.count;
+  }
+  if(s.goal.type==="hit")return"目标 命中史莱姆 "+Math.min(spitHits,s.goal.count)+"/"+s.goal.count;
+  if(s.goal.type==="meet")return"目标 找到哭声的主人";
+  return"";
+}
+function storyGoalDone(s){
+  if(s.goal.type==="beans")return beansEaten>=s.goal.count;
+  if(s.goal.type==="gate")return MECHS.some(m=>m.kind==="gate"&&m.done);
+  if(s.goal.type==="hit")return spitHits>=s.goal.count;
+  return false;
+}
+function storyHidePanel(){
+  const p=document.getElementById("npcPanel");
+  panelOpen=false;panelNpc=null;npcNode=null;freeze=false;moveLock=false;
+  if(p){p.classList.remove("open");p.style.display="none";}
+}
+function startStoryMode(){
+  storyActive=true;storyStage=-1;storyTransitioning=false;introSeen=false;
+  startIntro();
+}
+function startStoryStage(index){
+  const s=STORY_PROLOGUE.stages[index];if(!s)return;
+  storyStage=index;storyTransitioning=false;playMode="story";
+  reset(true);groundBeans.length=0;enemies.length=0;npcs.length=0;
+  buildFromLevel(s.level);
+  for(const [x,y] of(s.beans||[]))groundBeans.push({x,y});
+  if(s.enemy)spawnEnemy(s.enemy.type,s.enemy.x,s.enemy.y);
+  if(s.keti){
+    const t=NPC_TYPES.keti;
+    npcs.push({kind:"keti",x:s.keti.x,y:s.keti.y,r:t.r,hp:t.hp,maxHp:t.hp,flash:0,inside:false,crying:false});
+  }
+  snake.len=s.startLen||CFG.initLen;charges=1;coilPath();computeSegs();
+  tutIdx=-1;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
+  heldKeys.clear();dirQueue.length=0;moveLock=false;
+  document.getElementById("overlay").classList.remove("show");
+  document.getElementById("tut").classList.remove("show");
+  document.getElementById("ovBtns").style.display="";
+  document.getElementById("pickList").innerHTML="";
+  banner(s.hint);
+}
+function openStoryDialog(key){
+  const d=STORY_PROLOGUE.dialogues[key];if(!d)return;
+  panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
+  const p=ensurePanel();p.style.display="flex";
+  document.getElementById("npcName").textContent=d.speaker;
+  document.getElementById("npcSub").textContent=d.sub;
+  drawPortraitInto(document.getElementById("npcPortrait"),d.portrait||"snake_self",false);
+  document.getElementById("npcSay").textContent=d.say;
+  const opts=document.getElementById("npcOpts");opts.innerHTML="";
+  d.options.forEach(o=>{
+    const b=document.createElement("button");b.className="npc-opt";b.textContent=o.label;
+    b.onclick=()=>{storyHidePanel();startStoryStage(o.nextStage);};opts.appendChild(b);
+  });
+  trackPanelOpts(opts);requestAnimationFrame(()=>p.classList.add("open"));
+}
+function storyCheckProgress(){
+  if(!storyActive||playMode!=="story"||storyTransitioning||storyStage<0||storyStage>=STORY_PROLOGUE.stages.length)return;
+  const s=STORY_PROLOGUE.stages[storyStage];
+  if(s.goal.type==="meet")return;
+  if(!storyGoalDone(s))return;
+  storyTransitioning=true;
+  if(storyStage===0)openStoryDialog("afterEat");
+  else if(storyStage===1)openStoryDialog("afterWall");
+  else if(storyStage===2)openStoryDialog("afterSlime");
+}
+function storyVictory(text){
+  if(!storyActive||playMode!=="story")return;
+  storyStage=STORY_PROLOGUE.stages.length;storyTransitioning=true;storyHidePanel();
+  gameState="victory";victoryRetry="story";
+  document.getElementById("ovTitle").textContent="序章完成";
+  document.getElementById("ovText").innerHTML=text+"<br><br>这是序章试玩版，后续地图和分支还会继续接上。";
+  document.getElementById("ovBtn").textContent="再玩一次序章";
+  document.getElementById("ovBtn2").textContent="回到首页";
+  document.getElementById("ovBtn2").style.display="";
+  document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
+  document.getElementById("ovBtn5").style.display="none";document.getElementById("ovBtn7").style.display="none";
+  document.getElementById("overlay").classList.add("show");
 }
 function drawBossUI(){
   const W=cv.width;
@@ -2302,7 +2514,7 @@ function buildTutArena(){
   for(const[rx,ry,rw,rh]of[[30,17,8,1],[30,23,8,1],[30,18,1,5]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   computeEnclosure();
-  enemies.push({type:"flower",x:34,y:20,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.5,vx:0,vy:0,shootT:2,warned:false});
+  enemies.push({type:"flower",x:34.5,y:21.5,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.5,vx:0,vy:0,shootT:2,warned:false});
 }
 function startTutorial(){
   playMode="tutorial";
@@ -2469,8 +2681,8 @@ function openPanel(n,nodeId){
       list=(node.options||[]).map(o=>({label:o.t,
         fn:()=>{
           if(!npcs.includes(n))return closePanel();
-          if(o.action==="eat")return eatNPC(n);
-          if(o.action==="end")return closePanel();
+          if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
+          if(o.action==="end"){closePanel();if(playMode==="story"&&storyStage===3)storyVictory("你暂时放过了她，但那阵哭声还留在耳边。");return;}
           return openPanel(n,o.next);
         }}));
     }else{
@@ -2495,8 +2707,8 @@ function handleOption(n,o){
   if(!npcs.includes(n))return closePanel();
   if(o.action==="trade")return panelTrade(n);
   if(o.action==="dialog")return openPanel(n,o.arg||"start");
-  if(o.action==="eat")return eatNPC(n);
-  if(o.action==="leave")return closePanel();
+  if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
+  if(o.action==="leave"){const isStoryKeti=playMode==="story"&&storyStage===3&&n.kind==="keti";closePanel();if(isStoryKeti)storyVictory("你没有靠近那个孩子，转身继续向前。");return;}
 }
 function merchantMarkup(n){
   const T=NPC_TYPES[n.kind];
@@ -2573,6 +2785,28 @@ function resumeFromUI(){
   paused=false;panelOpen=false;freeze=false;moveLock=true;
 }
 
+function spawnLaneClear(x,y,seconds){
+  const speed=CFG.snakeSpeed*RUN.speedMult,step=.05;
+  for(let t=0;t<=seconds;t+=step)if(hitWall(x+speed*t,y,.34))return false;
+  return true;
+}
+function ensurePrimarySpawnSafe(){
+  const old={x:snake.fx,y:snake.fy,dir:{x:dir.x,y:dir.y},path:snake.path.map(p=>({x:p.x,y:p.y}))};
+  const px=Math.floor(old.x),py=Math.floor(old.y),candidates=[];
+  for(let y=0;y<CFG.rows;y++)for(let x=0;x<CFG.cols;x++)
+    candidates.push({x,y,d:Math.abs(x-px)+Math.abs(y-py)});
+  candidates.sort((a,b)=>a.d-b.d);
+  for(const c of candidates){
+    snake.fx=c.x+.5;snake.fy=c.y+.5;dir={x:1,y:0};coilPath();computeSegs();
+    const p2=CoopMode.view();
+    const wallHit=segPos.some(s=>hitWall(s.x,s.y,.34));
+    const playerHit=p2&&segPos.some(a=>p2.segPos.some(b=>Math.hypot(a.x-b.x,a.y-b.y)<.72));
+    const laneHit=!spawnLaneClear(snake.fx,snake.fy,3);
+    if(!wallHit&&!playerHit&&!laneHit)return true;
+  }
+  snake.fx=old.x;snake.fy=old.y;dir=old.dir;snake.path=old.path;computeSegs();
+  return false;
+}
 function startBossFight(){
   playMode="boss";
   resetRun();
@@ -2580,6 +2814,8 @@ function startBossFight(){
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
   for(const[rx,ry,rw,rh]of[[8,8,2,2],[30,6,2,2],[52,8,2,2],[6,24,2,3],[54,22,2,3],[28,40,2,2],[52,38,2,2],[20,12,2,2],[12,34,2,2],[40,16,2,1],[44,34,2,2],[60,30,2,2]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
+  ensurePrimarySpawnSafe();
+  CoopMode.ensureSafeSpawn();
   tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
   boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
     phase2:false,patT:2.2,patIdx:0,sumT:9,stun:0,spin:0,flash:0,vx:0,vy:0,
@@ -2858,6 +3094,7 @@ document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   if(gameState==="victory"){
     if(victoryRetry==="boss")startBossFight();
+    else if(victoryRetry==="story")startStoryMode();
     else showMenu();
     return;
   }
@@ -2865,14 +3102,15 @@ document.getElementById("ovBtn").onclick=()=>{
     if(playMode==="campaign")startLevel();
     else if(playMode==="boss")startBossFight();
     else if(playMode==="tutorial")restartCurrentTut();
+    else if(playMode==="story")startStoryStage(Math.max(0,storyStage));
     else startGame();
     return;
   }
-  startCampaign();
+  startStoryMode();
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
-  if(gameState==="dead"&&playMode==="tutorial"){showMenu();return;}
+  if(gameState==="dead"){showMenu();return;}
   startTutorial();
 };
 document.getElementById("ovBtn5").onclick=()=>{
@@ -2924,12 +3162,13 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
+    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试本段":"再来一局";
   if(playMode==="tutorial"){
     document.getElementById("ovBtn2").textContent="回到首页";
     document.getElementById("ovBtn2").style.display="";
   }else{
-    document.getElementById("ovBtn2").style.display="none";
+    document.getElementById("ovBtn2").textContent="回到首页";
+    document.getElementById("ovBtn2").style.display="";
   }
   document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
   document.getElementById("ovBtn5").style.display="none";
@@ -2937,16 +3176,17 @@ function die(reason){
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
+  storyActive=false;storyStage=-1;storyTransitioning=false;
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>"+
+    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：从序章开始，边玩边了解蛇的身体、豆子和这个世界。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
     (InputMap.getPlayerCount()===2?"P2：方向键移动 ｜ 小键盘 0 吐豆 · 1 断尾 · 2 节点<br>":"")+
     "P 暂停 ｜ R 重开 ｜ M 静音 ｜ 设置中可自定义全部键位";
-  document.getElementById("ovBtn").textContent="开始闯关";
+  document.getElementById("ovBtn").textContent="剧情模式";
   document.getElementById("ovBtn2").textContent="教学关卡";
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="";
@@ -3402,7 +3642,7 @@ function updateHud(){
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
   document.getElementById("stat").textContent=
-    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":"")+
+    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?"序章 "+(storyStage+1)+"/"+STORY_PROLOGUE.stages.length+" ｜ "+storyGoalText()+" ｜ ":"")+
     (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 
@@ -3444,6 +3684,7 @@ function loop(now){
     if(playMode==="sandbox"||playMode==="campaign")updateSpawner(dt);
     computeEnclosure();
     updateCamera(dt);
+    storyCheckProgress();
     if(playMode==="campaign"&&curGoal&&alive){
       const g=curGoal,t=gameTime-levelStartT;
       if((g.type==="kills"&&kills>=g.count)||
@@ -3460,7 +3701,7 @@ function loop(now){
 }
 
 buildPanel();GameSettings.init();reset(false);showMenu();requestAnimationFrame(loop);
-if(typeof window!=="undefined")window.__IMS={
+const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debugRoot.__IMS={
   get npcs(){return npcs;},get snake(){return snake;},get panelOpen(){return panelOpen;},
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},

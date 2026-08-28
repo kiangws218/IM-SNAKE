@@ -150,7 +150,7 @@
   <summary>▶ 数值调参面板（改完立即生效，用于玩法验证）</summary>
   <div class="grid" id="tune"></div>
 </details>
-<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
+<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">剧情模式</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
 <div id="pauseMenu"><h2>已暂停</h2><button id="pauseResume">继 续</button><button id="pauseSettings">设 置</button><button id="pauseHome">返回首页</button></div>
 
 <script src="levels.js"></script>
@@ -161,6 +161,7 @@
 <script src="input.js"></script>
 <script src="settings.js"></script>
 <script src="coop-mode.js"></script>
+<script src="story.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -207,6 +208,7 @@ let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false;
 let curses=[];
 let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false;
+let storyActive=false,storyStage=-1,storyTransitioning=false;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -1178,7 +1180,7 @@ function buildFromLevel(L){
   curCaps=Object.assign({slime:0,rat:0,flower:0},L.caps);
   curBeanTarget=L.beans||8;
   curGoal=L.goal;levelStartT=gameTime;
-  if(playMode!=="intro")(L.npcs||["merchant"]).forEach(k=>spawnNPC(k));
+  if(playMode!=="intro")(Array.isArray(L.npcs)?L.npcs:["merchant"]).forEach(k=>spawnNPC(k));
 }
 function startCampaign(){
   if(!introSeen){
@@ -1227,6 +1229,7 @@ function advanceIntro(){
 function endIntro(){
   intro=null;
   const sk=document.getElementById("introSkip");if(sk)sk.remove();
+  if(storyActive){startStoryStage(0);return;}
   startCampaign();
 }
 function updateIntro(dt){
@@ -1246,6 +1249,90 @@ function updateIntro(dt){
       computeSegs();
     }else intro.arrived=true;
   }
+}
+function storyGoalText(){
+  const s=STORY_PROLOGUE.stages[storyStage];if(!s)return"";
+  if(s.goal.type==="beans")return"目标 吃豆 "+Math.min(beansEaten,s.goal.count)+"/"+s.goal.count;
+  if(s.goal.type==="gate"){
+    const m=MECHS.find(x=>x.kind==="gate");
+    return"目标 破坏脆弱墙 "+Math.min(m?m.prog:0,s.goal.count)+"/"+s.goal.count;
+  }
+  if(s.goal.type==="hit")return"目标 命中史莱姆 "+Math.min(spitHits,s.goal.count)+"/"+s.goal.count;
+  if(s.goal.type==="meet")return"目标 找到哭声的主人";
+  return"";
+}
+function storyGoalDone(s){
+  if(s.goal.type==="beans")return beansEaten>=s.goal.count;
+  if(s.goal.type==="gate")return MECHS.some(m=>m.kind==="gate"&&m.done);
+  if(s.goal.type==="hit")return spitHits>=s.goal.count;
+  return false;
+}
+function storyHidePanel(){
+  const p=document.getElementById("npcPanel");
+  panelOpen=false;panelNpc=null;npcNode=null;freeze=false;moveLock=false;
+  if(p){p.classList.remove("open");p.style.display="none";}
+}
+function startStoryMode(){
+  storyActive=true;storyStage=-1;storyTransitioning=false;introSeen=false;
+  startIntro();
+}
+function startStoryStage(index){
+  const s=STORY_PROLOGUE.stages[index];if(!s)return;
+  storyStage=index;storyTransitioning=false;playMode="story";
+  reset(true);groundBeans.length=0;enemies.length=0;npcs.length=0;
+  buildFromLevel(s.level);
+  for(const [x,y] of(s.beans||[]))groundBeans.push({x,y});
+  if(s.enemy)spawnEnemy(s.enemy.type,s.enemy.x,s.enemy.y);
+  if(s.keti){
+    const t=NPC_TYPES.keti;
+    npcs.push({kind:"keti",x:s.keti.x,y:s.keti.y,r:t.r,hp:t.hp,maxHp:t.hp,flash:0,inside:false,crying:false});
+  }
+  snake.len=s.startLen||CFG.initLen;charges=1;coilPath();computeSegs();
+  tutIdx=-1;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
+  heldKeys.clear();dirQueue.length=0;moveLock=false;
+  document.getElementById("overlay").classList.remove("show");
+  document.getElementById("tut").classList.remove("show");
+  document.getElementById("ovBtns").style.display="";
+  document.getElementById("pickList").innerHTML="";
+  banner(s.hint);
+}
+function openStoryDialog(key){
+  const d=STORY_PROLOGUE.dialogues[key];if(!d)return;
+  panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
+  const p=ensurePanel();p.style.display="flex";
+  document.getElementById("npcName").textContent=d.speaker;
+  document.getElementById("npcSub").textContent=d.sub;
+  drawPortraitInto(document.getElementById("npcPortrait"),d.portrait||"snake_self",false);
+  document.getElementById("npcSay").textContent=d.say;
+  const opts=document.getElementById("npcOpts");opts.innerHTML="";
+  d.options.forEach(o=>{
+    const b=document.createElement("button");b.className="npc-opt";b.textContent=o.label;
+    b.onclick=()=>{storyHidePanel();startStoryStage(o.nextStage);};opts.appendChild(b);
+  });
+  trackPanelOpts(opts);requestAnimationFrame(()=>p.classList.add("open"));
+}
+function storyCheckProgress(){
+  if(!storyActive||playMode!=="story"||storyTransitioning||storyStage<0||storyStage>=STORY_PROLOGUE.stages.length)return;
+  const s=STORY_PROLOGUE.stages[storyStage];
+  if(s.goal.type==="meet")return;
+  if(!storyGoalDone(s))return;
+  storyTransitioning=true;
+  if(storyStage===0)openStoryDialog("afterEat");
+  else if(storyStage===1)openStoryDialog("afterWall");
+  else if(storyStage===2)openStoryDialog("afterSlime");
+}
+function storyVictory(text){
+  if(!storyActive||playMode!=="story")return;
+  storyStage=STORY_PROLOGUE.stages.length;storyTransitioning=true;storyHidePanel();
+  gameState="victory";victoryRetry="story";
+  document.getElementById("ovTitle").textContent="序章完成";
+  document.getElementById("ovText").innerHTML=text+"<br><br>这是序章试玩版，后续地图和分支还会继续接上。";
+  document.getElementById("ovBtn").textContent="再玩一次序章";
+  document.getElementById("ovBtn2").textContent="回到首页";
+  document.getElementById("ovBtn2").style.display="";
+  document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
+  document.getElementById("ovBtn5").style.display="none";document.getElementById("ovBtn7").style.display="none";
+  document.getElementById("overlay").classList.add("show");
 }
 function drawBossUI(){
   const W=cv.width;
@@ -1563,8 +1650,8 @@ function openPanel(n,nodeId){
       list=(node.options||[]).map(o=>({label:o.t,
         fn:()=>{
           if(!npcs.includes(n))return closePanel();
-          if(o.action==="eat")return eatNPC(n);
-          if(o.action==="end")return closePanel();
+          if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
+          if(o.action==="end"){closePanel();if(playMode==="story"&&storyStage===3)storyVictory("你暂时放过了她，但那阵哭声还留在耳边。");return;}
           return openPanel(n,o.next);
         }}));
     }else{
@@ -1589,8 +1676,8 @@ function handleOption(n,o){
   if(!npcs.includes(n))return closePanel();
   if(o.action==="trade")return panelTrade(n);
   if(o.action==="dialog")return openPanel(n,o.arg||"start");
-  if(o.action==="eat")return eatNPC(n);
-  if(o.action==="leave")return closePanel();
+  if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
+  if(o.action==="leave"){const isStoryKeti=playMode==="story"&&storyStage===3&&n.kind==="keti";closePanel();if(isStoryKeti)storyVictory("你没有靠近那个孩子，转身继续向前。");return;}
 }
 function merchantMarkup(n){
   const T=NPC_TYPES[n.kind];
@@ -1976,6 +2063,7 @@ document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   if(gameState==="victory"){
     if(victoryRetry==="boss")startBossFight();
+    else if(victoryRetry==="story")startStoryMode();
     else showMenu();
     return;
   }
@@ -1983,10 +2071,11 @@ document.getElementById("ovBtn").onclick=()=>{
     if(playMode==="campaign")startLevel();
     else if(playMode==="boss")startBossFight();
     else if(playMode==="tutorial")restartCurrentTut();
+    else if(playMode==="story")startStoryStage(Math.max(0,storyStage));
     else startGame();
     return;
   }
-  startCampaign();
+  startStoryMode();
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
@@ -2042,7 +2131,7 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
+    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试本段":"再来一局";
   if(playMode==="tutorial"){
     document.getElementById("ovBtn2").textContent="回到首页";
     document.getElementById("ovBtn2").style.display="";
@@ -2056,16 +2145,17 @@ function die(reason){
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
+  storyActive=false;storyStage=-1;storyTransitioning=false;
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>"+
+    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：从序章开始，边玩边了解蛇的身体、豆子和这个世界。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
     (InputMap.getPlayerCount()===2?"P2：方向键移动 ｜ 小键盘 0 吐豆 · 1 断尾 · 2 节点<br>":"")+
     "P 暂停 ｜ R 重开 ｜ M 静音 ｜ 设置中可自定义全部键位";
-  document.getElementById("ovBtn").textContent="开始闯关";
+  document.getElementById("ovBtn").textContent="剧情模式";
   document.getElementById("ovBtn2").textContent="教学关卡";
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="";
@@ -2521,7 +2611,7 @@ function updateHud(){
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
   document.getElementById("stat").textContent=
-    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":"")+
+    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?"序章 "+(storyStage+1)+"/"+STORY_PROLOGUE.stages.length+" ｜ "+storyGoalText()+" ｜ ":"")+
     (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 
@@ -2563,6 +2653,7 @@ function loop(now){
     if(playMode==="sandbox"||playMode==="campaign")updateSpawner(dt);
     computeEnclosure();
     updateCamera(dt);
+    storyCheckProgress();
     if(playMode==="campaign"&&curGoal&&alive){
       const g=curGoal,t=gameTime-levelStartT;
       if((g.type==="kills"&&kills>=g.count)||

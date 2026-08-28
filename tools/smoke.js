@@ -20,10 +20,10 @@ code+=inline;
 function mkEl(id){
   return {
     id, style:{}, textContent:"", innerHTML:"",
-    classList:{add(){},remove(){},contains(){return false}},
+    classList:{add(){},remove(){},toggle(){},contains(){return false}},
     children:[],
-    appendChild(c){this.children.push(c);return c},
-    querySelector(){return {textContent:""}},
+    appendChild(c){this.children.push(c);return c}, remove(){}, click(){if(this.onclick)this.onclick()},
+    querySelector(){return {textContent:""}}, querySelectorAll(){return this.children},
     getContext(){return ctx2d},
     onclick:null,
   };
@@ -42,11 +42,11 @@ let storedControls=coopMode?JSON.stringify({playerCount:2,bindings:{1:{up:"KeyW"
 global.localStorage={getItem(){return storedControls},setItem(k,v){storedControls=v}};
 const listeners={};
 global.addEventListener=(ev,fn)=>{(listeners[ev]=listeners[ev]||[]).push(fn)};
-let rafCb=null,simTime=0;
-global.requestAnimationFrame=cb=>{rafCb=cb};
+let rafCbs=[],simTime=0;
+global.requestAnimationFrame=cb=>{rafCbs.push(cb)};
 global.performance={now:()=>simTime};
 const fire=(ev,name)=>{(listeners[name]||[]).forEach(f=>f(ev));};
-const frames=n=>{for(let i=0;i<n;i++){simTime+=16.7;const cb=rafCb;rafCb=null;if(cb)cb(simTime);}};
+const frames=n=>{for(let i=0;i<n;i++){simTime+=16.7;const cbs=rafCbs;rafCbs=[];cbs.forEach(cb=>cb(simTime));}};
 
 try{
   new Function("document","addEventListener","performance","requestAnimationFrame",code)(
@@ -75,24 +75,45 @@ try{
     console.log("[coop one player down + teammate continues] OK");els["pauseHome"].onclick();frames(2);
   }
   els["ovBtn"].onclick();
-  frames(30);
-  console.log("[campaign start L1 + 30 frames] OK");
-  fire({key:"w",preventDefault(){},repeat:false},"keydown");
+  fire({key:"r",code:"KeyR",preventDefault(){},repeat:false},"keydown");
+  frames(2);
+  if(global.__IMS.gameState!=="play"||!els["stat"].textContent.includes("序章"))throw new Error("Story mode did not start");
+  console.log("[story prologue stage 1] OK");
+  frames(360);
+  if(!global.__IMS.panelOpen)throw new Error("Story stage 1 did not open its dialogue");
+  els["npcOpts"].children[0].onclick();
+  frames(2);
   frames(200);
-  console.log("[L1 move 200 frames] OK");
-  fire({key:" ",preventDefault(){},repeat:false},"keydown");
-  frames(100);
-  console.log("[stance fire 100 frames] OK");
-  fire({key:"f",preventDefault(){},repeat:false},"keydown");
-  frames(60);
-  console.log("[node place 60 frames] OK");
+  const storyFire=coopMode?"j":" ";
+  fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){},repeat:false},"keydown");
+  frames(190);
+  fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){}},"keyup");
+  if(!global.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
+  console.log("[story prologue stage 2] OK");
+  els["npcOpts"].children[0].onclick();
+  frames(2);
+  els["pauseHome"].onclick();
+  frames(2);
   els["ovBtn3"].onclick();
   frames(120);
   console.log("[sandbox 120 frames] OK");
+  fire({key:"w",preventDefault(){},repeat:false},"keydown");
+  frames(200);
+  console.log("[sandbox move 200 frames] OK");
+  const sandboxFire=coopMode?"j":" ";
+  fire({key:sandboxFire,code:coopMode?"KeyJ":"Space",preventDefault(){},repeat:false},"keydown");
+  frames(100);
+  console.log("[sandbox stance fire 100 frames] OK");
+  fire({key:"f",preventDefault(){},repeat:false},"keydown");
+  frames(60);
+  console.log("[sandbox node place 60 frames] OK");
+  els["pauseHome"].onclick();
+  frames(2);
   els["ovBtn2"].onclick();
   frames(600);
+
   global.__IMS.closePanel();
-  global.__IMS.snake.fy=.5;
+  global.__IMS.snake.fx=-.5;global.__IMS.snake.fy=-.5;
   fire({key:"w",code:"KeyW",preventDefault(){},repeat:false},"keydown");frames(40);fire({key:"w",code:"KeyW",preventDefault(){}},"keyup");
   if(global.__IMS.gameState!=="dead")throw new Error("Tutorial death flow did not reach retry screen");
   els["ovBtn"].onclick();frames(2);
