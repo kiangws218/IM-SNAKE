@@ -19,6 +19,10 @@
 | 文件 | 归属 | 规则 |
 |---|---|---|
 | `prototype/index.html` | 引擎+规则层 | **谨慎修改**：只动引擎/系统，改前先理解 RUN 状态机制 |
+| `prototype/player-core.js` | 玩家移动核心（可复用） | 单人/双人共用；改手感先看这里 |
+| `prototype/input.js` | 输入动作映射 | 按键重映射；改操作看这里 |
+| `prototype/settings.js` | 玩家数量/按键设置 | 双人合作开关 |
+| `prototype/coop-mode.js` | 本地双人合作 | P2 复用 PlayerCore，共享关卡目标 |
 | `prototype/levels.js` | 关卡轨道 | 自由增删关卡，遵循文件头规范（含 zones/mechs 扩展） |
 | `prototype/upgrades.js` | 肉鸽卡池轨道 | 自由增删强化卡，效果只能通过修改 RUN 字段实现 |
 | `prototype/enemies.js` | 怪物注册表轨道 | 怪物行为原型（chaser/thief/ranged/charger/bomber）与数值 |
@@ -46,13 +50,11 @@
 
 ## 当前状态与下一步
 
-- ✅ 地基 + NPC 系统 + BOSS 战完成（v0.28）：巨岩茧母·磐（菜单 ⚔ Boss挑战 进入）
-- 🐛 **已知未修 BUG（交接优先处理）**：移动端与可蒂交互时，右侧面板滑入但内容全空（头像/名字/台词/选项均无）。
-  - 已加排查工具：`window.__IMS` 调试钩子（暴露 npcs/snake/gameState/paused/freeze/alive/moveLock/openPanel/closePanel）；openPanel 已包 try/catch + uiFatal 红条（真机崩溃会直接显示）
-  - 无头复现（`node tools/diag-npc.js`）：门控变量全部正常（play/false/false/true/false）、无异常抛出，但 openPanel 从未触发、且 snake.fx 冻结在出生点 6.50——**疑似 loop 的 play 分支未执行，或 rAF 链首帧就断了**
-  - 排查建议：①在 loop() 首尾加帧计数器确认 rAF 链是否存活 ②在 play 块首尾各加探针 ③真机复现看红条是否出现（区分"没调用"还是"调用即崩"）
-- ⏳ 选关界面已实现但暂时隐藏（ovBtn4 display:none，架构保留，去掉那行即恢复）
-- ⏳ 待定：音效合成版（prototype/index-sfx.html，冻结中）；剧情基调未定（STORY_INTRO.md 有三基调分析）
+- ✅ 架构升级完成（v0.35/0.36 合入 main）：玩家移动核心 + 输入映射 + 本地双人合作已并线，之后唯一主线
+- ✅ 数值：吐豆 2/s、豆伤基础 4、监狱 15+30/10+10（多环 -1）、节点 HP2、商人 60s（见数值管理器 cardtool/）
+- ✅ 数值管理器（cardtool/index.html）：卡牌/蛇身/怪物/NPC/掉落物 全量配置，导出 JSON 给开发者对接
+- 🐛 历史遗留（可忽略）：移动端可蒂空面板已由 v0.31 ghost-panel 守卫修复；无头 diag 探针（tools/diag-npc.js）保留备用
+- ⏳ 待定：剧情基调未定；肉鸽框架专章 ROGUELITE.md 待实现；卡牌数值 JSON 尚未接入引擎（只保存未接线）
 
 ## 提交纪律
 
