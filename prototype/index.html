@@ -879,7 +879,10 @@ function updateNPCs(dt){
     if(n.hp<=0){dieNPC(n);continue;}
     if(alive&&!panelOpen&&gameState==="play"){
       const near=nearestPlayer(n.x,n.y),d=near?Math.hypot(n.x-near.x,n.y-near.y):Infinity;
-      if(d<0.85&&!n.inside)openPanel(n);
+      if(d<0.85&&!n.inside){
+        const storyHandled=typeof window!=="undefined"&&typeof window.storyControllerInteract==="function"&&window.storyControllerInteract(n);
+        if(!storyHandled)openPanel(n);
+      }
       else if(d>1.25)n.inside=false;
     }
   }
@@ -2001,6 +2004,11 @@ function buildPanel(){
 
 const MOVE_KEYS={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
 const heldKeys=new Set();
+function callRuntime(name,fallback,...args){
+  const appRoot=typeof window!=="undefined"?window:globalThis;
+  const fn=appRoot&&appRoot[name];
+  return typeof fn==="function"?fn(...args):fallback(...args);
+}
 function comboVec(){
   let x=0,y=0;
   if(heldKeys.has("up"))y--;
@@ -2018,6 +2026,7 @@ addEventListener("keydown",ev=>{
     if(playMode==="intro"){endIntro();return;}
     if(playMode==="tutorial"){if(gameState==="dead")restartCurrentTut();else startTutorial();}
     else if(playMode==="campaign"&&gameState!=="victory"&&levelIdx<LEVELS.length)startLevel();
+    else if(playMode==="story")callRuntime("startStoryStage",startStoryStage,Math.max(0,storyStage));
     else startGame();
     return;
   }
@@ -2067,7 +2076,7 @@ document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   if(gameState==="victory"){
     if(victoryRetry==="boss")startBossFight();
-    else if(victoryRetry==="story")startStoryMode();
+    else if(victoryRetry==="story")callRuntime("startStoryMode",startStoryMode);
     else showMenu();
     return;
   }
@@ -2075,11 +2084,11 @@ document.getElementById("ovBtn").onclick=()=>{
     if(playMode==="campaign")startLevel();
     else if(playMode==="boss")startBossFight();
     else if(playMode==="tutorial")restartCurrentTut();
-    else if(playMode==="story")startStoryStage(Math.max(0,storyStage));
+    else if(playMode==="story")callRuntime("startStoryStage",startStoryStage,Math.max(0,storyStage));
     else startGame();
     return;
   }
-  startStoryMode();
+  callRuntime("startStoryMode",startStoryMode);
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
@@ -2654,6 +2663,7 @@ function loop(now){
     updateBoss(dt);
     if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
+    if(typeof window!=="undefined"&&typeof window.storyControllerTick==="function")window.storyControllerTick();
     if(playMode==="sandbox"||playMode==="campaign")updateSpawner(dt);
     computeEnclosure();
     updateCamera(dt);

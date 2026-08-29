@@ -1,21 +1,20 @@
 #!/usr/bin/env node
 /* 冒烟测试：无头跑通 加载→闯关→射击→布点→沙盒→教学 全链路
  * 用法：node tools/smoke.js prototype/index.html   （必须全绿才允许提交） */
-const fs=require("fs"),path=require("path");
+const fs=require("fs"),path=require("path"),vm=require("vm");
 const args=process.argv.slice(2),coopMode=args.includes("--coop");
 const htmlPath=path.resolve(args.find(a=>!a.startsWith("--"))||"prototype/index.html");
 if(!fs.existsSync(htmlPath)){console.error("找不到 "+htmlPath);process.exit(1);}
 const html=fs.readFileSync(htmlPath,"utf8");
 let code="";
-const re=/<script src="([^"]+)"><\/script>/g;let m;
-while((m=re.exec(html))){
-  const p=path.join(path.dirname(htmlPath),m[1]);
-  if(!fs.existsSync(p)){console.log("[skip missing] "+m[1]);continue;}
-  code+=fs.readFileSync(p,"utf8")+"\n;\n";
+for(const match of html.matchAll(/<script(?: src="([^"]+)")?>([\s\S]*?)<\/script>/g)){
+  const src=match[1];
+  if(src){
+    const p=path.join(path.dirname(htmlPath),src);
+    if(!fs.existsSync(p)){console.log("[skip missing] "+src);continue;}
+    code+=fs.readFileSync(p,"utf8")+"\n;\n";
+  }else code+=match[2]+"\n;\n";
 }
-let inline="";
-for(const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) inline+=m[1]+"\n;\n";
-code+=inline;
 
 function mkEl(id){
   return {
@@ -23,6 +22,7 @@ function mkEl(id){
     classList:{add(){},remove(){},toggle(){},contains(){return false}},
     children:[],
     appendChild(c){this.children.push(c);return c}, remove(){}, click(){if(this.onclick)this.onclick()},
+    setAttribute(){},
     querySelector(){return {textContent:""}}, querySelectorAll(){return this.children},
     getContext(){return ctx2d},
     onclick:null,
@@ -36,7 +36,10 @@ const els={};
 global.document={
   getElementById(id){if(!els[id])els[id]=mkEl(id);return els[id];},
   createElement(tag){return mkEl("<"+tag+">");},
+  querySelector(){return null},
+  querySelectorAll(){return[]},
   body:mkEl("body"),
+  head:mkEl("head"),
 };
 let storedControls=coopMode?JSON.stringify({playerCount:2,bindings:{1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",cut:"KeyK",node:"KeyF"},2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",cut:"Numpad1",node:"Numpad2"}}}):null;
 global.localStorage={getItem(){return storedControls},setItem(k,v){storedControls=v}};
@@ -48,20 +51,25 @@ global.performance={now:()=>simTime};
 const fire=(ev,name)=>{(listeners[name]||[]).forEach(f=>f(ev));};
 const frames=n=>{for(let i=0;i<n;i++){simTime+=16.7;const cbs=rafCbs;rafCbs=[];cbs.forEach(cb=>cb(simTime));}};
 
+const sandbox={document:global.document,localStorage:global.localStorage,addEventListener:global.addEventListener,
+  performance:global.performance,requestAnimationFrame:global.requestAnimationFrame,navigator:{maxTouchPoints:0},
+  screen:{orientation:{}},location:{reload(){}},console,setTimeout,clearTimeout,Math,Set,Map,Uint8Array,Array,Object,JSON,
+  Date,Promise,parseInt,parseFloat,isNaN};
+sandbox.window=sandbox;sandbox.globalThis=sandbox;sandbox.global=sandbox;
+vm.createContext(sandbox);
 try{
-  new Function("document","addEventListener","performance","requestAnimationFrame",code)(
-    document,addEventListener,performance,requestAnimationFrame);
+  vm.runInContext(code,sandbox);
   console.log("[load] OK");
   els["ovBtn5"].onclick();
   if(!els["pickList"].children.length)throw new Error("Boss challenge selection did not open");
   els["pickList"].children[0].onclick();frames(180);
-  if(!global.__IMS.alive)throw new Error("Boss spawn is unsafe");
-  if(coopMode&&!global.CoopMode.state.p.alive)throw new Error("P2 boss spawn is unsafe");
+  if(!sandbox.__IMS.alive)throw new Error("Boss spawn is unsafe");
+  if(coopMode&&!sandbox.CoopMode.state.p.alive)throw new Error("P2 boss spawn is unsafe");
   els["pauseHome"].onclick();frames(2);
   frames(5);
   if(coopMode){
     els["ovBtn3"].onclick();frames(30);
-    const coop=global.CoopMode&&global.CoopMode.state,p=coop&&coop.p;
+    const coop=sandbox.CoopMode&&sandbox.CoopMode.state,p=coop&&coop.p;
     if(!coop||!coop.enabled||!p||!p.alive)throw new Error("P2 was not created");
     const y0=p.snake.fy;fire({key:"ArrowDown",code:"ArrowDown",preventDefault(){},repeat:false},"keydown");frames(25);fire({key:"ArrowDown",code:"ArrowDown",preventDefault(){}},"keyup");
     if(!(p.snake.fy>y0+.2))throw new Error("P2 movement input did not move the player");
@@ -70,17 +78,17 @@ try{
     const charge0=p.charges;fire({key:"2",code:"Numpad2",preventDefault(){},repeat:false},"keydown");
     if(p.charges!==charge0-1)throw new Error("P2 node placement did not consume its own charge");
     frames(20);console.log("[coop P2 move + fire + node] OK");
-    const runningStat=els["stat"].textContent;global.CoopMode.defeat("P2 test down");frames(70);
+    const runningStat=els["stat"].textContent;sandbox.CoopMode.defeat("P2 test down");frames(70);
     if(p.alive||els["stat"].textContent===runningStat)throw new Error("P1 did not continue after P2 went down");
     console.log("[coop one player down + teammate continues] OK");els["pauseHome"].onclick();frames(2);
   }
   els["ovBtn"].onclick();
   fire({key:"r",code:"KeyR",preventDefault(){},repeat:false},"keydown");
   frames(2);
-  if(global.__IMS.gameState!=="play"||!els["stat"].textContent.includes("序章"))throw new Error("Story mode did not start");
+  if(sandbox.__IMS.gameState!=="play"||!els["stat"].textContent.includes("序章"))throw new Error("Story mode did not start");
   console.log("[story prologue stage 1] OK");
   frames(360);
-  if(!global.__IMS.panelOpen)throw new Error("Story stage 1 did not open its dialogue");
+  if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 1 did not open its dialogue");
   els["npcOpts"].children[0].onclick();
   frames(2);
   frames(200);
@@ -88,7 +96,7 @@ try{
   fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){},repeat:false},"keydown");
   frames(190);
   fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){}},"keyup");
-  if(!global.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
+  if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
   console.log("[story prologue stage 2] OK");
   els["npcOpts"].children[0].onclick();
   frames(2);
@@ -112,13 +120,13 @@ try{
   els["ovBtn2"].onclick();
   frames(600);
 
-  global.__IMS.closePanel();
-  global.__IMS.snake.fx=-.5;global.__IMS.snake.fy=-.5;
+  sandbox.__IMS.closePanel();
+  sandbox.__IMS.snake.fx=-.5;sandbox.__IMS.snake.fy=-.5;
   fire({key:"w",code:"KeyW",preventDefault(){},repeat:false},"keydown");frames(40);fire({key:"w",code:"KeyW",preventDefault(){}},"keyup");
-  if(global.__IMS.gameState!=="dead")throw new Error("Tutorial death flow did not reach retry screen");
+  if(sandbox.__IMS.gameState!=="dead")throw new Error("Tutorial death flow did not reach retry screen");
   els["ovBtn"].onclick();frames(2);
-  if(!global.__IMS.panelOpen||global.__IMS.gameState!=="play")throw new Error("Tutorial retry did not reopen its section dialog");
-  global.__IMS.closePanel();els["pauseHome"].onclick();frames(2);
+  if(!sandbox.__IMS.panelOpen||sandbox.__IMS.gameState!=="play")throw new Error("Tutorial retry did not reopen its section dialog");
+  sandbox.__IMS.closePanel();els["pauseHome"].onclick();frames(2);
   console.log("[tutorial death + retry] OK");
 }catch(err){
   console.error("RUNTIME ERROR:",err.stack);
