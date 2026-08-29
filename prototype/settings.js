@@ -69,10 +69,10 @@
     S.panel.style.display="flex";render();
   }
   function closePanel(){if(S.capture)S.capture=null;if(S.panel)S.panel.style.display="none";}
-  function onInputChosen(mode){
+  function onInputChosen(mode,forceCountChoice){
     S.inputMode=mode;
     if(mode==="touch"){if(InputMap.needsPlayerChoice())InputMap.setPlayerCount(1);return;}
-    if(mode==="kb"&&InputMap.needsPlayerChoice())open(true);
+    if(mode==="kb"&&(forceCountChoice||InputMap.needsPlayerChoice()))open(true);
   }
   function init(){
     build();

@@ -60,6 +60,12 @@ vm.createContext(sandbox);
 try{
   vm.runInContext(code,sandbox);
   console.log("[load] OK");
+  const storyMaps=sandbox.IMS_STORY_MAPS&&sandbox.IMS_STORY_MAPS.STORY_MAPS;
+  const tutorialMap=storyMaps&&storyMaps[sandbox.IMS_STORY_MAPS.TYPES.TUTORIAL];
+  const tutorialGate=tutorialMap&&tutorialMap.gates&&tutorialMap.gates[0];
+  const tutorialExit=tutorialMap&&tutorialMap.exits&&tutorialMap.exits[0];
+  if(!tutorialGate||tutorialGate.x!==48||tutorialGate.y!==16||!tutorialExit||tutorialExit.rect[0]!==47||tutorialExit.rect[1]!==14)
+    throw new Error("Tutorial gate/exit was not moved to the upper-right");
   els["ovBtn5"].onclick();
   if(!els["pickList"].children.length)throw new Error("Boss challenge selection did not open");
   els["pickList"].children[0].onclick();frames(180);
@@ -89,6 +95,11 @@ try{
   console.log("[story prologue stage 1] OK");
   frames(360);
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 1 did not open its dialogue");
+  fire({key:"ArrowRight",code:"ArrowRight",preventDefault(){},repeat:false},"keydown");
+  fire({key:"d",code:"KeyD",preventDefault(){},repeat:false},"keydown");
+  fire({key:"r",code:"KeyR",preventDefault(){},repeat:false},"keydown");
+  if(!sandbox.__IMS.panelOpen||sandbox.__IMS.gameState!=="play")throw new Error("Dialogue was closed by an unrelated key");
+  console.log("[story dialogue input lock] OK");
   els["npcOpts"].children[0].onclick();
   frames(2);
   frames(200);
@@ -98,8 +109,19 @@ try{
   fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){}},"keyup");
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
   console.log("[story prologue stage 2] OK");
-  els["npcOpts"].children[0].onclick();
-  frames(2);
+  sandbox.storyDirector().runtime.enter("wilderness_start");
+  const keti=sandbox.__IMS.npcs.find(n=>n.kind==="keti");
+  if(!keti)throw new Error("Keti was not spawned in wilderness");
+  if(!sandbox.storyControllerInteract(keti)||sandbox.storyDirector().runtime.node.id!=="keti_question")
+    throw new Error("Keti interaction did not enter the story dialogue");
+  if(!sandbox.storyControllerInteract(keti)||sandbox.storyDirector().runtime.node.id!=="keti_question")
+    throw new Error("Keti interaction was not claimed by the story controller");
+  const chooseKeti=label=>{const b=[...els["npcOpts"].children].reverse().find(x=>x.textContent===label);if(!b)throw new Error("Keti choice not found: "+label);b.onclick();frames(1);};
+  chooseKeti("是的。");
+  chooseKeti("开玩笑的，我不会吃你的");
+  if(sandbox.storyDirector().runtime.node.id!=="wilderness_slimes"||sandbox.__IMS.gameState==="victory")
+    throw new Error("Saving Keti incorrectly ended the story");
+  console.log("[story Keti continuation] OK");
   els["pauseHome"].onclick();
   frames(2);
   els["ovBtn3"].onclick();

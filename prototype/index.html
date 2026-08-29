@@ -2022,6 +2022,14 @@ addEventListener("keydown",ev=>{
   const k=ev.key.toLowerCase();
   const action=InputMap.actionFor(1,ev);
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))ev.preventDefault();
+  // 剧情对话期间只允许操作对话本身；移动、发射、重开和暂停键都不能
+  // 把面板关掉或改变蛇的位置，否则玩家可能永远回不到当前剧情节点。
+  if(panelOpen&&gameState==="play"){
+    if(k==="arrowup"||k==="w"){ev.preventDefault();selPanel(-1);return;}
+    if(k==="arrowdown"||k==="s"){ev.preventDefault();selPanel(1);return;}
+    if(k===" "||k==="j"||k==="enter"){ev.preventDefault();confirmPanel();return;}
+    return;
+  }
   if(k==="r"){
     if(playMode==="intro"){endIntro();return;}
     if(playMode==="tutorial"){if(gameState==="dead")restartCurrentTut();else startTutorial();}
@@ -2031,11 +2039,6 @@ addEventListener("keydown",ev=>{
     return;
   }
   if(gameState==="intro"){if(k===" "||k==="j"){advanceIntro();return;}}
-  if(panelOpen&&gameState==="play"){
-    if(k==="arrowup"||k==="w"){ev.preventDefault();selPanel(-1);return;}
-    if(k==="arrowdown"||k==="s"){ev.preventDefault();selPanel(1);return;}
-    if(k===" "||k==="j"||k==="enter"||k==="arrowright"||k==="d"){ev.preventDefault();confirmPanel();return;}
-  }
   if(gameState!=="play"&&gameState!=="intro")return;
   if(MOVE_KEYS[action]){
     heldKeys.add(action);
