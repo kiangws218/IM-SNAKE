@@ -64,13 +64,18 @@ try{
   const tutorialMap=storyMaps&&storyMaps[sandbox.IMS_STORY_MAPS.TYPES.TUTORIAL];
   const tutorialGate=tutorialMap&&tutorialMap.gates&&tutorialMap.gates[0];
   const tutorialExit=tutorialMap&&tutorialMap.exits&&tutorialMap.exits[0];
-  if(!tutorialGate||tutorialGate.x!==48||tutorialGate.y!==16||!tutorialExit||tutorialExit.rect[0]!==47||tutorialExit.rect[1]!==14)
-    throw new Error("Tutorial gate/exit was not moved to the upper-right");
+  if(!tutorialMap.cleanMap||!tutorialMap.solidOutside||tutorialMap.solidOutside[0]!==4||tutorialMap.solidOutside[1]!==16||
+     !tutorialGate||tutorialGate.x!==48||tutorialGate.y!==16||!tutorialExit||tutorialExit.rect[0]!==47||tutorialExit.rect[1]!==14)
+    throw new Error("Tutorial map boundary or gate/exit was not configured correctly");
   els["ovBtn5"].onclick();
   if(!els["pickList"].children.length)throw new Error("Boss challenge selection did not open");
   els["pickList"].children[0].onclick();frames(180);
   if(!sandbox.__IMS.alive)throw new Error("Boss spawn is unsafe");
   if(coopMode&&!sandbox.CoopMode.state.p.alive)throw new Error("P2 boss spawn is unsafe");
+  sandbox.enterPhase2();
+  const stake=sandbox.__IMS.bossStakes[0];
+  stake.cap=1;sandbox.updateBoss(.5);
+  if(stake.cap!==1)throw new Error("Boss stake progress regressed while uncovered");
   els["pauseHome"].onclick();frames(2);
   frames(5);
   if(coopMode){
@@ -109,7 +114,16 @@ try{
   fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){}},"keyup");
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
   console.log("[story prologue stage 2] OK");
+  const gate=sandbox.__IMS.mechs.find(m=>m.kind==="gate");
+  if(sandbox.__IMS.voidCells.size===0)throw new Error("Tutorial map did not create a solid dark outside");
+  sandbox.recordGateHit(gate);sandbox.recordGateHit(gate);
+  if(gate.prog!==2)throw new Error("Repeated gate hits were not accumulated");
+  console.log("[gate repeated hits] OK");
   sandbox.storyDirector().runtime.enter("wilderness_start");
+  if(sandbox.__IMS.groundBeans.length<8)throw new Error("Wilderness did not seed enough beans");
+  sandbox.__IMS.groundBeans.length=0;sandbox.updateSpawner(3.1);
+  if(sandbox.__IMS.groundBeans.length<1)throw new Error("Wilderness beans did not respawn");
+  console.log("[wilderness bean supply] OK");
   const keti=sandbox.__IMS.npcs.find(n=>n.kind==="keti");
   if(!keti)throw new Error("Keti was not spawned in wilderness");
   if(!sandbox.storyControllerInteract(keti)||sandbox.storyDirector().runtime.node.id!=="keti_question")

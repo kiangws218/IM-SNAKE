@@ -1246,8 +1246,8 @@ const SANDBOX_CAPS={
 (function(root){
 const TYPES=Object.freeze({TUTORIAL:"prologue_tutorial",WILDERNESS:"prologue_wilderness"});
 const STORY_MAPS={
-[TYPES.TUTORIAL]:{id:TYPES.TUTORIAL,name:"教学地图",kind:"story",spawn:{x:8.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,16,51,1],[4,32,51,1],[4,17,1,15],[55,17,1,6],[55,26,1,6]],beans:[[16,24],[24,24],[32,24],[42,24],[48,24],[51,24]],gates:[{id:"tutorial_fragile_gate",kind:"fragile_gate",x:48,y:16,w:3,h:1,need:3,breakEvent:"map.fragile_gate_broken"}],exits:[{id:"tutorial_exit",rect:[47,14,5,3],requiresGate:"tutorial_fragile_gate",targetMap:TYPES.WILDERNESS,targetSpawn:"wilderness_entry"}],npcs:[],enemySpawns:[],rules:{allowFreeSnakeAfterTimeout:true,exitRequiresGate:true}},
-[TYPES.WILDERNESS]:{id:TYPES.WILDERNESS,name:"荒野",kind:"story",spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,12,60,1],[4,36,60,1],[4,12,1,11],[4,28,1,8],[63,12,1,25],[20,18,2,2],[31,29,2,2],[48,16,2,2]],beans:[],gates:[],exits:[],npcs:[{id:"keti",kind:"keti",x:42.5,y:24.5}],enemySpawns:[],entryPoints:{wilderness_entry:{x:7.5,y:24.5,dir:{x:1,y:0}}},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3}}
+[TYPES.TUTORIAL]:{id:TYPES.TUTORIAL,name:"教学地图",kind:"story",spawn:{x:8.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},cleanMap:true,solidOutside:[4,16,51,16],obstacles:[],beans:[[16,24],[24,24],[32,24],[42,24],[48,24],[51,24]],gates:[{id:"tutorial_fragile_gate",kind:"fragile_gate",x:48,y:16,w:3,h:1,need:3,breakEvent:"map.fragile_gate_broken"}],exits:[{id:"tutorial_exit",rect:[47,14,5,3],requiresGate:"tutorial_fragile_gate",targetMap:TYPES.WILDERNESS,targetSpawn:"wilderness_entry"}],npcs:[],enemySpawns:[],rules:{allowFreeSnakeAfterTimeout:true,exitRequiresGate:true,beanTarget:0}},
+[TYPES.WILDERNESS]:{id:TYPES.WILDERNESS,name:"荒野",kind:"story",spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,12,60,1],[4,36,60,1],[4,12,1,11],[4,28,1,8],[63,12,1,25],[20,18,2,2],[31,29,2,2],[48,16,2,2]],beans:[],gates:[],exits:[],npcs:[{id:"keti",kind:"keti",x:42.5,y:24.5}],enemySpawns:[],entryPoints:{wilderness_entry:{x:7.5,y:24.5,dir:{x:1,y:0}}},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:10,initialRandomBeans:8,beanRespawn:3}}
 };
 root.IMS_STORY_MAPS={TYPES,STORY_MAPS,clone:value=>JSON.parse(JSON.stringify(value))};
 })(typeof window!=="undefined"?window:globalThis);
@@ -1382,7 +1382,7 @@ let snake={fx:0,fy:0,len:4,path:[],pathLen:0};
 let dir={x:1,y:0}, dirQueue=[];
 let firing=false, fireT=0, fireStreak=0;
 let segPos=[], occSet=new Set();
-let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats;
+let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats, voidCells=new Set();
 let flyingBeans=[];
 let danger=null, hurtFlash=0;
 let gameState="menu", playMode="sandbox", tutIdx=-1;
@@ -1413,6 +1413,7 @@ function hurtPlayerById(id,reason){if(id===2)CoopMode.hurt(reason);else hurtPlay
 
 function buildObstacles(){
   obstacles=new Set();
+  voidCells=new Set();
   const rects=[
     [8,5,3,2],[18,5,3,2],[28,5,3,2],[38,6,3,2],[50,5,3,2],[60,6,3,2],
     [8,20,3,2],[20,22,2,2],[34,19,3,2],[48,21,3,2],[62,20,3,2],
@@ -1502,6 +1503,18 @@ function updateFlyingBeans(dt){
 }
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
+function recordGateHit(m){
+  if(!m||m.done)return false;
+  m.prog=Math.min(m.need,m.prog+1);
+  ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
+  if(m.prog>=m.need){
+    m.done=true;
+    for(const idx of m.cellIdx||[])obstacles.delete(idx);
+    grantReward(m.reward);computeEnclosure();
+    ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
+  }
+  return true;
+}
 function beanDamage(owner){
   if(owner===2)return CoopMode.damage();
   const base=4+RUN.dmgBonus;
@@ -1702,14 +1715,7 @@ function pickUps(){
       for(const m of MECHS){
         if(m.done||m.kind!=="gate")continue;
         if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
-          m.prog++;
-          ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
-          if(m.prog>=m.need){
-            m.done=true;
-            for(const idx of m.cellIdx)obstacles.delete(idx);
-            grantReward(m.reward);computeEnclosure();
-            ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
-          }
+          recordGateHit(m);
         }
       }
       if(Math.random()<RUN.greedy){snake.len++;ftext(b.x+.5,b.y,"贪食 +1","#ffd76e");}
@@ -1838,15 +1844,8 @@ function updateProjs(dt){
       for(const m of MECHS){
         if(m.done||m.kind!=="gate"||!m.cellIdx)continue;
         if(m.cellIdx.includes(K(hit.cx,hit.cy))){
-          m.prog++;
           puff(p.x,p.y,"#7fd1e8");
-          ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
-          if(m.prog>=m.need){
-            m.done=true;
-            for(const idx of m.cellIdx)obstacles.delete(idx);
-            grantReward(m.reward);computeEnclosure();
-            ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
-          }
+          recordGateHit(m);
           fed=true;break;
         }
       }
@@ -2260,7 +2259,7 @@ function updateSpawner(dt){
     if(playMode==="sandbox"){
       const keys=Object.keys(SANDBOX_CAPS).filter(k=>cnt(k)<SANDBOX_CAPS[k]);
       if(keys.length)spawnEnemy(keys[rnd(keys.length)]);
-    }else{
+    }else if(playMode==="campaign"){
       if(cnt("slime")<curCaps.slime)spawnEnemy("slime");
       else if(cnt("rat")<curCaps.rat)spawnEnemy("rat");
       else if(cnt("flower")<curCaps.flower)spawnEnemy("flower");
@@ -2287,7 +2286,13 @@ function cutTail(){
 }
 
 function buildFromLevel(L){
-  buildObstacles();
+  if(L.cleanMap){obstacles=new Set();voidCells=new Set();}
+  else buildObstacles();
+  if(L.solidOutside){
+    const[ax,ay,aw,ah]=L.solidOutside;
+    for(let x=0;x<CFG.cols;x++)for(let y=0;y<CFG.rows;y++)
+      if(x<ax||x>=ax+aw||y<ay||y>=ay+ah){const i=K(x,y);obstacles.add(i);voidCells.add(i);}
+  }
   for(const r of(L.obstacles||[])){
     const[rx,ry,rw,rh]=r;
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
@@ -3061,8 +3066,8 @@ function updateBoss(dt){
   for(const s of bossStakes){
     if(s.dead)continue;
     const sr=prisonMask[K(Math.floor(s.x),Math.floor(s.y))];
-    if(sr>=0&&prisonRegionBody[sr]){s.cap+=dt;s.hot=true;}
-    else{s.cap=Math.max(0,s.cap-dt*.6);s.hot=false;}
+    if(sr>=0&&prisonRegionBody[sr]){s.cap=Math.min(s.need,s.cap+dt);s.hot=true;}
+    else{s.hot=false;}
     if(s.cap>=s.need){
       s.dead=true;
       boss.shield=Math.max(0,boss.shield-25);
@@ -3336,9 +3341,15 @@ function render(){
   for(let x=x0;x<x1;x++)for(let y=y0;y<y1;y++){
     if((x+y)%2===0){ctx.fillStyle="#151627";ctx.fillRect(x*T,y*T,T,T);}
   }
+  ctx.fillStyle="#080912";
+  for(const o of voidCells){
+    const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
+    if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
+  }
   ctx.fillStyle="#2c2d44";
   for(const o of obstacles){
     const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
+    if(voidCells.has(o))continue;
     if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
   }
   ctx.strokeStyle="#34355a";ctx.lineWidth=4;
@@ -3787,7 +3798,7 @@ function loop(now){
     if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
     if(typeof window!=="undefined"&&typeof window.storyControllerTick==="function")window.storyControllerTick();
-    if(playMode==="sandbox"||playMode==="campaign")updateSpawner(dt);
+    if(playMode==="sandbox"||playMode==="campaign"||playMode==="story")updateSpawner(dt);
     computeEnclosure();
     updateCamera(dt);
     storyCheckProgress();
@@ -3812,6 +3823,8 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},
   get alive(){return alive;},get moveLock(){return moveLock;},
+  get mechs(){return MECHS;},get boss(){return boss;},get bossStakes(){return bossStakes;},
+  get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
   openPanel,closePanel,openCurseCard,CURSED_POOL
 };
 </script>
@@ -3825,11 +3838,11 @@ let D=null,lastMap=null,gateSent=false,exitSent=false,observedBeans=0,observedLe
 const ty=(n,f)=>T[n]||f,emit=(n,p)=>B&&B.emit(ty(n,"story."+n.toLowerCase()),p||{}),snap=()=>D&&D.runtime.state.snapshot(),cnt=k=>snap()&&snap().counters[k]||0,node=()=>D&&D.runtime.node?D.runtime.node.id:"";
 function state(fn,r){if(D)D.runtime.state.update(fn,r);}
 function close(){if(old.close)old.close();panelOpen=false;freeze=false;moveLock=false;panelNpc=null;npcNode=null;}
-function lvl(m){return{obstacles:m.obstacles||[],mechs:(m.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]};}
+function lvl(m){return{cleanMap:!!m.cleanMap,solidOutside:m.solidOutside||null,obstacles:m.obstacles||[],mechs:(m.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]};}
 function enemyAt(s){const t=ENEMY_TYPES[s.type];if(!t)return;const e={type:s.type,x:s.x,y:s.y,flash:0,hitT:0,hp:t.hp,max:t.hp,r:t.r,vx:0,vy:0,wanderT:0,squash:rnd(6)};enemies.push(e);}
 function loadMap(id,entry){
  const m=MS[id];lastMap=id;gateSent=false;exitSent=false;boss=null;bossStakes=[];playMode="story";storyStage=id===TM?0:6;reset(true);buildFromLevel(lvl(m));groundBeans.length=0;(m.beans||[]).forEach(p=>groundBeans.push({x:p[0],y:p[1]}));enemies.length=0;npcs.length=0;
- const sp=(entry&&m.entryPoints&&m.entryPoints[entry])||m.spawn;snake.fx=sp.x;snake.fy=sp.y;dir=sp.dir;snake.len=id===TM?CFG.initLen:CFG.initLen;coilPath();computeSegs();computeEnclosure();observedBeans=beansEaten;observedLen=snake.len;
+ const sp=(entry&&m.entryPoints&&m.entryPoints[entry])||m.spawn;snake.fx=sp.x;snake.fy=sp.y;dir=sp.dir;snake.len=id===TM?CFG.initLen:CFG.initLen;coilPath();computeSegs();computeEnclosure();const rules=m.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();observedBeans=beansEaten;observedLen=snake.len;
  if(id===WM){const k=m.npcs&&m.npcs[0],st=snap().actors.keti.status;if(k&&st!=="dead"&&st!=="eaten"){const q=NPC_TYPES.keti;D.keti={storyId:"keti",kind:"keti",x:k.x,y:k.y,r:q.r,hp:q.hp,maxHp:q.hp,flash:0,inside:false,crying:false};npcs.push(D.keti);state(s=>{s.actors.keti.status="alive";},"keti_spawn");}}
  gameState="play";paused=false;freeze=false;firing=false;fireKey=false;heldKeys.clear();dirQueue.length=0;moveLock=false;document.getElementById("overlay").classList.remove("show");document.getElementById("tut").classList.remove("show");document.getElementById("ovBtns").style.display="";document.getElementById("pickList").innerHTML="";ensurePrimarySpawnSafe();emit("MAP_LOADED",{mapId:id,spawnId:entry||null,clearForwardSeconds:3});banner(id===TM?"序章 · 教学地图：沿走廊前进":"地图 2 · 荒野：寻找哭声");
 }
