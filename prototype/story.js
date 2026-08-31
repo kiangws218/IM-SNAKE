@@ -1,7 +1,0 @@
-"use strict";
-const STORY_PROLOGUE={name:"序章",stages:[
-{id:"eat-beans",title:"序章 · 教学 1/7",hint:"先往右走，把通道里的 3 颗豆子全部吃掉",goal:{type:"beans",count:3},startLen:4,beans:[[12,25],[20,25],[28,25]],level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}},
-{id:"break-wall",title:"序章 · 教学 2/7",hint:"走到脆弱墙前，长按 J 或空格吐出 3 颗豆子，把墙打开",goal:{type:"gate",count:3},startLen:7,level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],mechs:[{kind:"gate",x:34,y:24,w:1,h:3,need:3,reward:{type:"beans",n:2}}],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}},
-{id:"hit-slime",title:"序章 · 教学 3/7",hint:"前面的史莱姆挡住了路，吐豆命中它 1 次",goal:{type:"hit",count:1},startLen:6,level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}},
-{id:"meet-keti",title:"序章 · 教学 4/7",hint:"远处传来了哭声，继续往右走，找到声音的主人",goal:{type:"meet"},startLen:6,level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}}
-],dialogues:{afterEat:{speaker:"我",sub:"序章 · 对话 1",portrait:"snake_self",say:"我究竟像这样吃了多久……感觉……有点恶心。要吐了！",options:[{label:"吐出来！",nextStage:1}]},afterWall:{speaker:"我",sub:"序章 · 对话 2",portrait:"snake_self",say:"吐出来舒服多了。但我的身体也变短了。上面有一堵脆弱的墙？似乎可以靠这个破坏它。",options:[{label:"继续往前走",nextStage:2}]},afterSlime:{speaker:"我",sub:"序章 · 对话 3",portrait:"snake_self",say:"豆子真的能打中东西……等等，前面好像有谁在哭。",options:[{label:"去看看",nextStage:3}]}}};

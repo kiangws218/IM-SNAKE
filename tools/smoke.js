@@ -17,8 +17,8 @@ for(const match of html.matchAll(/<script(?: src="([^"]+)")?>([\s\S]*?)<\/script
 }
 
 function mkEl(id){
-  return {
-    id, style:{}, textContent:"", innerHTML:"",
+  const element={
+    id, style:{}, textContent:"",
     classList:{add(){},remove(){},toggle(){},contains(){return false}},
     children:[],
     appendChild(c){this.children.push(c);return c}, remove(){}, click(){if(this.onclick)this.onclick()},
@@ -27,6 +27,9 @@ function mkEl(id){
     getContext(){return ctx2d},
     onclick:null,
   };
+  let html="";
+  Object.defineProperty(element,"innerHTML",{get(){return html},set(value){html=String(value);element.children.length=0;}});
+  return element;
 }
 const ctx2d=new Proxy({canvas:null},{
   get(t,p){ if(p in t)return t[p];     return (...a)=>({width:0,height:0}); },
@@ -108,7 +111,17 @@ try{
   fire({key:"r",code:"KeyR",preventDefault(){},repeat:false},"keydown");
   if(!sandbox.__IMS.panelOpen||sandbox.__IMS.gameState!=="play")throw new Error("Dialogue was closed by an unrelated key");
   console.log("[story dialogue input lock] OK");
-  els["npcOpts"].children[0].onclick();
+  const chooseStory=label=>{
+    for(let guard=0;guard<20;guard++){
+      const buttons=[...els["npcOpts"].children],wanted=buttons.find(button=>button.textContent===label);
+      if(wanted){wanted.onclick();frames(1);return;}
+      const next=buttons.find(button=>button.textContent==="继续");
+      if(!next)throw new Error("Story choice not found: "+label);
+      next.onclick();frames(1);
+    }
+    throw new Error("Story dialogue did not reach choice: "+label);
+  };
+  chooseStory("吐出来！");
   frames(2);
   frames(200);
   const storyFire=coopMode?"j":" ";
@@ -139,12 +152,22 @@ try{
     throw new Error("Keti interaction did not enter the story dialogue");
   if(!sandbox.storyControllerInteract(keti)||sandbox.storyDirector().runtime.node.id!=="keti_question")
     throw new Error("Keti interaction was not claimed by the story controller");
-  const chooseKeti=label=>{const b=[...els["npcOpts"].children].reverse().find(x=>x.textContent===label);if(!b)throw new Error("Keti choice not found: "+label);b.onclick();frames(1);};
+  const chooseKeti=label=>chooseStory(label);
   chooseKeti("是的。");
   chooseKeti("开玩笑的，我不会吃你的");
+  chooseKeti("挡在她前面");
   if(sandbox.storyDirector().runtime.node.id!=="wilderness_slimes"||sandbox.__IMS.gameState==="victory")
     throw new Error("Saving Keti incorrectly ended the story");
   console.log("[story Keti continuation] OK");
+  sandbox.storyDirector().runtime.enter("wilderness_start");
+  const doomedKeti=sandbox.__IMS.npcs.find(n=>n.kind==="keti");
+  sandbox.dieNPC(doomedKeti);frames(1);
+  if(sandbox.storyDirector().runtime.node.id!=="keti_dead")throw new Error("Keti death before dialogue left the story stuck");
+  console.log("[story early actor death fallback] OK");
+  sandbox.startStoryStage();frames(2);
+  if(sandbox.storyDirector().runtime.node.id!=="wilderness_keti_wait"||!sandbox.__IMS.npcs.some(n=>n.kind==="keti"))
+    throw new Error("Story map checkpoint retry did not restore the wilderness entry state");
+  console.log("[story map checkpoint retry] OK");
   els["pauseHome"].onclick();
   frames(2);
   els["ovBtn3"].onclick();

@@ -24,8 +24,9 @@
       else if(value!==undefined)out[key]=value;
     });
     out.flags=Object.assign({},base.flags,input.flags||{});
-    out.actors=Object.assign({},base.actors,input.actors||{});
-    out.actors.keti=Object.assign({},base.actors.keti,(input.actors&&input.actors.keti)||{});
+    out.actors={};
+    const actorIds=new Set([...Object.keys(base.actors),...Object.keys(input.actors||{})]);
+    actorIds.forEach(id=>{out.actors[id]=Object.assign({},base.actors[id]||{},(input.actors&&input.actors[id])||{});});
     out.counters=Object.assign({},base.counters,input.counters||{});
     out.player=Object.assign({},base.player,input.player||{});
     return out;

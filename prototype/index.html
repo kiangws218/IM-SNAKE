@@ -165,7 +165,8 @@
 <script src="story-state.js"></script>
 <script src="story-maps.js"></script>
 <script src="story-runtime.js"></script>
-<script src="story.js"></script>
+<script src="story-dialogue.js"></script>
+<script src="story-data.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -294,6 +295,11 @@ function routeStoryInteraction(kind,target,payload){
   const rootRef=typeof window!=="undefined"?window:globalThis;
   const handler=rootRef&&rootRef.storyControllerInteraction;
   return typeof handler==="function"?!!handler(kind,target,payload):false;
+}
+function notifyStoryEvent(name,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const api=rootRef&&rootRef.IMS_STORY_API;
+  if(api&&typeof api.engineEvent==="function")api.engineEvent(name,payload||{});
 }
 
 function buildObstacles(){
@@ -596,7 +602,7 @@ function pickUps(){
     if(Math.hypot(b.x+.5-snake.fx,b.y+.5-snake.fy)<RUN.pickupR){
       if(b.fromProj)projRecycled++;
       groundBeans.splice(i,1);
-      snake.len++;beansEaten++;
+      snake.len++;beansEaten++;notifyStoryEvent("beanEaten",{bean:b});
         for(const m of MECHS){
           if(m.done||m.kind!=="gate")continue;
           if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
@@ -635,6 +641,7 @@ function stanceShot(){
     return;
   }
   snake.len--;
+  notifyStoryEvent("beanSpit",{});
   const spd=CFG.spitSpeed*RUN.spitSpeedMult;
   let sx=snake.fx+dir.x*.9,sy=snake.fy+dir.y*.9;
   for(const k of[.9,1.4,1.9,2.4,2.9]){
@@ -916,6 +923,7 @@ function dieNPC(n){
   puff(n.x,n.y,"#c77dff");
   ftext(n.x,n.y-.8,T.name+"倒下了","#c77dff");
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorDied",{actor:n});
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
 }
 function eatNPC(n){
@@ -924,6 +932,7 @@ function eatNPC(n){
   puff(n.x,n.y,"#8fe36b");
   const wasOpen=(panelNpc===n);
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorEaten",{actor:n});
   if(wasOpen)closePanel();
   const T=NPC_TYPES[n.kind];
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
@@ -1268,90 +1277,12 @@ function updateIntro(dt){
     }else intro.arrived=true;
   }
 }
-function storyGoalText(){
-  const s=STORY_PROLOGUE.stages[storyStage];if(!s)return"";
-  if(s.goal.type==="beans")return"目标 吃豆 "+Math.min(beansEaten,s.goal.count)+"/"+s.goal.count;
-  if(s.goal.type==="gate"){
-    const m=MECHS.find(x=>x.kind==="gate");
-    return"目标 破坏脆弱墙 "+Math.min(m?m.prog:0,s.goal.count)+"/"+s.goal.count;
-  }
-  if(s.goal.type==="hit")return"目标 命中史莱姆 "+Math.min(spitHits,s.goal.count)+"/"+s.goal.count;
-  if(s.goal.type==="meet")return"目标 找到哭声的主人";
-  return"";
-}
-function storyGoalDone(s){
-  if(s.goal.type==="beans")return beansEaten>=s.goal.count;
-  if(s.goal.type==="gate")return MECHS.some(m=>m.kind==="gate"&&m.done);
-  if(s.goal.type==="hit")return spitHits>=s.goal.count;
-  return false;
-}
-function storyHidePanel(){
-  const p=document.getElementById("npcPanel");
-  panelOpen=false;panelNpc=null;npcNode=null;freeze=false;moveLock=false;
-  if(p){p.classList.remove("open");p.style.display="none";}
-}
-function startStoryMode(){
-  storyActive=true;storyStage=-1;storyTransitioning=false;introSeen=false;
-  startIntro();
-}
-function startStoryStage(index){
-  const s=STORY_PROLOGUE.stages[index];if(!s)return;
-  storyStage=index;storyTransitioning=false;playMode="story";
-  reset(true);groundBeans.length=0;enemies.length=0;npcs.length=0;
-  buildFromLevel(s.level);
-  for(const [x,y] of(s.beans||[]))groundBeans.push({x,y});
-  if(s.enemy)spawnEnemy(s.enemy.type,s.enemy.x,s.enemy.y);
-  if(s.keti){
-    const t=NPC_TYPES.keti;
-    npcs.push({kind:"keti",x:s.keti.x,y:s.keti.y,r:t.r,hp:t.hp,maxHp:t.hp,flash:0,inside:false,crying:false});
-  }
-  snake.len=s.startLen||CFG.initLen;charges=1;coilPath();computeSegs();
-  tutIdx=-1;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
-  heldKeys.clear();dirQueue.length=0;moveLock=false;
-  document.getElementById("overlay").classList.remove("show");
-  document.getElementById("tut").classList.remove("show");
-  document.getElementById("ovBtns").style.display="";
-  document.getElementById("pickList").innerHTML="";
-  banner(s.hint);
-}
-function openStoryDialog(key){
-  const d=STORY_PROLOGUE.dialogues[key];if(!d)return;
-  panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
-  const p=ensurePanel();p.style.display="flex";
-  document.getElementById("npcName").textContent=d.speaker;
-  document.getElementById("npcSub").textContent=d.sub;
-  drawPortraitInto(document.getElementById("npcPortrait"),d.portrait||"snake_self",false);
-  document.getElementById("npcSay").textContent=d.say;
-  const opts=document.getElementById("npcOpts");opts.innerHTML="";
-  d.options.forEach(o=>{
-    const b=document.createElement("button");b.className="npc-opt";b.textContent=o.label;
-    b.onclick=()=>{storyHidePanel();startStoryStage(o.nextStage);};opts.appendChild(b);
-  });
-  trackPanelOpts(opts);requestAnimationFrame(()=>p.classList.add("open"));
-}
-function storyCheckProgress(){
-  if(!storyActive||playMode!=="story"||storyTransitioning||storyStage<0||storyStage>=STORY_PROLOGUE.stages.length)return;
-  const s=STORY_PROLOGUE.stages[storyStage];
-  if(s.goal.type==="meet")return;
-  if(!storyGoalDone(s))return;
-  storyTransitioning=true;
-  if(storyStage===0)openStoryDialog("afterEat");
-  else if(storyStage===1)openStoryDialog("afterWall");
-  else if(storyStage===2)openStoryDialog("afterSlime");
-}
-function storyVictory(text){
-  if(!storyActive||playMode!=="story")return;
-  storyStage=STORY_PROLOGUE.stages.length;storyTransitioning=true;storyHidePanel();
-  gameState="victory";victoryRetry="story";
-  document.getElementById("ovTitle").textContent="序章完成";
-  document.getElementById("ovText").innerHTML=text+"<br><br>这是序章试玩版，后续地图和分支还会继续接上。";
-  document.getElementById("ovBtn").textContent="再玩一次序章";
-  document.getElementById("ovBtn2").textContent="回到首页";
-  document.getElementById("ovBtn2").style.display="";
-  document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
-  document.getElementById("ovBtn5").style.display="none";document.getElementById("ovBtn7").style.display="none";
-  document.getElementById("overlay").classList.add("show");
-}
+function storyApi(){return typeof window!=="undefined"?window.IMS_STORY_API:null;}
+function startStoryMode(){const api=storyApi();if(api)api.start();}
+function startStoryStage(){const api=storyApi();if(api)api.retry();}
+function storyGoalText(){const api=storyApi();return api?api.goalText():"按剧情继续";}
+function storyProgressText(){const api=storyApi();return api?api.progressText():"剧情模式";}
+function storyCheckProgress(){}
 function drawBossUI(){
   const W=cv.width;
   const bw=Math.min(W*.52,430),bx=(W-bw)/2,by=10;
@@ -2158,7 +2089,7 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试本段":"再来一局";
+    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试当前地图":"再来一局";
   if(playMode==="tutorial"){
     document.getElementById("ovBtn2").textContent="回到首页";
     document.getElementById("ovBtn2").style.display="";
@@ -2172,6 +2103,7 @@ function die(reason){
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
+  const story=storyApi();if(story)story.stop();
   storyActive=false;storyStage=-1;storyTransitioning=false;
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
@@ -2644,7 +2576,7 @@ function updateHud(){
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
   document.getElementById("stat").textContent=
-    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?"序章 "+(storyStage+1)+"/"+STORY_PROLOGUE.stages.length+" ｜ "+storyGoalText()+" ｜ ":"")+
+    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?storyProgressText()+" ｜ "+storyGoalText()+" ｜ ":"")+
     (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 

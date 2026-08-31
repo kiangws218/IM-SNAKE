@@ -1203,8 +1203,9 @@ const SANDBOX_CAPS={
       else if(value!==undefined)out[key]=value;
     });
     out.flags=Object.assign({},base.flags,input.flags||{});
-    out.actors=Object.assign({},base.actors,input.actors||{});
-    out.actors.keti=Object.assign({},base.actors.keti,(input.actors&&input.actors.keti)||{});
+    out.actors={};
+    const actorIds=new Set([...Object.keys(base.actors),...Object.keys(input.actors||{})]);
+    actorIds.forEach(id=>{out.actors[id]=Object.assign({},base.actors[id]||{},(input.actors&&input.actors[id])||{});});
     out.counters=Object.assign({},base.counters,input.counters||{});
     out.player=Object.assign({},base.player,input.player||{});
     return out;
@@ -1264,7 +1265,7 @@ start(id){this.stopWait();this.state.update(s=>{s.currentNode=id;},"start");retu
 enter(id){const n=this.graph[id];if(!n)throw new Error("Unknown story node: "+id);this.node=n;this.choices=n.choices||(n.onEnter&&n.onEnter.args&&n.onEnter.args.choices)||null;this.state.update(s=>{s.currentNode=id;},"node_enter");if(this.bus)this.bus.emit(types.NODE_ENTERED||"story.node_entered",{nodeId:id,node:n});if(n.onEnter)this.runCommand(n.onEnter);if(n.wait)this.waitFor(n.wait);if(n.auto)this.follow(n.auto);return n;}
 follow(id){return id?this.enter(id):null;}
 choose(id){if(!this.node||!this.choices)throw new Error("No choices available");const c=this.choices.find(x=>x.id===id);if(!c)throw new Error("Unknown choice: "+id);if(c.set)this.state.update(s=>applyPatch(s,c.set),"choice:"+id);if(this.bus)this.bus.emit(types.DIALOGUE_OPTION_SELECTED||"dialogue.option_selected",{nodeId:this.node.id,choiceId:id});if(c.run)c.run({runtime:this,state:this.state,choice:c});return this.follow(c.next);}
-waitFor(w){this.stopWait();if(!this.bus||!w||!Array.isArray(w.events))return;const h=e=>{if(!w.events.includes(e.type))return;if(w.predicate&&!w.predicate(e,this.state.snapshot()))return;this.stopWait();const target=typeof w.target==="function"?w.target(e,this.state.snapshot()):w.target;this.state.update(s=>{s.lastEvent={type:e.type,payload:e};},"event:"+e.type);if(target)this.follow(target);};this.unsubscribers.push(this.bus.on("*",h));this.waiting=w;}
+waitFor(w){this.stopWait();if(!this.bus||!w||!Array.isArray(w.events))return;const h=e=>{if(!w.events.includes(e.type))return;if(w.predicate&&!w.predicate(e,this.state.snapshot()))return;this.stopWait();const target=typeof w.target==="function"?w.target(e,this.state.snapshot()):w.target;this.state.update(s=>{s.lastEvent={type:e.type,payload:e.payload};},"event:"+e.type);if(target)this.follow(target);};this.unsubscribers.push(this.bus.on("*",h));this.waiting=w;}
 runCommand(c){const n=c&&(c.name||c),a=this.adapters[n];if(typeof a==="function")a(c.args||{},this.state,this);}
 stopWait(){this.unsubscribers.splice(0).forEach(x=>x());this.waiting=null;}
 startTimer(id,seconds,onExpire){this.stopTimer(id);this.timers.set(id,setTimeout(()=>{this.timers.delete(id);if(this.bus)this.bus.emit(types.TIMER_EXPIRED||"story.timer_expired",{id});if(onExpire)onExpire();},Math.max(0,seconds)*1000));}
@@ -1278,12 +1279,163 @@ root.IMS_STORY_RUNTIME={StoryRuntime,applyPatch};
 </script>
 <script>
 "use strict";
-const STORY_PROLOGUE={name:"序章",stages:[
-{id:"eat-beans",title:"序章 · 教学 1/7",hint:"先往右走，把通道里的 3 颗豆子全部吃掉",goal:{type:"beans",count:3},startLen:4,beans:[[12,25],[20,25],[28,25]],level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}},
-{id:"break-wall",title:"序章 · 教学 2/7",hint:"走到脆弱墙前，长按 J 或空格吐出 3 颗豆子，把墙打开",goal:{type:"gate",count:3},startLen:7,level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],mechs:[{kind:"gate",x:34,y:24,w:1,h:3,need:3,reward:{type:"beans",n:2}}],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}},
-{id:"hit-slime",title:"序章 · 教学 3/7",hint:"前面的史莱姆挡住了路，吐豆命中它 1 次",goal:{type:"hit",count:1},startLen:6,level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}},
-{id:"meet-keti",title:"序章 · 教学 4/7",hint:"远处传来了哭声，继续往右走，找到声音的主人",goal:{type:"meet"},startLen:6,level:{obstacles:[[4,19,52,1],[4,31,52,1],[4,20,1,11],[55,20,1,11]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]}}
-],dialogues:{afterEat:{speaker:"我",sub:"序章 · 对话 1",portrait:"snake_self",say:"我究竟像这样吃了多久……感觉……有点恶心。要吐了！",options:[{label:"吐出来！",nextStage:1}]},afterWall:{speaker:"我",sub:"序章 · 对话 2",portrait:"snake_self",say:"吐出来舒服多了。但我的身体也变短了。上面有一堵脆弱的墙？似乎可以靠这个破坏它。",options:[{label:"继续往前走",nextStage:2}]},afterSlime:{speaker:"我",sub:"序章 · 对话 3",portrait:"snake_self",say:"豆子真的能打中东西……等等，前面好像有谁在哭。",options:[{label:"去看看",nextStage:3}]}}};
+
+(function(root){
+  function splitPages(value){
+    if(Array.isArray(value))return value.map(page=>String(page||"").trim()).filter(Boolean);
+    return String(value||"")
+      .replace(/\r\n?/g,"\n")
+      .split(/\n[ \t]*\n+/)
+      .map(page=>page.trim())
+      .filter(Boolean);
+  }
+
+  function normalize(dialogue){
+    const source=dialogue||{};
+    const pages=splitPages(source.pages||source.text||"");
+    return Object.assign({},source,{pages:pages.length?pages:[""]});
+  }
+
+  root.IMS_STORY_DIALOGUE={splitPages,normalize};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+
+(function(root){
+  const MAPS=root.IMS_STORY_MAPS.TYPES;
+  const progress=(step,total=8)=>({chapter:"序章",step,total});
+  const textGoal=text=>({kind:"text",text});
+  const counterGoal=(label,counter,target)=>({kind:"counter",label,counter,target});
+
+  const PROLOGUE={
+    id:"prologue",
+    start:"prologue_start",
+    nodes:{
+      prologue_start:{
+        id:"prologue_start",enter:{action:"loadMap",mapId:MAPS.TUTORIAL},next:"tutorial_1",
+        progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3)
+      },
+      tutorial_1:{
+        id:"tutorial_1",progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3),
+        wait:{events:["PLAYER_BEAN_EATEN"],condition:"tutorialBeans3",target:"dialogue_1"}
+      },
+      dialogue_1:{
+        id:"dialogue_1",progress:progress(2),goal:textGoal("阅读对话"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 1",pages:[
+          "我究竟像这样吃了多久……",
+          "感觉……有点恶心。",
+          "要吐了！"
+        ],choices:[{id:"go",label:"吐出来！",next:"tutorial_2"}]}
+      },
+      tutorial_2:{
+        id:"tutorial_2",progress:progress(3),goal:counterGoal("目标 吐出","tutorialBeansSpit",3),
+        wait:{events:["PLAYER_BEAN_SPIT"],condition:"tutorialSpit3",target:"dialogue_2"}
+      },
+      dialogue_2:{
+        id:"dialogue_2",progress:progress(4),goal:textGoal("吃豆并破坏脆弱墙"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 2",pages:[
+          "吐出来舒服多了。",
+          "但是我的身体也变短了。",
+          "上面有一堵脆弱的墙？",
+          "似乎可以靠这个破坏它。"
+        ],choices:[{id:"go",label:"继续前进",action:"waitForWall"}]}
+      },
+      dialogue_3:{
+        id:"dialogue_3",progress:progress(5),goal:textGoal("找到门并走出教学地图"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 3",pages:[
+          "外面会是什么样子呢？",
+          "从来没有出去过，去看看好了。"
+        ],choices:[{id:"go",label:"走向门",action:"waitForExit"}]}
+      },
+      dialogue_4:{
+        id:"dialogue_4",progress:progress(5),goal:textGoal("找到门并走出教学地图"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 4",pages:[
+          "也许，我还是适合待在里面。",
+          "就这样一直吃下去……"
+        ],choices:[
+          {id:"stay",label:"继续小游戏",next:"tutorial_free_play"},
+          {id:"leave",label:"还是出去看看",next:"tutorial_free_play"}
+        ]}
+      },
+      tutorial_free_play:{
+        id:"tutorial_free_play",progress:progress(5),goal:textGoal("找到门并走出教学地图"),
+        enter:{action:"banner",text:"自由探索：找到已经打开的门，走出教学地图"},
+        wait:{events:["MAP_EXIT_ENTERED"],target:"wilderness_start"}
+      },
+      wilderness_start:{
+        id:"wilderness_start",enter:{action:"loadMap",mapId:MAPS.WILDERNESS,entry:"wilderness_entry"},
+        next:"wilderness_keti_wait",progress:progress(6),goal:textGoal("找到哭声的主人")
+      },
+      wilderness_keti_wait:{
+        id:"wilderness_keti_wait",progress:progress(6),goal:textGoal("找到哭声的主人"),
+        wait:{events:["ACTOR_INTERACTED","ACTOR_DIED","ACTOR_EATEN"],condition:"ketiEvent",targetResolver:"ketiFirstContact"}
+      },
+      keti_question:{
+        id:"keti_question",progress:progress(6),goal:textGoal("与可蒂交谈"),
+        dialogue:{speaker:"可蒂",sub:"地图 2 · 荒野",portrait:"keti",crying:true,pages:["你要吃掉我吗？"],choices:[
+          {id:"yes",label:"是的。",next:"keti_cry"},
+          {id:"eat",label:"吃掉",next:"keti_eaten",danger:true}
+        ]}
+      },
+      keti_cry:{
+        id:"keti_cry",progress:progress(6),goal:textGoal("回应可蒂"),
+        dialogue:{speaker:"可蒂",sub:"可蒂哭了",portrait:"keti",crying:true,pages:["哇————！","你会吃掉我吗？"],choices:[
+          {id:"save",label:"开玩笑的，我不会吃你的",next:"keti_reassured"},
+          {id:"eat",label:"吃掉",next:"keti_eaten",danger:true},
+          {id:"leave",label:"离开",next:"free_explore"}
+        ]}
+      },
+      keti_reassured:{
+        id:"keti_reassured",progress:progress(7),goal:textGoal("保护可蒂"),
+        dialogue:{speaker:"可蒂",sub:"可蒂稍微安心了",portrait:"keti",crying:true,pages:[
+          "真的吗？这跟他们说的不一样……",
+          "啊！有怪物来了！"
+        ],choices:[{id:"fight",label:"挡在她前面",next:"wilderness_slimes"}]}
+      },
+      keti_eaten:{id:"keti_eaten",enter:{action:"eatKeti"},next:"eaten_slimes",progress:progress(7),goal:textGoal("击败史莱姆")},
+      eaten_slimes:{
+        id:"eaten_slimes",enter:{action:"spawnSlimes"},progress:progress(7),goal:textGoal("击败两只史莱姆"),
+        wait:{events:["ENEMIES_DEFEATED"],condition:"enemiesCleared",target:"free_explore"}
+      },
+      wilderness_slimes:{
+        id:"wilderness_slimes",enter:{action:"spawnSlimes"},progress:progress(7),goal:textGoal("击败两只史莱姆"),
+        wait:{events:["ENEMIES_DEFEATED"],condition:"enemiesCleared",targetResolver:"ketiOutcome"}
+      },
+      keti_saved:{
+        id:"keti_saved",progress:progress(8),goal:textGoal("完成序章"),
+        dialogue:{speaker:"可蒂",sub:"可蒂存活",portrait:"keti",pages:[
+          "是你救了我吗？",
+          "可我……不能离开这里。",
+          "请继续往前走吧，大人。",
+          "最后，可以请你告诉我你的名字吗？"
+        ],choices:[{id:"name",label:"告诉她我的名字",next:"input_player_name"}]}
+      },
+      keti_dead:{
+        id:"keti_dead",progress:progress(8),goal:textGoal("决定如何处理"),
+        dialogue:{speaker:"我",sub:"可蒂死亡",pages:["哭声消失了。","她的尸体还留在这里。"],choices:[
+          {id:"leave",label:"离开",next:"free_explore"},
+          {id:"eat",label:"吃掉尸体",next:"keti_eaten_after_death",danger:true}
+        ]}
+      },
+      keti_eaten_after_death:{id:"keti_eaten_after_death",enter:{action:"eatCorpse"},next:"free_explore",progress:progress(8),goal:textGoal("自由探索")},
+      free_explore:{
+        id:"free_explore",enter:{action:"freeExplore"},progress:progress(8),goal:textGoal("自由探索"),
+        wait:{events:["TIMER_EXPIRED"],condition:"freeExploreTimer",target:"memory_blur"}
+      },
+      memory_blur:{id:"memory_blur",enter:{action:"memoryBlur"},next:"memory_blur_dialogue",progress:progress(8),goal:textGoal("回忆自己的名字")},
+      memory_blur_dialogue:{
+        id:"memory_blur_dialogue",progress:progress(8),goal:textGoal("回忆自己的名字"),
+        dialogue:{speaker:"我",sub:"记忆模糊",pages:["我……刚才吃了什么？","脑子里只剩下一片空白。"],choices:[{id:"name",label:"回忆自己的名字",next:"input_player_name"}]}
+      },
+      input_player_name:{id:"input_player_name",enter:{action:"nameInput",next:"prologue_complete"},progress:progress(8),goal:textGoal("输入名字")},
+      prologue_complete:{id:"prologue_complete",enter:{action:"storyEnd",title:"序章试玩完成",text:"名字和选择已经记录。后续章节会从这里继续。"},progress:progress(8),goal:textGoal("序章完成")}
+    }
+  };
+
+  root.IMS_STORY_DATA={PROLOGUE};
+})(typeof window!=="undefined"?window:globalThis);
 
 </script>
 <script>
@@ -1414,6 +1566,11 @@ function routeStoryInteraction(kind,target,payload){
   const rootRef=typeof window!=="undefined"?window:globalThis;
   const handler=rootRef&&rootRef.storyControllerInteraction;
   return typeof handler==="function"?!!handler(kind,target,payload):false;
+}
+function notifyStoryEvent(name,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const api=rootRef&&rootRef.IMS_STORY_API;
+  if(api&&typeof api.engineEvent==="function")api.engineEvent(name,payload||{});
 }
 
 function buildObstacles(){
@@ -1716,7 +1873,7 @@ function pickUps(){
     if(Math.hypot(b.x+.5-snake.fx,b.y+.5-snake.fy)<RUN.pickupR){
       if(b.fromProj)projRecycled++;
       groundBeans.splice(i,1);
-      snake.len++;beansEaten++;
+      snake.len++;beansEaten++;notifyStoryEvent("beanEaten",{bean:b});
         for(const m of MECHS){
           if(m.done||m.kind!=="gate")continue;
           if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
@@ -1755,6 +1912,7 @@ function stanceShot(){
     return;
   }
   snake.len--;
+  notifyStoryEvent("beanSpit",{});
   const spd=CFG.spitSpeed*RUN.spitSpeedMult;
   let sx=snake.fx+dir.x*.9,sy=snake.fy+dir.y*.9;
   for(const k of[.9,1.4,1.9,2.4,2.9]){
@@ -2036,6 +2194,7 @@ function dieNPC(n){
   puff(n.x,n.y,"#c77dff");
   ftext(n.x,n.y-.8,T.name+"倒下了","#c77dff");
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorDied",{actor:n});
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
 }
 function eatNPC(n){
@@ -2044,6 +2203,7 @@ function eatNPC(n){
   puff(n.x,n.y,"#8fe36b");
   const wasOpen=(panelNpc===n);
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorEaten",{actor:n});
   if(wasOpen)closePanel();
   const T=NPC_TYPES[n.kind];
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
@@ -2388,90 +2548,12 @@ function updateIntro(dt){
     }else intro.arrived=true;
   }
 }
-function storyGoalText(){
-  const s=STORY_PROLOGUE.stages[storyStage];if(!s)return"";
-  if(s.goal.type==="beans")return"目标 吃豆 "+Math.min(beansEaten,s.goal.count)+"/"+s.goal.count;
-  if(s.goal.type==="gate"){
-    const m=MECHS.find(x=>x.kind==="gate");
-    return"目标 破坏脆弱墙 "+Math.min(m?m.prog:0,s.goal.count)+"/"+s.goal.count;
-  }
-  if(s.goal.type==="hit")return"目标 命中史莱姆 "+Math.min(spitHits,s.goal.count)+"/"+s.goal.count;
-  if(s.goal.type==="meet")return"目标 找到哭声的主人";
-  return"";
-}
-function storyGoalDone(s){
-  if(s.goal.type==="beans")return beansEaten>=s.goal.count;
-  if(s.goal.type==="gate")return MECHS.some(m=>m.kind==="gate"&&m.done);
-  if(s.goal.type==="hit")return spitHits>=s.goal.count;
-  return false;
-}
-function storyHidePanel(){
-  const p=document.getElementById("npcPanel");
-  panelOpen=false;panelNpc=null;npcNode=null;freeze=false;moveLock=false;
-  if(p){p.classList.remove("open");p.style.display="none";}
-}
-function startStoryMode(){
-  storyActive=true;storyStage=-1;storyTransitioning=false;introSeen=false;
-  startIntro();
-}
-function startStoryStage(index){
-  const s=STORY_PROLOGUE.stages[index];if(!s)return;
-  storyStage=index;storyTransitioning=false;playMode="story";
-  reset(true);groundBeans.length=0;enemies.length=0;npcs.length=0;
-  buildFromLevel(s.level);
-  for(const [x,y] of(s.beans||[]))groundBeans.push({x,y});
-  if(s.enemy)spawnEnemy(s.enemy.type,s.enemy.x,s.enemy.y);
-  if(s.keti){
-    const t=NPC_TYPES.keti;
-    npcs.push({kind:"keti",x:s.keti.x,y:s.keti.y,r:t.r,hp:t.hp,maxHp:t.hp,flash:0,inside:false,crying:false});
-  }
-  snake.len=s.startLen||CFG.initLen;charges=1;coilPath();computeSegs();
-  tutIdx=-1;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
-  heldKeys.clear();dirQueue.length=0;moveLock=false;
-  document.getElementById("overlay").classList.remove("show");
-  document.getElementById("tut").classList.remove("show");
-  document.getElementById("ovBtns").style.display="";
-  document.getElementById("pickList").innerHTML="";
-  banner(s.hint);
-}
-function openStoryDialog(key){
-  const d=STORY_PROLOGUE.dialogues[key];if(!d)return;
-  panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
-  const p=ensurePanel();p.style.display="flex";
-  document.getElementById("npcName").textContent=d.speaker;
-  document.getElementById("npcSub").textContent=d.sub;
-  drawPortraitInto(document.getElementById("npcPortrait"),d.portrait||"snake_self",false);
-  document.getElementById("npcSay").textContent=d.say;
-  const opts=document.getElementById("npcOpts");opts.innerHTML="";
-  d.options.forEach(o=>{
-    const b=document.createElement("button");b.className="npc-opt";b.textContent=o.label;
-    b.onclick=()=>{storyHidePanel();startStoryStage(o.nextStage);};opts.appendChild(b);
-  });
-  trackPanelOpts(opts);requestAnimationFrame(()=>p.classList.add("open"));
-}
-function storyCheckProgress(){
-  if(!storyActive||playMode!=="story"||storyTransitioning||storyStage<0||storyStage>=STORY_PROLOGUE.stages.length)return;
-  const s=STORY_PROLOGUE.stages[storyStage];
-  if(s.goal.type==="meet")return;
-  if(!storyGoalDone(s))return;
-  storyTransitioning=true;
-  if(storyStage===0)openStoryDialog("afterEat");
-  else if(storyStage===1)openStoryDialog("afterWall");
-  else if(storyStage===2)openStoryDialog("afterSlime");
-}
-function storyVictory(text){
-  if(!storyActive||playMode!=="story")return;
-  storyStage=STORY_PROLOGUE.stages.length;storyTransitioning=true;storyHidePanel();
-  gameState="victory";victoryRetry="story";
-  document.getElementById("ovTitle").textContent="序章完成";
-  document.getElementById("ovText").innerHTML=text+"<br><br>这是序章试玩版，后续地图和分支还会继续接上。";
-  document.getElementById("ovBtn").textContent="再玩一次序章";
-  document.getElementById("ovBtn2").textContent="回到首页";
-  document.getElementById("ovBtn2").style.display="";
-  document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
-  document.getElementById("ovBtn5").style.display="none";document.getElementById("ovBtn7").style.display="none";
-  document.getElementById("overlay").classList.add("show");
-}
+function storyApi(){return typeof window!=="undefined"?window.IMS_STORY_API:null;}
+function startStoryMode(){const api=storyApi();if(api)api.start();}
+function startStoryStage(){const api=storyApi();if(api)api.retry();}
+function storyGoalText(){const api=storyApi();return api?api.goalText():"按剧情继续";}
+function storyProgressText(){const api=storyApi();return api?api.progressText():"剧情模式";}
+function storyCheckProgress(){}
 function drawBossUI(){
   const W=cv.width;
   const bw=Math.min(W*.52,430),bx=(W-bw)/2,by=10;
@@ -3278,7 +3360,7 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试本段":"再来一局";
+    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试当前地图":"再来一局";
   if(playMode==="tutorial"){
     document.getElementById("ovBtn2").textContent="回到首页";
     document.getElementById("ovBtn2").style.display="";
@@ -3292,6 +3374,7 @@ function die(reason){
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
+  const story=storyApi();if(story)story.stop();
   storyActive=false;storyStage=-1;storyTransitioning=false;
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
@@ -3764,7 +3847,7 @@ function updateHud(){
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
   document.getElementById("stat").textContent=
-    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?"序章 "+(storyStage+1)+"/"+STORY_PROLOGUE.stages.length+" ｜ "+storyGoalText()+" ｜ ":"")+
+    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?storyProgressText()+" ｜ "+storyGoalText()+" ｜ ":"")+
     (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 
@@ -3836,91 +3919,252 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
 </script>
 <script>
 "use strict";
+
 (function(root){
-const A=root.IMS_STORY_RUNTIME,S=root.IMS_STORY_STATE,E=root.IMS_STORY_EVENTS,M=root.IMS_STORY_MAPS;
-const T=E.TYPES,B=E.bus,TM=M.TYPES.TUTORIAL,WM=M.TYPES.WILDERNESS,MS=M.STORY_MAPS;
-const old={open:root.openPanel,close:root.closePanel,eat:root.eatNPC,die:root.dieNPC,pick:root.pickUps,shot:root.stanceShot,proj:root.updateProjs,enemies:root.updateEnemies,menu:root.showMenu};
-let D=null,lastMap=null,gateSent=false,exitSent=false,observedBeans=0,observedLen=0;
-let ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};
-const ty=(n,f)=>T[n]||f,emit=(n,p)=>B&&B.emit(ty(n,"story."+n.toLowerCase()),p||{}),snap=()=>D&&D.runtime.state.snapshot(),cnt=k=>snap()&&snap().counters[k]||0,node=()=>D&&D.runtime.node?D.runtime.node.id:"";
-function state(fn,r){if(D)D.runtime.state.update(fn,r);}
-function close(){if(old.close)old.close();panelOpen=false;freeze=false;moveLock=false;panelNpc=null;npcNode=null;}
-function setOwnership(m){const i=m&&m.interactions||{};ownership={actors:new Set(i.actors||[]),mechanics:new Set(i.mechanics||i.mechs||[]),exits:new Set(i.exits||[])};}
-function targetId(target){return typeof target==="string"?target:target&&(target.storyId||target.id||target.kind)||"";}
-function owns(kind,target){const key=kind==="actor"?"actors":kind==="mechanic"?"mechanics":kind==="exit"?"exits":"";return !!key&&ownership[key].has(targetId(target));}
-function lvl(m){return{cleanMap:!!m.cleanMap,solidOutside:m.solidOutside||null,obstacles:m.obstacles||[],mechs:(m.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]};}
-function enemyAt(s){const t=ENEMY_TYPES[s.type];if(!t)return;const e={type:s.type,x:s.x,y:s.y,flash:0,hitT:0,hp:t.hp,max:t.hp,r:t.r,vx:0,vy:0,wanderT:0,squash:rnd(6)};enemies.push(e);}
-function loadMap(id,entry){
- const m=MS[id];lastMap=id;setOwnership(m);gateSent=false;exitSent=false;boss=null;bossStakes=[];playMode="story";storyStage=id===TM?0:6;reset(true);buildFromLevel(lvl(m));groundBeans.length=0;(m.beans||[]).forEach(p=>groundBeans.push({x:p[0],y:p[1]}));enemies.length=0;npcs.length=0;
- const sp=(entry&&m.entryPoints&&m.entryPoints[entry])||m.spawn;snake.fx=sp.x;snake.fy=sp.y;dir=sp.dir;snake.len=id===TM?CFG.initLen:CFG.initLen;coilPath();computeSegs();computeEnclosure();const rules=m.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();observedBeans=beansEaten;observedLen=snake.len;
- if(id===WM){const k=m.npcs&&m.npcs[0],st=snap().actors.keti.status;if(k&&st!=="dead"&&st!=="eaten"){const q=NPC_TYPES.keti;D.keti={storyId:"keti",kind:"keti",x:k.x,y:k.y,r:q.r,hp:q.hp,maxHp:q.hp,flash:0,inside:false,crying:false};npcs.push(D.keti);state(s=>{s.actors.keti.status="alive";},"keti_spawn");}}
- gameState="play";paused=false;freeze=false;firing=false;fireKey=false;heldKeys.clear();dirQueue.length=0;moveLock=false;document.getElementById("overlay").classList.remove("show");document.getElementById("tut").classList.remove("show");document.getElementById("ovBtns").style.display="";document.getElementById("pickList").innerHTML="";ensurePrimarySpawnSafe();emit("MAP_LOADED",{mapId:id,spawnId:entry||null,clearForwardSeconds:3});banner(id===TM?"序章 · 教学地图：沿走廊前进":"地图 2 · 荒野：寻找哭声");
-}
-function dialog(a){
- panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;panelNpc=null;npcNode=null;const p=ensurePanel();p.style.display="flex";document.getElementById("npcName").textContent=a.speaker||"我";document.getElementById("npcSub").textContent=a.sub||"序章";drawPortraitInto(document.getElementById("npcPortrait"),a.portrait||"snake_self",!!a.crying);document.getElementById("npcSay").textContent=a.text||"";
- const box=document.getElementById("npcOpts");box.innerHTML="";(a.choices||[{id:"continue",label:"继续"}]).forEach(c=>{const b=document.createElement("button");b.className="npc-opt"+(c.danger?" red":"");b.textContent=c.label;b.onclick=()=>{close();try{D.runtime.choose(c.id);}catch(e){console.error(e);}};box.appendChild(b);});trackPanelOpts(box);requestAnimationFrame(()=>p.classList.add("open"));
-}
-function nameInput(){
- panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;const p=ensurePanel();p.style.display="flex";document.getElementById("npcName").textContent="我";document.getElementById("npcSub").textContent="序章 · 输入名字";drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);document.getElementById("npcSay").innerHTML="这段旅程，应该怎么称呼你？<br><input id='storyNameInput' maxlength='16' style='margin-top:12px;width:220px;padding:8px;background:#10111e;color:#ffe9b3;border:1px solid #ffd76e;border-radius:6px;font:14px Consolas'><button id='storyNameConfirm' class='npc-opt'>确定</button>";
- const i=document.getElementById("storyNameInput"),b=document.getElementById("storyNameConfirm"),done=()=>{const n=(i.value||"").trim()||"未命名";state(s=>{s.player.name=n;s.currentNode="InputPlayerName";},"name_input");close();banner("名字已记住："+n);};b.onclick=done;i.onkeydown=e=>{if(e.key==="Enter")done();};panelOpts=[b];panelSel=0;requestAnimationFrame(()=>{p.classList.add("open");i.focus();});
-}
-function eatKeti(){const n=D&&D.keti;if(n&&npcs.includes(n)&&old.eat)old.eat(n);state(s=>{s.actors.keti.status="eaten";s.actors.keti.corpsePresent=false;},"keti_eaten");emit("ACTOR_EATEN",{actorId:"keti"});}
-function eatCorpse(){state(s=>{s.actors.keti.status="eaten";s.actors.keti.corpsePresent=false;},"keti_corpse_eaten");emit("ACTOR_EATEN",{actorId:"keti",corpse:true});}
-function wallWait(){close();if(cnt("tutorialBeansEaten")>=5&&gateSent){D.runtime.follow("dialogue_3");return;}D.runtime.waitFor({events:[ty("PLAYER_BEAN_EATEN","story.player_bean_eaten"),ty("FRAGILE_GATE_BROKEN","story.fragile_gate_broken")],predicate:()=>cnt("tutorialBeansEaten")>=5&&gateSent,target:"dialogue_3"});}
-function exitWait(){close();D.runtime.startTimer("tutorial_exit_timeout",30);D.runtime.waitFor({events:[ty("MAP_EXIT_ENTERED","story.map_exit_entered"),ty("TIMER_EXPIRED","story.timer_expired")],predicate:e=>e.type===ty("MAP_EXIT_ENTERED","story.map_exit_entered")||(e.payload&&e.payload.id==="tutorial_exit"),target:e=>e.type===ty("MAP_EXIT_ENTERED","story.map_exit_entered")?"wilderness_start":"dialogue_4"});}
-const G={
- prologue_start:{id:"prologue_start",onEnter:{name:"load",args:{id:TM}},auto:"tutorial_1"},
- tutorial_1:{id:"tutorial_1",wait:{events:[ty("PLAYER_BEAN_EATEN","story.player_bean_eaten")],predicate:()=>cnt("tutorialBeansEaten")>=3,target:"dialogue_1"}},
- dialogue_1:{id:"dialogue_1",onEnter:{name:"dialog",args:{speaker:"我",sub:"序章 · 对话框 1",text:"我究竟像这样吃了多久……感觉……有点恶心。要吐了！",choices:[{id:"go",label:"吐出来！",next:"tutorial_2"}]}}},
- tutorial_2:{id:"tutorial_2",wait:{events:[ty("PLAYER_BEAN_SPIT","story.player_bean_spit")],predicate:()=>cnt("tutorialBeansSpit")>=3,target:"dialogue_2"}},
- dialogue_2:{id:"dialogue_2",onEnter:{name:"dialog",args:{speaker:"我",sub:"序章 · 对话框 2",text:"吐出来舒服多了。但我的身体也变短了。前面有一堵脆弱的墙？似乎可以靠这个破坏它。",choices:[{id:"go",label:"继续前进",run:wallWait}]}}},
- dialogue_3:{id:"dialogue_3",onEnter:{name:"dialog",args:{speaker:"我",sub:"序章 · 对话框 3",text:"墙后面是什么？先别停下来，找到门，再出去。",choices:[{id:"go",label:"走向门",run:exitWait}]}}},
- dialogue_4:{id:"dialogue_4",onEnter:{name:"dialog",args:{speaker:"我",sub:"序章 · 对话框 4",text:"时间过去了……这里似乎还藏着什么。你可以继续玩一会儿，也可以现在离开。",choices:[{id:"go",label:"继续小游戏",next:"tutorial_free_play"},{id:"leave",label:"走出门",next:"tutorial_free_play"}]}}},
- tutorial_free_play:{id:"tutorial_free_play",onEnter:{name:"banner",args:{text:"自由探索：找到已经打开的门，走出教学地图"}},wait:{events:[ty("MAP_EXIT_ENTERED","story.map_exit_entered")],target:"wilderness_start"}},
- wilderness_start:{id:"wilderness_start",onEnter:{name:"load",args:{id:WM,entry:"wilderness_entry"}},auto:"wilderness_keti_wait"},
- wilderness_keti_wait:{id:"wilderness_keti_wait",wait:{events:[ty("ACTOR_INTERACTED","story.actor_interacted")],predicate:e=>e.payload&&e.payload.actorId==="keti",target:"keti_question"}},
- keti_question:{id:"keti_question",onEnter:{name:"dialog",args:{speaker:"可蒂",sub:"地图 2 · 荒野",portrait:"keti",crying:true,text:"呜……你也是从那边来的吗？",choices:[{id:"yes",label:"是的。",next:"keti_cry"},{id:"eat",label:"吃掉",next:"keti_eaten",danger:true}]}}},
- keti_cry:{id:"keti_cry",onEnter:{name:"dialog",args:{speaker:"可蒂",sub:"可蒂哭了",portrait:"keti",crying:true,text:"你会吃掉我吗？",choices:[{id:"save",label:"开玩笑的，我不会吃你的",next:"wilderness_slimes"},{id:"eat",label:"吃掉",next:"keti_eaten",danger:true},{id:"leave",label:"离开",next:"free_explore"}]}}},
- keti_eaten:{id:"keti_eaten",onEnter:{name:"eatKeti"},auto:"eaten_slimes"},
- eaten_slimes:{id:"eaten_slimes",onEnter:{name:"slimes"},wait:{events:[ty("ENEMIES_DEFEATED","story.enemies_defeated")],predicate:()=>D.spawned&&enemies.length===0,target:"free_explore"}},
- wilderness_slimes:{id:"wilderness_slimes",onEnter:{name:"slimes"},wait:{events:[ty("ENEMIES_DEFEATED","story.enemies_defeated")],predicate:()=>D.spawned&&enemies.length===0,target:()=>snap().actors.keti.status==="alive"?"keti_saved":"keti_dead"}},
- keti_saved:{id:"keti_saved",onEnter:{name:"dialog",args:{speaker:"可蒂",sub:"可蒂存活",portrait:"keti",text:"谢谢你……你叫什么名字？",choices:[{id:"name",label:"告诉她我的名字",next:"input_player_name"}]}}},
- keti_dead:{id:"keti_dead",onEnter:{name:"dialog",args:{speaker:"我",sub:"可蒂死亡",text:"哭声消失了。她的尸体还留在这里。",choices:[{id:"leave",label:"离开",next:"free_explore"},{id:"eat",label:"吃掉尸体",next:"keti_eaten_after_death",danger:true}]}}},
- keti_eaten_after_death:{id:"keti_eaten_after_death",onEnter:{name:"eatCorpse"},auto:"free_explore"},
- free_explore:{id:"free_explore",onEnter:{name:"freeExplore"},wait:{events:[ty("TIMER_EXPIRED","story.timer_expired")],predicate:e=>e.payload&&e.payload.id==="free_explore_memory",target:"memory_blur"}},
- memory_blur:{id:"memory_blur",onEnter:{name:"memoryBlur"}},
- input_player_name:{id:"input_player_name",onEnter:{name:"nameInput"}}
-};
-function syncSignals(){
- if(!D||!storyActive||playMode!=="story")return;
- if(beansEaten>observedBeans){
-  const delta=beansEaten-observedBeans;
-  state(s=>{s.counters.tutorialBeansEaten+=delta;s.player.bodyLength=snake.len;},"bean_eaten");
-  for(let i=0;i<delta;i++)emit("PLAYER_BEAN_EATEN",{count:cnt("tutorialBeansEaten")});
- }
- observedBeans=beansEaten;
- if(snake.len<observedLen){
-  const delta=observedLen-snake.len;
-  state(s=>{s.counters.tutorialBeansSpit+=delta;s.player.bodyLength=snake.len;},"bean_spit");
-  for(let i=0;i<delta;i++)emit("PLAYER_BEAN_SPIT",{count:cnt("tutorialBeansSpit")});
- }
- observedLen=snake.len;
- emit("ENEMIES_DEFEATED",{remaining:enemies.length,total:kills});
-}
-function inRect(x,y,r){return !!r&&x>=r[0]&&x<=r[0]+r[2]&&y>=r[1]&&y<=r[1]+r[3];}
-function update(){if(!D||!storyActive||playMode!=="story")return;const n=node();if(n==="tutorial_1"||n==="dialogue_1")storyStage=0;else if(n==="tutorial_2"||n==="dialogue_2")storyStage=1;else if(n==="dialogue_3")storyStage=2;else storyStage=3;if(lastMap===TM&&MECHS.some(m=>m.kind==="gate"&&m.done)&&!gateSent){gateSent=true;state(s=>{s.flags.tutorialGateBroken=true;s.flags.tutorialExitUnlocked=true;s.counters.tutorialGateSpit=3;},"gate_broken");emit("FRAGILE_GATE_BROKEN",{gateId:"tutorial_fragile_gate"});}const exit=MS[TM]&&MS[TM].exits&&MS[TM].exits[0];if(lastMap===TM&&!exitSent&&gateSent&&exit&&inRect(snake.fx,snake.fy,exit.rect))routeInteraction("exit",exit,{type:"enter",apply:()=>{exitSent=true;emit("MAP_EXIT_ENTERED",{id:exit.id,mapId:TM,targetMap:exit.targetMap});}});}
-function tick(){if(!D||!storyActive||playMode!=="story")return;syncSignals();update();}
-function routeInteraction(kind,target,payload){if(!D||!storyActive||playMode!=="story"||!owns(kind,target))return false;if(kind==="actor"){target.inside=true;if(node()==="wilderness_keti_wait"){D.keti=target;state(s=>{s.actors.keti.met=true;},"keti_met");emit("ACTOR_INTERACTED",{actorId:targetId(target)});}return true;}if(payload&&typeof payload.apply==="function")payload.apply();return true;}
-function interact(n){return routeInteraction("actor",n);}
-function goal(){const n=node();if(n==="tutorial_1")return"目标 吃豆 "+Math.min(3,cnt("tutorialBeansEaten"))+"/3";if(n==="tutorial_2")return"目标 吐出 "+Math.min(3,cnt("tutorialBeansSpit"))+"/3";if(n==="dialogue_2")return"目标 吃豆 5 颗并破坏脆弱墙";if(n==="dialogue_3"||n==="dialogue_4"||n==="tutorial_free_play")return"目标 找到门并走出教学地图";if(n==="wilderness_keti_wait"||n==="keti_question"||n==="keti_cry")return"目标 找到哭声的主人";if(n==="wilderness_slimes"||n==="eaten_slimes")return"目标 击败两只史莱姆";if(n==="free_explore")return"自由探索";return"按剧情继续";}
-root.pickUps=function(){old.pick();};
-root.stanceShot=function(){old.shot();};
-root.updateProjs=function(dt){old.proj(dt);};root.updateEnemies=function(dt){old.enemies(dt);};
-root.dieNPC=function(n){const k=n&&n.kind==="keti";old.die(n);if(k&&D&&playMode==="story"){state(s=>{s.actors.keti.status="dead";s.actors.keti.corpsePresent=true;},"keti_dead");emit("ACTOR_DIED",{actorId:"keti"});}};
-root.eatNPC=function(n){const k=n&&n.kind==="keti";old.eat(n);if(k&&D&&playMode==="story"){state(s=>{s.actors.keti.status="eaten";s.actors.keti.corpsePresent=false;},"keti_eaten");emit("ACTOR_EATEN",{actorId:"keti"});}};
-root.openPanel=function(n,id){if(routeInteraction("actor",n))return;return old.open(n,id);};root.storyControllerInteract=interact;root.storyControllerInteraction=routeInteraction;root.storyControllerOwns=owns;root.storyControllerTick=tick;root.storyCheckProgress=update;root.storyGoalText=goal;
-function start(){if(D)D.runtime.stop();ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";const st=new S.StoryStateStore();st.reset("new_story");D={spawned:false,keti:null,runtime:new A.StoryRuntime({graph:G,state:st,bus:B,adapters:{load:a=>loadMap(a.id,a.entry),dialog:a=>dialog(a),banner:a=>banner(a.text),eatKeti:eatKeti,eatCorpse:eatCorpse,slimes:()=>{D.spawned=true;enemies.length=0;enemyAt({type:"slime",x:54.5,y:21.5});enemyAt({type:"slime",x:54.5,y:27.5});},freeExplore:()=>{close();banner("自由探索：30 秒后会出现记忆模糊");D.runtime.startTimer("free_explore_memory",30);},memoryBlur:()=>{state(s=>{s.flags.memoryBlurSeen=true;s.player.bodyLength=CFG.minLen;},"memory_blur");snake.len=CFG.minLen;computeSegs();dialog({speaker:"我",sub:"记忆模糊",text:"我……刚才吃了什么？脑子里只剩下一片空白。",choices:[{id:"name",label:"输入名字",next:"input_player_name"}]});},nameInput:nameInput}})};D.runtime.start("prologue_start");}
-root.startStoryMode=start;root.startStoryStage=start;root.storyDirector=()=>D;root.startCampaign=()=>{boss=null;bossStakes=[];playMode="campaign";resetRun();carry={len:CFG.initLen,charges:1};levelIdx=0;startLevel();};document.getElementById("pauseHome").onclick=()=>root.showMenu();root.showMenu=()=>{if(D)D.runtime.stop();D=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;return typeof old.menu==="function"?old.menu():null;};
+  const RuntimeApi=root.IMS_STORY_RUNTIME;
+  const StateApi=root.IMS_STORY_STATE;
+  const Events=root.IMS_STORY_EVENTS;
+  const Maps=root.IMS_STORY_MAPS;
+  const Dialogue=root.IMS_STORY_DIALOGUE;
+  const Story=root.IMS_STORY_DATA.PROLOGUE;
+  const T=Events.TYPES,B=Events.bus,TM=Maps.TYPES.TUTORIAL,WM=Maps.TYPES.WILDERNESS,MS=Maps.STORY_MAPS;
+
+  let director=null,lastMap=null,gateSent=false,exitSent=false,observedEnemies=0;
+  let ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};
+
+  const eventType=name=>T[name]||name;
+  const emit=(name,payload)=>B.emit(eventType(name),payload||{});
+  const snapshot=()=>director&&director.runtime.state.snapshot();
+  const count=key=>snapshot()&&snapshot().counters[key]||0;
+  const currentNode=()=>director&&director.runtime.node&&director.runtime.node.id||"";
+  const updateState=(mutator,reason)=>director&&director.runtime.state.update(mutator,reason);
+
+  function closeDialogue(){
+    if(typeof root.closePanel==="function")root.closePanel();
+    panelOpen=false;freeze=false;moveLock=false;panelNpc=null;npcNode=null;
+    const say=document.getElementById("npcSay");if(say)say.onclick=null;
+  }
+
+  function setOwnership(map){
+    const interactions=map&&map.interactions||{};
+    ownership={
+      actors:new Set(interactions.actors||[]),
+      mechanics:new Set(interactions.mechanics||interactions.mechs||[]),
+      exits:new Set(interactions.exits||[])
+    };
+  }
+
+  function targetId(target){return typeof target==="string"?target:target&&(target.storyId||target.id||target.kind)||"";}
+  function owns(kind,target){
+    const key=kind==="actor"?"actors":kind==="mechanic"?"mechanics":kind==="exit"?"exits":"";
+    return !!key&&ownership[key].has(targetId(target));
+  }
+
+  function levelFromMap(map){
+    return {
+      cleanMap:!!map.cleanMap,solidOutside:map.solidOutside||null,obstacles:map.obstacles||[],
+      mechs:(map.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),
+      waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
+    };
+  }
+
+  function enemyAt(spec){
+    const type=ENEMY_TYPES[spec.type];if(!type)return;
+    enemies.push({type:spec.type,x:spec.x,y:spec.y,flash:0,hitT:0,hp:type.hp,max:type.hp,r:type.r,vx:0,vy:0,wanderT:0,squash:rnd(6)});
+  }
+
+  function rememberCheckpoint(nodeId){
+    if(!director)return;
+    director.checkpoint={nodeId,state:director.runtime.state.snapshot()};
+    updateState(state=>{state.checkpoint={nodeId,mapId:lastMap};},"checkpoint");
+    director.checkpoint.state=director.runtime.state.snapshot();
+  }
+
+  function loadMap(args){
+    const id=args.mapId,map=MS[id];if(!map)throw new Error("Unknown story map: "+id);
+    lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
+    playMode="story";storyStage=id===TM?0:5;reset(true);buildFromLevel(levelFromMap(map));
+    groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
+    enemies.length=0;npcs.length=0;
+    const spawn=(args.entry&&map.entryPoints&&map.entryPoints[args.entry])||map.spawn;
+    snake.fx=spawn.x;snake.fy=spawn.y;dir=spawn.dir;snake.len=CFG.initLen;
+    coilPath();computeSegs();computeEnclosure();
+    const rules=map.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;
+    for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();
+    if(id===WM){
+      const spec=map.npcs&&map.npcs[0],status=snapshot().actors.keti.status;
+      if(spec&&status!=="dead"&&status!=="eaten"){
+        const type=NPC_TYPES.keti;
+        director.keti={storyId:"keti",kind:"keti",x:spec.x,y:spec.y,r:type.r,hp:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false};
+        npcs.push(director.keti);
+        updateState(state=>{state.actors.keti.status="alive";},"keti_spawn");
+      }
+    }
+    observedEnemies=enemies.length;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
+    heldKeys.clear();dirQueue.length=0;moveLock=false;
+    document.getElementById("overlay").classList.remove("show");
+    document.getElementById("tut").classList.remove("show");
+    document.getElementById("ovBtns").style.display="";
+    document.getElementById("pickList").innerHTML="";
+    ensurePrimarySpawnSafe();
+    emit("MAP_LOADED",{mapId:id,spawnId:args.entry||null,clearForwardSeconds:3});
+    banner(id===TM?"序章 · 教学地图：沿走廊前进":"地图 2 · 荒野：寻找哭声");
+    rememberCheckpoint(id===TM?"prologue_start":"wilderness_start");
+  }
+
+  function dialogue(args){
+    const data=Dialogue.normalize(args),pages=data.pages;
+    let pageIndex=0;
+    panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;panelNpc=null;npcNode=null;
+    const panel=ensurePanel(),say=document.getElementById("npcSay"),options=document.getElementById("npcOpts");
+    panel.style.display="flex";
+    document.getElementById("npcName").textContent=data.speaker||"我";
+    document.getElementById("npcSub").textContent=data.sub||"序章";
+    drawPortraitInto(document.getElementById("npcPortrait"),data.portrait||"snake_self",!!data.crying);
+
+    const render=()=>{
+      say.textContent=pages[pageIndex];options.innerHTML="";say.onclick=null;
+      if(pageIndex<pages.length-1){
+        const next=document.createElement("button");next.className="npc-opt";next.textContent="继续";
+        const advance=()=>{pageIndex++;render();};
+        next.onclick=advance;say.onclick=advance;options.appendChild(next);
+      }else{
+        (data.choices||[{id:"continue",label:"继续"}]).forEach(choice=>{
+          const button=document.createElement("button");
+          button.className="npc-opt"+(choice.danger?" red":"");button.textContent=choice.label;
+          button.onclick=()=>{closeDialogue();director.runtime.choose(choice.id);};
+          options.appendChild(button);
+        });
+      }
+      trackPanelOpts(options);
+    };
+    render();requestAnimationFrame(()=>panel.classList.add("open"));
+  }
+
+  function nameInput(args){
+    panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;
+    const panel=ensurePanel();panel.style.display="flex";
+    document.getElementById("npcName").textContent="我";
+    document.getElementById("npcSub").textContent="序章 · 输入名字";
+    drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
+    document.getElementById("npcSay").innerHTML="这段旅程，应该怎么称呼你？<br><input id='storyNameInput' maxlength='16' style='margin-top:12px;width:220px;padding:8px;background:#10111e;color:#ffe9b3;border:1px solid #ffd76e;border-radius:6px;font:14px Consolas'><button id='storyNameConfirm' class='npc-opt'>确定</button>";
+    const input=document.getElementById("storyNameInput"),button=document.getElementById("storyNameConfirm");
+    const done=()=>{
+      const name=(input.value||"").trim()||"未命名";
+      updateState(state=>{state.player.name=name;},"name_input");
+      closeDialogue();banner("名字已记住："+name);director.runtime.follow(args.next);
+    };
+    button.onclick=done;input.onkeydown=event=>{if(event.key==="Enter")done();};
+    panelOpts=[button];panelSel=0;requestAnimationFrame(()=>{panel.classList.add("open");input.focus();});
+  }
+
+  function eatKeti(){const npc=director&&director.keti;if(npc&&npcs.includes(npc))root.eatNPC(npc);}
+  function eatCorpse(){updateState(state=>{state.actors.keti.status="eaten";state.actors.keti.corpsePresent=false;},"keti_corpse_eaten");emit("ACTOR_EATEN",{actorId:"keti",corpse:true});}
+  function spawnSlimes(){director.spawned=true;enemies.length=0;enemyAt({type:"slime",x:54.5,y:21.5});enemyAt({type:"slime",x:54.5,y:27.5});observedEnemies=enemies.length;}
+  function freeExplore(){closeDialogue();banner("自由探索：30 秒后会出现记忆模糊");director.runtime.startTimer("free_explore_memory",30);}
+  function memoryBlur(){
+    updateState(state=>{state.flags.memoryBlurSeen=true;state.player.bodyLength=CFG.minLen;},"memory_blur");
+    snake.len=CFG.minLen;computeSegs();
+  }
+  function storyEnd(args){
+    closeDialogue();gameState="victory";victoryRetry="story";
+    document.getElementById("ovTitle").textContent=args.title||"剧情完成";
+    document.getElementById("ovText").textContent=args.text||"";
+    document.getElementById("ovBtn").textContent="重新开始序章";
+    document.getElementById("ovBtn2").textContent="回到首页";document.getElementById("ovBtn2").style.display="";
+    document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
+    document.getElementById("ovBtn5").style.display="none";document.getElementById("ovBtn7").style.display="none";
+    document.getElementById("overlay").classList.add("show");
+  }
+
+  function wallWait(){
+    closeDialogue();
+    if(count("tutorialBeansEaten")>=5&&gateSent){director.runtime.follow("dialogue_3");return;}
+    director.runtime.waitFor({events:[eventType("PLAYER_BEAN_EATEN"),eventType("FRAGILE_GATE_BROKEN")],predicate:()=>count("tutorialBeansEaten")>=5&&gateSent,target:"dialogue_3"});
+  }
+  function exitWait(){
+    closeDialogue();director.runtime.startTimer("tutorial_exit_timeout",30);
+    director.runtime.waitFor({events:[eventType("MAP_EXIT_ENTERED"),eventType("TIMER_EXPIRED")],predicate:event=>event.type===eventType("MAP_EXIT_ENTERED")||event.payload&&event.payload.id==="tutorial_exit",target:event=>event.type===eventType("MAP_EXIT_ENTERED")?"wilderness_start":"dialogue_4"});
+  }
+
+  const conditions={
+    tutorialBeans3:()=>count("tutorialBeansEaten")>=3,
+    tutorialSpit3:()=>count("tutorialBeansSpit")>=3,
+    ketiEvent:event=>event.payload&&event.payload.actorId==="keti",
+    enemiesCleared:()=>director.spawned&&enemies.length===0,
+    freeExploreTimer:event=>event.payload&&event.payload.id==="free_explore_memory"
+  };
+  const targetResolvers={
+    ketiFirstContact:event=>event.type===eventType("ACTOR_INTERACTED")?"keti_question":event.type===eventType("ACTOR_EATEN")?"eaten_slimes":"keti_dead",
+    ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead"
+  };
+  const choiceActions={waitForWall:wallWait,waitForExit:exitWait};
+
+  function compileChoice(choice){const compiled=Object.assign({},choice);if(choice.action){compiled.run=choiceActions[choice.action];delete compiled.action;}return compiled;}
+  function compileNode(node){
+    const compiled={id:node.id,goal:node.goal,progress:node.progress};
+    if(node.dialogue){const args=Object.assign({},node.dialogue,{choices:(node.dialogue.choices||[]).map(compileChoice)});compiled.onEnter={name:"dialog",args};}
+    else if(node.enter)compiled.onEnter={name:node.enter.action,args:node.enter};
+    if(node.next)compiled.auto=node.next;
+    if(node.wait){compiled.wait={events:node.wait.events.map(eventType),target:node.wait.target};if(node.wait.condition)compiled.wait.predicate=conditions[node.wait.condition];if(node.wait.targetResolver)compiled.wait.target=targetResolvers[node.wait.targetResolver];}
+    return compiled;
+  }
+  function compileGraph(nodes){const graph={};Object.keys(nodes).forEach(id=>{graph[id]=compileNode(nodes[id]);});return graph;}
+
+  function routeInteraction(kind,target,payload){
+    if(!director||!storyActive||playMode!=="story"||!owns(kind,target))return false;
+    if(kind==="actor"){
+      target.inside=true;
+      if(currentNode()==="wilderness_keti_wait"){
+        director.keti=target;updateState(state=>{state.actors.keti.met=true;},"keti_met");emit("ACTOR_INTERACTED",{actorId:targetId(target)});
+      }
+      return true;
+    }
+    if(payload&&typeof payload.apply==="function")payload.apply();
+    return true;
+  }
+
+  function engineEvent(name,payload){
+    if(!director||!storyActive||playMode!=="story")return;
+    if(name==="beanEaten"){
+      updateState(state=>{state.counters.tutorialBeansEaten++;state.player.bodyLength=snake.len;},"bean_eaten");emit("PLAYER_BEAN_EATEN",{count:count("tutorialBeansEaten")});
+    }else if(name==="beanSpit"){
+      updateState(state=>{state.counters.tutorialBeansSpit++;state.player.bodyLength=snake.len;},"bean_spit");emit("PLAYER_BEAN_SPIT",{count:count("tutorialBeansSpit")});
+    }else if(name==="actorDied"||name==="actorEaten"){
+      const actor=payload&&payload.actor;if(!actor||!owns("actor",actor))return;
+      const eaten=name==="actorEaten";
+      updateState(state=>{state.actors.keti.status=eaten?"eaten":"dead";state.actors.keti.corpsePresent=!eaten;},eaten?"keti_eaten":"keti_dead");emit(eaten?"ACTOR_EATEN":"ACTOR_DIED",{actorId:targetId(actor)});
+    }
+  }
+
+  function update(){
+    if(!director||!storyActive||playMode!=="story")return;
+    const node=director.runtime.node,progress=node&&node.progress;storyStage=progress?Math.max(0,progress.step-1):storyStage;
+    if(lastMap===TM&&MECHS.some(mechanic=>mechanic.kind==="gate"&&mechanic.done)&&!gateSent){gateSent=true;updateState(state=>{state.flags.tutorialGateBroken=true;state.flags.tutorialExitUnlocked=true;state.counters.tutorialGateSpit=3;},"gate_broken");emit("FRAGILE_GATE_BROKEN",{gateId:"tutorial_fragile_gate"});}
+    const exit=MS[TM]&&MS[TM].exits&&MS[TM].exits[0];
+    if(lastMap===TM&&!exitSent&&gateSent&&exit&&snake.fx>=exit.rect[0]&&snake.fx<=exit.rect[0]+exit.rect[2]&&snake.fy>=exit.rect[1]&&snake.fy<=exit.rect[1]+exit.rect[3])routeInteraction("exit",exit,{type:"enter",apply:()=>{exitSent=true;emit("MAP_EXIT_ENTERED",{id:exit.id,mapId:TM,targetMap:exit.targetMap});}});
+    if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
+    observedEnemies=enemies.length;
+  }
+
+  function goalText(){const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target;return goal.text||"按剧情继续";}
+  function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
+
+  function start(){
+    stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";
+    const state=new StateApi.StoryStateStore();state.reset("new_story");
+    director={spawned:false,keti:null,checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,freeExplore,memoryBlur,nameInput,storyEnd}})};
+    director.runtime.start(Story.start);
+  }
+  function retry(){if(!director||!director.checkpoint){start();return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
+  function stop(){if(director)director.runtime.stop();director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
+
+  root.IMS_STORY_API={start,retry,stop,tick:update,goalText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
+  root.storyControllerInteraction=routeInteraction;
+  root.storyControllerOwns=owns;
+  root.storyControllerInteract=target=>routeInteraction("actor",target);
+  root.storyControllerTick=update;
+  root.storyDirector=()=>director;
 })(typeof window!=="undefined"?window:globalThis);
 
 </script>
