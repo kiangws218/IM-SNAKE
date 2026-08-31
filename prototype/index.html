@@ -290,6 +290,11 @@ function nearestPlayer(x,y){
 }
 function bodyHas(key){return occSet.has(key)||CoopMode.bodyHas(key);}
 function hurtPlayerById(id,reason){if(id===2)CoopMode.hurt(reason);else hurtPlayer(reason);}
+function routeStoryInteraction(kind,target,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const handler=rootRef&&rootRef.storyControllerInteraction;
+  return typeof handler==="function"?!!handler(kind,target,payload):false;
+}
 
 function buildObstacles(){
   obstacles=new Set();
@@ -592,12 +597,13 @@ function pickUps(){
       if(b.fromProj)projRecycled++;
       groundBeans.splice(i,1);
       snake.len++;beansEaten++;
-      for(const m of MECHS){
-        if(m.done||m.kind!=="gate")continue;
-        if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
-          recordGateHit(m);
+        for(const m of MECHS){
+          if(m.done||m.kind!=="gate")continue;
+          if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
+            const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"pickup",bean:b,apply:()=>recordGateHit(m)});
+            if(!handled)recordGateHit(m);
+          }
         }
-      }
       if(Math.random()<RUN.greedy){snake.len++;ftext(b.x+.5,b.y,"贪食 +1","#ffd76e");}
       ftext(b.x+.5,b.y+.3,"+1","#8fe36b");puff(b.x+.5,b.y+.5,"#8fe36b");
     }
@@ -725,7 +731,8 @@ function updateProjs(dt){
         if(m.done||m.kind!=="gate"||!m.cellIdx)continue;
         if(m.cellIdx.includes(K(hit.cx,hit.cy))){
           puff(p.x,p.y,"#7fd1e8");
-          recordGateHit(m);
+          const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"projectile",projectile:p,apply:()=>recordGateHit(m)});
+          if(!handled)recordGateHit(m);
           fed=true;break;
         }
       }
@@ -879,8 +886,7 @@ function updateNPCs(dt){
     if(alive&&!panelOpen&&gameState==="play"){
       const near=nearestPlayer(n.x,n.y),d=near?Math.hypot(n.x-near.x,n.y-near.y):Infinity;
       if(d<0.85&&!n.inside){
-        const storyHandled=typeof window!=="undefined"&&typeof window.storyControllerInteract==="function"&&window.storyControllerInteract(n);
-        if(!storyHandled)openPanel(n);
+        if(!routeStoryInteraction("actor",n))openPanel(n);
       }
       else if(d>1.25)n.inside=false;
     }
@@ -1662,8 +1668,8 @@ function openPanel(n,nodeId){
       list=(node.options||[]).map(o=>({label:o.t,
         fn:()=>{
           if(!npcs.includes(n))return closePanel();
-          if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
-          if(o.action==="end"){closePanel();if(playMode==="story"&&storyStage===3)storyVictory("你暂时放过了她，但那阵哭声还留在耳边。");return;}
+          if(o.action==="eat"){eatNPC(n);return;}
+          if(o.action==="end"){closePanel();return;}
           return openPanel(n,o.next);
         }}));
     }else{
@@ -1688,8 +1694,8 @@ function handleOption(n,o){
   if(!npcs.includes(n))return closePanel();
   if(o.action==="trade")return panelTrade(n);
   if(o.action==="dialog")return openPanel(n,o.arg||"start");
-  if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
-  if(o.action==="leave"){const isStoryKeti=playMode==="story"&&storyStage===3&&n.kind==="keti";closePanel();if(isStoryKeti)storyVictory("你没有靠近那个孩子，转身继续向前。");return;}
+  if(o.action==="eat"){eatNPC(n);return;}
+  if(o.action==="leave"){closePanel();return;}
 }
 function merchantMarkup(n){
   const T=NPC_TYPES[n.kind];

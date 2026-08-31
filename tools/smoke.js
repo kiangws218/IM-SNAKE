@@ -67,6 +67,9 @@ try{
   if(!tutorialMap.cleanMap||!tutorialMap.solidOutside||tutorialMap.solidOutside[0]!==4||tutorialMap.solidOutside[1]!==16||
      !tutorialGate||tutorialGate.x!==48||tutorialGate.y!==16||!tutorialExit||tutorialExit.rect[0]!==47||tutorialExit.rect[1]!==14)
     throw new Error("Tutorial map boundary or gate/exit was not configured correctly");
+  if(!tutorialMap.interactions||!tutorialMap.interactions.mechanics.includes("tutorial_fragile_gate")||
+     !tutorialMap.interactions.exits.includes("tutorial_exit"))
+    throw new Error("Tutorial interaction ownership was not declared");
   els["ovBtn5"].onclick();
   if(!els["pickList"].children.length)throw new Error("Boss challenge selection did not open");
   els["pickList"].children[0].onclick();frames(180);
@@ -116,6 +119,10 @@ try{
   console.log("[story prologue stage 2] OK");
   const gate=sandbox.__IMS.mechs.find(m=>m.kind==="gate");
   if(sandbox.__IMS.voidCells.size===0)throw new Error("Tutorial map did not create a solid dark outside");
+  let routedGateHits=0;
+  if(!sandbox.storyControllerOwns("mechanic",gate)||
+     !sandbox.storyControllerInteraction("mechanic",gate,{type:"gate_hit",apply:()=>{routedGateHits++;}})||routedGateHits!==1)
+    throw new Error("Story gate interaction was not claimed exactly once");
   sandbox.recordGateHit(gate);sandbox.recordGateHit(gate);
   if(gate.prog!==2)throw new Error("Repeated gate hits were not accumulated");
   console.log("[gate repeated hits] OK");
@@ -126,6 +133,8 @@ try{
   console.log("[wilderness bean supply] OK");
   const keti=sandbox.__IMS.npcs.find(n=>n.kind==="keti");
   if(!keti)throw new Error("Keti was not spawned in wilderness");
+  if(!sandbox.storyControllerOwns("actor",keti)||sandbox.storyControllerInteraction("actor",{kind:"merchant"}))
+    throw new Error("Story actor ownership leaked to unrelated NPCs");
   if(!sandbox.storyControllerInteract(keti)||sandbox.storyDirector().runtime.node.id!=="keti_question")
     throw new Error("Keti interaction did not enter the story dialogue");
   if(!sandbox.storyControllerInteract(keti)||sandbox.storyDirector().runtime.node.id!=="keti_question")

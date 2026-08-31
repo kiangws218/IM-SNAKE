@@ -1246,8 +1246,8 @@ const SANDBOX_CAPS={
 (function(root){
 const TYPES=Object.freeze({TUTORIAL:"prologue_tutorial",WILDERNESS:"prologue_wilderness"});
 const STORY_MAPS={
-[TYPES.TUTORIAL]:{id:TYPES.TUTORIAL,name:"教学地图",kind:"story",spawn:{x:8.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},cleanMap:true,solidOutside:[4,16,51,16],obstacles:[],beans:[[16,24],[24,24],[32,24],[42,24],[48,24],[51,24]],gates:[{id:"tutorial_fragile_gate",kind:"fragile_gate",x:48,y:16,w:3,h:1,need:3,breakEvent:"map.fragile_gate_broken"}],exits:[{id:"tutorial_exit",rect:[47,14,5,3],requiresGate:"tutorial_fragile_gate",targetMap:TYPES.WILDERNESS,targetSpawn:"wilderness_entry"}],npcs:[],enemySpawns:[],rules:{allowFreeSnakeAfterTimeout:true,exitRequiresGate:true,beanTarget:0}},
-[TYPES.WILDERNESS]:{id:TYPES.WILDERNESS,name:"荒野",kind:"story",spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,12,60,1],[4,36,60,1],[4,12,1,11],[4,28,1,8],[63,12,1,25],[20,18,2,2],[31,29,2,2],[48,16,2,2]],beans:[],gates:[],exits:[],npcs:[{id:"keti",kind:"keti",x:42.5,y:24.5}],enemySpawns:[],entryPoints:{wilderness_entry:{x:7.5,y:24.5,dir:{x:1,y:0}}},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:10,initialRandomBeans:8,beanRespawn:3}}
+[TYPES.TUTORIAL]:{id:TYPES.TUTORIAL,name:"教学地图",kind:"story",spawn:{x:8.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},cleanMap:true,solidOutside:[4,16,51,16],obstacles:[],beans:[[16,24],[24,24],[32,24],[42,24],[48,24],[51,24]],gates:[{id:"tutorial_fragile_gate",kind:"fragile_gate",x:48,y:16,w:3,h:1,need:3,breakEvent:"map.fragile_gate_broken"}],exits:[{id:"tutorial_exit",rect:[47,14,5,3],requiresGate:"tutorial_fragile_gate",targetMap:TYPES.WILDERNESS,targetSpawn:"wilderness_entry"}],interactions:{mechanics:["tutorial_fragile_gate"],exits:["tutorial_exit"]},npcs:[],enemySpawns:[],rules:{allowFreeSnakeAfterTimeout:true,exitRequiresGate:true,beanTarget:0}},
+[TYPES.WILDERNESS]:{id:TYPES.WILDERNESS,name:"荒野",kind:"story",spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,12,60,1],[4,36,60,1],[4,12,1,11],[4,28,1,8],[63,12,1,25],[20,18,2,2],[31,29,2,2],[48,16,2,2]],beans:[],gates:[],exits:[],interactions:{actors:["keti"]},npcs:[{id:"keti",kind:"keti",x:42.5,y:24.5}],enemySpawns:[],entryPoints:{wilderness_entry:{x:7.5,y:24.5,dir:{x:1,y:0}}},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:10,initialRandomBeans:8,beanRespawn:3}}
 };
 root.IMS_STORY_MAPS={TYPES,STORY_MAPS,clone:value=>JSON.parse(JSON.stringify(value))};
 })(typeof window!=="undefined"?window:globalThis);
@@ -1410,6 +1410,11 @@ function nearestPlayer(x,y){
 }
 function bodyHas(key){return occSet.has(key)||CoopMode.bodyHas(key);}
 function hurtPlayerById(id,reason){if(id===2)CoopMode.hurt(reason);else hurtPlayer(reason);}
+function routeStoryInteraction(kind,target,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const handler=rootRef&&rootRef.storyControllerInteraction;
+  return typeof handler==="function"?!!handler(kind,target,payload):false;
+}
 
 function buildObstacles(){
   obstacles=new Set();
@@ -1712,12 +1717,13 @@ function pickUps(){
       if(b.fromProj)projRecycled++;
       groundBeans.splice(i,1);
       snake.len++;beansEaten++;
-      for(const m of MECHS){
-        if(m.done||m.kind!=="gate")continue;
-        if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
-          recordGateHit(m);
+        for(const m of MECHS){
+          if(m.done||m.kind!=="gate")continue;
+          if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
+            const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"pickup",bean:b,apply:()=>recordGateHit(m)});
+            if(!handled)recordGateHit(m);
+          }
         }
-      }
       if(Math.random()<RUN.greedy){snake.len++;ftext(b.x+.5,b.y,"贪食 +1","#ffd76e");}
       ftext(b.x+.5,b.y+.3,"+1","#8fe36b");puff(b.x+.5,b.y+.5,"#8fe36b");
     }
@@ -1845,7 +1851,8 @@ function updateProjs(dt){
         if(m.done||m.kind!=="gate"||!m.cellIdx)continue;
         if(m.cellIdx.includes(K(hit.cx,hit.cy))){
           puff(p.x,p.y,"#7fd1e8");
-          recordGateHit(m);
+          const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"projectile",projectile:p,apply:()=>recordGateHit(m)});
+          if(!handled)recordGateHit(m);
           fed=true;break;
         }
       }
@@ -1999,8 +2006,7 @@ function updateNPCs(dt){
     if(alive&&!panelOpen&&gameState==="play"){
       const near=nearestPlayer(n.x,n.y),d=near?Math.hypot(n.x-near.x,n.y-near.y):Infinity;
       if(d<0.85&&!n.inside){
-        const storyHandled=typeof window!=="undefined"&&typeof window.storyControllerInteract==="function"&&window.storyControllerInteract(n);
-        if(!storyHandled)openPanel(n);
+        if(!routeStoryInteraction("actor",n))openPanel(n);
       }
       else if(d>1.25)n.inside=false;
     }
@@ -2782,8 +2788,8 @@ function openPanel(n,nodeId){
       list=(node.options||[]).map(o=>({label:o.t,
         fn:()=>{
           if(!npcs.includes(n))return closePanel();
-          if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
-          if(o.action==="end"){closePanel();if(playMode==="story"&&storyStage===3)storyVictory("你暂时放过了她，但那阵哭声还留在耳边。");return;}
+          if(o.action==="eat"){eatNPC(n);return;}
+          if(o.action==="end"){closePanel();return;}
           return openPanel(n,o.next);
         }}));
     }else{
@@ -2808,8 +2814,8 @@ function handleOption(n,o){
   if(!npcs.includes(n))return closePanel();
   if(o.action==="trade")return panelTrade(n);
   if(o.action==="dialog")return openPanel(n,o.arg||"start");
-  if(o.action==="eat"){eatNPC(n);if(playMode==="story"&&storyStage===3)storyVictory("可蒂倒在了地上。你不知道自己为什么会这么做。");return;}
-  if(o.action==="leave"){const isStoryKeti=playMode==="story"&&storyStage===3&&n.kind==="keti";closePanel();if(isStoryKeti)storyVictory("你没有靠近那个孩子，转身继续向前。");return;}
+  if(o.action==="eat"){eatNPC(n);return;}
+  if(o.action==="leave"){closePanel();return;}
 }
 function merchantMarkup(n){
   const T=NPC_TYPES[n.kind];
@@ -3835,13 +3841,17 @@ const A=root.IMS_STORY_RUNTIME,S=root.IMS_STORY_STATE,E=root.IMS_STORY_EVENTS,M=
 const T=E.TYPES,B=E.bus,TM=M.TYPES.TUTORIAL,WM=M.TYPES.WILDERNESS,MS=M.STORY_MAPS;
 const old={open:root.openPanel,close:root.closePanel,eat:root.eatNPC,die:root.dieNPC,pick:root.pickUps,shot:root.stanceShot,proj:root.updateProjs,enemies:root.updateEnemies,menu:root.showMenu};
 let D=null,lastMap=null,gateSent=false,exitSent=false,observedBeans=0,observedLen=0;
+let ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};
 const ty=(n,f)=>T[n]||f,emit=(n,p)=>B&&B.emit(ty(n,"story."+n.toLowerCase()),p||{}),snap=()=>D&&D.runtime.state.snapshot(),cnt=k=>snap()&&snap().counters[k]||0,node=()=>D&&D.runtime.node?D.runtime.node.id:"";
 function state(fn,r){if(D)D.runtime.state.update(fn,r);}
 function close(){if(old.close)old.close();panelOpen=false;freeze=false;moveLock=false;panelNpc=null;npcNode=null;}
+function setOwnership(m){const i=m&&m.interactions||{};ownership={actors:new Set(i.actors||[]),mechanics:new Set(i.mechanics||i.mechs||[]),exits:new Set(i.exits||[])};}
+function targetId(target){return typeof target==="string"?target:target&&(target.storyId||target.id||target.kind)||"";}
+function owns(kind,target){const key=kind==="actor"?"actors":kind==="mechanic"?"mechanics":kind==="exit"?"exits":"";return !!key&&ownership[key].has(targetId(target));}
 function lvl(m){return{cleanMap:!!m.cleanMap,solidOutside:m.solidOutside||null,obstacles:m.obstacles||[],mechs:(m.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]};}
 function enemyAt(s){const t=ENEMY_TYPES[s.type];if(!t)return;const e={type:s.type,x:s.x,y:s.y,flash:0,hitT:0,hp:t.hp,max:t.hp,r:t.r,vx:0,vy:0,wanderT:0,squash:rnd(6)};enemies.push(e);}
 function loadMap(id,entry){
- const m=MS[id];lastMap=id;gateSent=false;exitSent=false;boss=null;bossStakes=[];playMode="story";storyStage=id===TM?0:6;reset(true);buildFromLevel(lvl(m));groundBeans.length=0;(m.beans||[]).forEach(p=>groundBeans.push({x:p[0],y:p[1]}));enemies.length=0;npcs.length=0;
+ const m=MS[id];lastMap=id;setOwnership(m);gateSent=false;exitSent=false;boss=null;bossStakes=[];playMode="story";storyStage=id===TM?0:6;reset(true);buildFromLevel(lvl(m));groundBeans.length=0;(m.beans||[]).forEach(p=>groundBeans.push({x:p[0],y:p[1]}));enemies.length=0;npcs.length=0;
  const sp=(entry&&m.entryPoints&&m.entryPoints[entry])||m.spawn;snake.fx=sp.x;snake.fy=sp.y;dir=sp.dir;snake.len=id===TM?CFG.initLen:CFG.initLen;coilPath();computeSegs();computeEnclosure();const rules=m.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();observedBeans=beansEaten;observedLen=snake.len;
  if(id===WM){const k=m.npcs&&m.npcs[0],st=snap().actors.keti.status;if(k&&st!=="dead"&&st!=="eaten"){const q=NPC_TYPES.keti;D.keti={storyId:"keti",kind:"keti",x:k.x,y:k.y,r:q.r,hp:q.hp,maxHp:q.hp,flash:0,inside:false,crying:false};npcs.push(D.keti);state(s=>{s.actors.keti.status="alive";},"keti_spawn");}}
  gameState="play";paused=false;freeze=false;firing=false;fireKey=false;heldKeys.clear();dirQueue.length=0;moveLock=false;document.getElementById("overlay").classList.remove("show");document.getElementById("tut").classList.remove("show");document.getElementById("ovBtns").style.display="";document.getElementById("pickList").innerHTML="";ensurePrimarySpawnSafe();emit("MAP_LOADED",{mapId:id,spawnId:entry||null,clearForwardSeconds:3});banner(id===TM?"序章 · 教学地图：沿走廊前进":"地图 2 · 荒野：寻找哭声");
@@ -3898,18 +3908,19 @@ function syncSignals(){
  emit("ENEMIES_DEFEATED",{remaining:enemies.length,total:kills});
 }
 function inRect(x,y,r){return !!r&&x>=r[0]&&x<=r[0]+r[2]&&y>=r[1]&&y<=r[1]+r[3];}
-function update(){if(!D||!storyActive||playMode!=="story")return;const n=node();if(n==="tutorial_1"||n==="dialogue_1")storyStage=0;else if(n==="tutorial_2"||n==="dialogue_2")storyStage=1;else if(n==="dialogue_3")storyStage=2;else storyStage=3;if(lastMap===TM&&MECHS.some(m=>m.kind==="gate"&&m.done)&&!gateSent){gateSent=true;state(s=>{s.flags.tutorialGateBroken=true;s.flags.tutorialExitUnlocked=true;s.counters.tutorialGateSpit=3;},"gate_broken");emit("FRAGILE_GATE_BROKEN",{gateId:"tutorial_fragile_gate"});}const exit=MS[TM]&&MS[TM].exits&&MS[TM].exits[0];if(lastMap===TM&&!exitSent&&gateSent&&exit&&inRect(snake.fx,snake.fy,exit.rect)){exitSent=true;emit("MAP_EXIT_ENTERED",{id:exit.id,mapId:TM,targetMap:exit.targetMap});}}
+function update(){if(!D||!storyActive||playMode!=="story")return;const n=node();if(n==="tutorial_1"||n==="dialogue_1")storyStage=0;else if(n==="tutorial_2"||n==="dialogue_2")storyStage=1;else if(n==="dialogue_3")storyStage=2;else storyStage=3;if(lastMap===TM&&MECHS.some(m=>m.kind==="gate"&&m.done)&&!gateSent){gateSent=true;state(s=>{s.flags.tutorialGateBroken=true;s.flags.tutorialExitUnlocked=true;s.counters.tutorialGateSpit=3;},"gate_broken");emit("FRAGILE_GATE_BROKEN",{gateId:"tutorial_fragile_gate"});}const exit=MS[TM]&&MS[TM].exits&&MS[TM].exits[0];if(lastMap===TM&&!exitSent&&gateSent&&exit&&inRect(snake.fx,snake.fy,exit.rect))routeInteraction("exit",exit,{type:"enter",apply:()=>{exitSent=true;emit("MAP_EXIT_ENTERED",{id:exit.id,mapId:TM,targetMap:exit.targetMap});}});}
 function tick(){if(!D||!storyActive||playMode!=="story")return;syncSignals();update();}
-function interact(n){if(!D||!storyActive||playMode!=="story"||!n||n.kind!=="keti")return false;n.inside=true;if(node()!=="wilderness_keti_wait")return true;D.keti=n;state(s=>{s.actors.keti.met=true;},"keti_met");emit("ACTOR_INTERACTED",{actorId:"keti"});return true;}
+function routeInteraction(kind,target,payload){if(!D||!storyActive||playMode!=="story"||!owns(kind,target))return false;if(kind==="actor"){target.inside=true;if(node()==="wilderness_keti_wait"){D.keti=target;state(s=>{s.actors.keti.met=true;},"keti_met");emit("ACTOR_INTERACTED",{actorId:targetId(target)});}return true;}if(payload&&typeof payload.apply==="function")payload.apply();return true;}
+function interact(n){return routeInteraction("actor",n);}
 function goal(){const n=node();if(n==="tutorial_1")return"目标 吃豆 "+Math.min(3,cnt("tutorialBeansEaten"))+"/3";if(n==="tutorial_2")return"目标 吐出 "+Math.min(3,cnt("tutorialBeansSpit"))+"/3";if(n==="dialogue_2")return"目标 吃豆 5 颗并破坏脆弱墙";if(n==="dialogue_3"||n==="dialogue_4"||n==="tutorial_free_play")return"目标 找到门并走出教学地图";if(n==="wilderness_keti_wait"||n==="keti_question"||n==="keti_cry")return"目标 找到哭声的主人";if(n==="wilderness_slimes"||n==="eaten_slimes")return"目标 击败两只史莱姆";if(n==="free_explore")return"自由探索";return"按剧情继续";}
 root.pickUps=function(){old.pick();};
 root.stanceShot=function(){old.shot();};
 root.updateProjs=function(dt){old.proj(dt);};root.updateEnemies=function(dt){old.enemies(dt);};
 root.dieNPC=function(n){const k=n&&n.kind==="keti";old.die(n);if(k&&D&&playMode==="story"){state(s=>{s.actors.keti.status="dead";s.actors.keti.corpsePresent=true;},"keti_dead");emit("ACTOR_DIED",{actorId:"keti"});}};
 root.eatNPC=function(n){const k=n&&n.kind==="keti";old.eat(n);if(k&&D&&playMode==="story"){state(s=>{s.actors.keti.status="eaten";s.actors.keti.corpsePresent=false;},"keti_eaten");emit("ACTOR_EATEN",{actorId:"keti"});}};
-root.openPanel=function(n,id){if(interact(n))return;return old.open(n,id);};root.storyControllerInteract=interact;root.storyControllerTick=tick;root.storyCheckProgress=update;root.storyGoalText=goal;
-function start(){if(D)D.runtime.stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";const st=new S.StoryStateStore();st.reset("new_story");D={spawned:false,keti:null,runtime:new A.StoryRuntime({graph:G,state:st,bus:B,adapters:{load:a=>loadMap(a.id,a.entry),dialog:a=>dialog(a),banner:a=>banner(a.text),eatKeti:eatKeti,eatCorpse:eatCorpse,slimes:()=>{D.spawned=true;enemies.length=0;enemyAt({type:"slime",x:54.5,y:21.5});enemyAt({type:"slime",x:54.5,y:27.5});},freeExplore:()=>{close();banner("自由探索：30 秒后会出现记忆模糊");D.runtime.startTimer("free_explore_memory",30);},memoryBlur:()=>{state(s=>{s.flags.memoryBlurSeen=true;s.player.bodyLength=CFG.minLen;},"memory_blur");snake.len=CFG.minLen;computeSegs();dialog({speaker:"我",sub:"记忆模糊",text:"我……刚才吃了什么？脑子里只剩下一片空白。",choices:[{id:"name",label:"输入名字",next:"input_player_name"}]});},nameInput:nameInput}})};D.runtime.start("prologue_start");}
-root.startStoryMode=start;root.startStoryStage=start;root.storyDirector=()=>D;root.startCampaign=()=>{boss=null;bossStakes=[];playMode="campaign";resetRun();carry={len:CFG.initLen,charges:1};levelIdx=0;startLevel();};document.getElementById("pauseHome").onclick=()=>root.showMenu();root.showMenu=()=>{if(D)D.runtime.stop();D=null;boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;return typeof old.menu==="function"?old.menu():null;};
+root.openPanel=function(n,id){if(routeInteraction("actor",n))return;return old.open(n,id);};root.storyControllerInteract=interact;root.storyControllerInteraction=routeInteraction;root.storyControllerOwns=owns;root.storyControllerTick=tick;root.storyCheckProgress=update;root.storyGoalText=goal;
+function start(){if(D)D.runtime.stop();ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";const st=new S.StoryStateStore();st.reset("new_story");D={spawned:false,keti:null,runtime:new A.StoryRuntime({graph:G,state:st,bus:B,adapters:{load:a=>loadMap(a.id,a.entry),dialog:a=>dialog(a),banner:a=>banner(a.text),eatKeti:eatKeti,eatCorpse:eatCorpse,slimes:()=>{D.spawned=true;enemies.length=0;enemyAt({type:"slime",x:54.5,y:21.5});enemyAt({type:"slime",x:54.5,y:27.5});},freeExplore:()=>{close();banner("自由探索：30 秒后会出现记忆模糊");D.runtime.startTimer("free_explore_memory",30);},memoryBlur:()=>{state(s=>{s.flags.memoryBlurSeen=true;s.player.bodyLength=CFG.minLen;},"memory_blur");snake.len=CFG.minLen;computeSegs();dialog({speaker:"我",sub:"记忆模糊",text:"我……刚才吃了什么？脑子里只剩下一片空白。",choices:[{id:"name",label:"输入名字",next:"input_player_name"}]});},nameInput:nameInput}})};D.runtime.start("prologue_start");}
+root.startStoryMode=start;root.startStoryStage=start;root.storyDirector=()=>D;root.startCampaign=()=>{boss=null;bossStakes=[];playMode="campaign";resetRun();carry={len:CFG.initLen,charges:1};levelIdx=0;startLevel();};document.getElementById("pauseHome").onclick=()=>root.showMenu();root.showMenu=()=>{if(D)D.runtime.stop();D=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;return typeof old.menu==="function"?old.menu():null;};
 })(typeof window!=="undefined"?window:globalThis);
 
 </script>
