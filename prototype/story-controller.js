@@ -6,11 +6,14 @@
   const Events=root.IMS_STORY_EVENTS;
   const Maps=root.IMS_STORY_MAPS;
   const Dialogue=root.IMS_STORY_DIALOGUE;
+  const SaveApi=root.IMS_STORY_SAVE;
   const Story=root.IMS_STORY_DATA.PROLOGUE;
   const T=Events.TYPES,B=Events.bus,TM=Maps.TYPES.TUTORIAL,WM=Maps.TYPES.WILDERNESS,MS=Maps.STORY_MAPS;
 
   let director=null,lastMap=null,gateSent=false,exitSent=false,observedEnemies=0;
+  let exitTimeoutHandle=null,exitTimeoutPending=false;
   let ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};
+  const saveStore=SaveApi?new SaveApi.StorySaveStore():null;
 
   const eventType=name=>T[name]||name;
   const emit=(name,payload)=>B.emit(eventType(name),payload||{});
@@ -58,11 +61,19 @@
     director.checkpoint={nodeId,state:director.runtime.state.snapshot()};
     updateState(state=>{state.checkpoint={nodeId,mapId:lastMap};},"checkpoint");
     director.checkpoint.state=director.runtime.state.snapshot();
+    saveCurrent();
+  }
+
+  function saveCurrent(){
+    if(!director||!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
+    const state=director.runtime.state.snapshot();
+    return saveStore.save(director.slot,state,{currentNode:state.currentNode,currentMap:lastMap,completed:state.flags&&state.flags.storyCompleted});
   }
 
   function loadMap(args){
     const id=args.mapId,map=MS[id];if(!map)throw new Error("Unknown story map: "+id);
     lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
+    updateState(state=>{state.currentMap=id;},"map_selected");
     playMode="story";storyStage=id===TM?0:5;reset(true);buildFromLevel(levelFromMap(map));
     groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
     enemies.length=0;npcs.length=0;
@@ -147,6 +158,7 @@
     snake.len=CFG.minLen;computeSegs();
   }
   function storyEnd(args){
+    updateState(state=>{state.flags.storyCompleted=true;},"story_complete");saveCurrent();
     closeDialogue();gameState="victory";victoryRetry="story";
     document.getElementById("ovTitle").textContent=args.title||"剧情完成";
     document.getElementById("ovText").textContent=args.text||"";
@@ -163,8 +175,11 @@
     director.runtime.waitFor({events:[eventType("PLAYER_BEAN_EATEN"),eventType("FRAGILE_GATE_BROKEN")],predicate:()=>count("tutorialBeansEaten")>=5&&gateSent,target:"dialogue_3"});
   }
   function exitWait(){
-    closeDialogue();director.runtime.startTimer("tutorial_exit_timeout",30);
-    director.runtime.waitFor({events:[eventType("MAP_EXIT_ENTERED"),eventType("TIMER_EXPIRED")],predicate:event=>event.type===eventType("MAP_EXIT_ENTERED")||event.payload&&event.payload.id==="tutorial_exit",target:event=>event.type===eventType("MAP_EXIT_ENTERED")?"wilderness_start":"dialogue_4"});
+    closeDialogue();
+    if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);
+    exitTimeoutPending=false;
+    exitTimeoutHandle=setTimeout(()=>{exitTimeoutHandle=null;exitTimeoutPending=true;},30000);
+    director.runtime.waitFor({events:[eventType("MAP_EXIT_ENTERED")],target:"wilderness_start"});
   }
 
   const conditions={
@@ -222,7 +237,12 @@
     const node=director.runtime.node,progress=node&&node.progress;storyStage=progress?Math.max(0,progress.step-1):storyStage;
     if(lastMap===TM&&MECHS.some(mechanic=>mechanic.kind==="gate"&&mechanic.done)&&!gateSent){gateSent=true;updateState(state=>{state.flags.tutorialGateBroken=true;state.flags.tutorialExitUnlocked=true;state.counters.tutorialGateSpit=3;},"gate_broken");emit("FRAGILE_GATE_BROKEN",{gateId:"tutorial_fragile_gate"});}
     const exit=MS[TM]&&MS[TM].exits&&MS[TM].exits[0];
-    if(lastMap===TM&&!exitSent&&gateSent&&exit&&snake.fx>=exit.rect[0]&&snake.fx<=exit.rect[0]+exit.rect[2]&&snake.fy>=exit.rect[1]&&snake.fy<=exit.rect[1]+exit.rect[3])routeInteraction("exit",exit,{type:"enter",apply:()=>{exitSent=true;emit("MAP_EXIT_ENTERED",{id:exit.id,mapId:TM,targetMap:exit.targetMap});}});
+    if(lastMap===TM&&!exitSent&&gateSent&&exit&&snake.fx>=exit.rect[0]&&snake.fx<=exit.rect[0]+exit.rect[2]&&snake.fy>=exit.rect[1]&&snake.fy<=exit.rect[1]+exit.rect[3])routeInteraction("exit",exit,{type:"enter",apply:()=>{exitSent=true;if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;emit("MAP_EXIT_ENTERED",{id:exit.id,mapId:TM,targetMap:exit.targetMap});}});
+    if(exitTimeoutPending&&currentNode()==="dialogue_3"){
+      exitTimeoutPending=false;
+      updateState(state=>{state.flags.tutorialTimeoutSeen=true;},"tutorial_timeout");
+      director.runtime.follow("dialogue_4");
+    }
     if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
     observedEnemies=enemies.length;
   }
@@ -230,16 +250,31 @@
   function goalText(){const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target;return goal.text||"按剧情继续";}
   function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
 
-  function start(){
+  function createDirector(state,slot){
+    return {slot,spawned:false,keti:null,checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,freeExplore,memoryBlur,nameInput,storyEnd}})};
+  }
+
+  function start(slot){
     stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";
     const state=new StateApi.StoryStateStore();state.reset("new_story");
-    director={spawned:false,keti:null,checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,freeExplore,memoryBlur,nameInput,storyEnd}})};
+    director=createDirector(state,Number(slot)||1);
     director.runtime.start(Story.start);
+    return {ok:true,slot:director.slot};
   }
-  function retry(){if(!director||!director.checkpoint){start();return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
-  function stop(){if(director)director.runtime.stop();director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
+  function resume(slot){
+    if(!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
+    const loaded=saveStore.load(slot);if(!loaded.ok)return loaded;if(loaded.empty)return start(slot);
+    stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";
+    const state=new StateApi.StoryStateStore(loaded.data),checkpoint=loaded.data.checkpoint;
+    director=createDirector(state,Number(slot)||1);
+    const nodeId=checkpoint&&checkpoint.nodeId||(loaded.data.currentMap===WM?"wilderness_start":Story.start);
+    director.runtime.start(nodeId);
+    return {ok:true,slot:director.slot,resumed:true,legacy:!!loaded.legacy};
+  }
+  function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
+  function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
 
-  root.IMS_STORY_API={start,retry,stop,tick:update,goalText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
+  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
   root.storyControllerInteraction=routeInteraction;
   root.storyControllerOwns=owns;
   root.storyControllerInteract=target=>routeInteraction("actor",target);

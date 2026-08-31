@@ -7,7 +7,7 @@
   function enabled(){return S.enabled;}
   function active(){return !!(S.enabled&&S.p&&S.p.alive);}
   function reset(){
-    S.enabled=InputMap.getPlayerCount()===2&&playMode!=="tutorial"&&playMode!=="intro";
+    S.enabled=InputMap.getPlayerCount()===2&&playMode!=="tutorial"&&playMode!=="intro"&&playMode!=="story";
     S.downReason="";
     if(!S.enabled){S.p=null;return;}
     const sy=Math.floor(CFG.rows/2)+4,saved=playMode==="campaign"?(S.carry||carry):null;

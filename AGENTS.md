@@ -12,7 +12,8 @@
 
 - 运行：直接打开 `prototype/index.html`
 - 提交前必须跑：`node tools/smoke.js prototype/index.html` → 必须全绿
-- 修改剧情运行时或剧情数据后还必须跑：`node tools/story-runtime-tests.js`
+- 修改剧情运行时或剧情数据后还必须跑：`node tools/story-runtime-tests.js`、`node tools/story-save-tests.js`
+- 修改 Arcweave 原稿或导入器后还必须跑：`node tools/arcweave-tests.js`
 - 改动玩法后：真人试玩验证手感
 
 ## 文件领地（严格分工，防冲突）
@@ -27,6 +28,8 @@
 | `prototype/intro.js` | 开场演出轨道 | 只定义 window.INTRO_SCENE 数据，播放器在引擎内 |
 | `prototype/story-data.js` | 剧情内容轨道 | 唯一运行剧情源；对白、选择、节点跳转写在这里 |
 | `prototype/story-controller.js` | 剧情适配层 | 只连接剧情运行时与游戏引擎，不在这里新增正文台词 |
+| `prototype/story-save.js` | 剧情存档层 | 三槽、迁移、损坏保护；不得依赖游戏画面对象 |
+| `story/source/` / `story/generated/` | Arcweave 导入轨道 | 前者保留原始导出，后者是可审查中间数据，不直接覆盖运行时 |
 | `STORY.md` | 剧情轨道 | 剧情制作、分页和异常操作约定；运行数据以 `prototype/story-data.js` 为准 |
 | `CARD_REVIEW.md` | 卡池评审 | 给制作人看的卡牌清单，可自由更新 |
 | `GDD.md` | 设计宪法 | 所有拍板当天落在这里；数值以 §8 速查表为准 |

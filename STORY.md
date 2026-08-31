@@ -2,9 +2,17 @@
 
 ## 当前唯一运行数据
 
-游戏实际读取 `prototype/story-data.js`。`prototype/prologue.yarn` 目前仅作为 Arcweave 导出参考，不参与运行，也不能反向覆盖运行数据。
+游戏实际读取 `prototype/story-data.js`。Arcweave 原稿保存在 `story/source/project_settings.json`，规范化中间数据和待确认报告位于 `story/generated/`；它们不会未经确认直接覆盖运行数据。
 
-拿到新的 Arcweave 原始导出后，应保留原始文件，并通过转换和校验脚本生成运行数据；不要再手工维护多份对白。
+拿到新的 Arcweave 原始导出后，应保留原始文件，并运行 `node tools/import-arcweave.js story/source/project_settings.json` 和 `node tools/arcweave-tests.js`。转换器保留 UUID、连接和段落边界；不要再手工维护多份对白。
+
+## 当前游玩与存档规则
+
+- 剧情模式当前固定为单人；全局的双人设置会保留，返回沙盒或 Boss 挑战后仍然生效。
+- 剧情提供 3 个独立存档位，在进入每张地图时自动保存检查点。
+- “继续游戏”从最近地图入口重建确定性场景，不尝试恢复半截战斗的瞬时对象。
+- 旧的单槽 `imsnake.story.main` 会作为存档 1 读取，继续后写入新版三槽格式。
+- 损坏存档不会阻止进入菜单，可以在对应槽位明确选择覆盖新开。
 
 ## 对话分页规则
 

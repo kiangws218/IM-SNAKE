@@ -1,0 +1,1285 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "format": "arcweave-project-settings",
+    "name": "Untitled project",
+    "startingElement": "3ab85262-d563-46b7-9d8d-2f0d419f7f23"
+  },
+  "start": "3ab85262-d563-46b7-9d8d-2f0d419f7f23",
+  "nodes": [
+    {
+      "id": "034cfd9e-d986-4c27-925d-c5a18487b9c6",
+      "uuid": "034cfd9e-d986-4c27-925d-c5a18487b9c6",
+      "title": "对话框1",
+      "pages": [
+        "玩家：我究竟像这样吃了多久...",
+        "感觉...有点恶心...",
+        "要吐了！"
+      ],
+      "sourceParagraphCount": 4,
+      "ignoredEmptyParagraphs": 1,
+      "outputs": [
+        {
+          "id": "8fd5a0be-dd4a-48f8-9cd1-9c2f288477da",
+          "targetId": "261c75d0-4046-4f2f-b054-2bf777774b9b",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "034cfd9e-d986-4c27-925d-c5a18487b9c6"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "261c75d0-4046-4f2f-b054-2bf777774b9b",
+      "uuid": "261c75d0-4046-4f2f-b054-2bf777774b9b",
+      "title": "教学2",
+      "pages": [
+        "屏幕上方显示：按J或空格吐出豆子",
+        "(根据键位显示)"
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "b3b1e3e8-e618-47da-aaaf-ab9fe092008c",
+          "targetId": "ef72a48c-a1db-4384-8e45-92ecc3196ee2",
+          "label": "玩家吐出三颗豆子",
+          "labelPages": [
+            "玩家吐出三颗豆子"
+          ],
+          "sourceId": "261c75d0-4046-4f2f-b054-2bf777774b9b"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "ef72a48c-a1db-4384-8e45-92ecc3196ee2",
+      "uuid": "ef72a48c-a1db-4384-8e45-92ecc3196ee2",
+      "title": "对话框2",
+      "pages": [
+        "玩家：吐出来舒服多了",
+        "但是我的身体也变短了",
+        "上面有一堵脆弱的墙？",
+        "似乎可以靠这个破坏它。"
+      ],
+      "sourceParagraphCount": 4,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "7f224f96-35b2-4087-bda0-1ab2f5439899",
+          "targetId": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1",
+          "label": "玩家再次吃豆子，\n并向墙吐出，\n墙破裂",
+          "labelPages": [
+            "玩家再次吃豆子，",
+            "并向墙吐出，",
+            "墙破裂"
+          ],
+          "sourceId": "ef72a48c-a1db-4384-8e45-92ecc3196ee2"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1",
+      "uuid": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1",
+      "title": "对话框3",
+      "pages": [
+        "玩家：外面会是什么样子呢？",
+        "从来没有出去过，去看看好了"
+      ],
+      "sourceParagraphCount": 3,
+      "ignoredEmptyParagraphs": 1,
+      "outputs": [
+        {
+          "id": "e6fc4cc1-e981-4a60-a2ea-a0b3fa52c4c0",
+          "targetId": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5",
+          "label": "30s内玩家还没出去",
+          "labelPages": [
+            "30s内玩家还没出去"
+          ],
+          "sourceId": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1"
+        },
+        {
+          "id": "71e80004-bb28-4b9c-85b8-44d35fdb0e75",
+          "targetId": "a1638596-78f7-4be3-970c-93950b66ff42",
+          "label": "玩家走出门",
+          "labelPages": [
+            "玩家走出门"
+          ],
+          "sourceId": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1"
+        }
+      ],
+      "outletCount": 2,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "a7b8bb72-cfce-4368-9c0f-8da062be4c6e",
+      "uuid": "a7b8bb72-cfce-4368-9c0f-8da062be4c6e",
+      "title": "教学1",
+      "pages": [
+        "进入地图1：新手教学。",
+        "单向向右地图，豆子在地图上横向排列（3颗）",
+        "屏幕上方显示：WASD移动(根据键位显示)",
+        "吃完所有豆子！"
+      ],
+      "sourceParagraphCount": 4,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "61ef41ae-8517-4c5d-84d0-28caa933d30a",
+          "targetId": "034cfd9e-d986-4c27-925d-c5a18487b9c6",
+          "label": "玩家吃完三颗豆子",
+          "labelPages": [
+            "玩家吃完三颗豆子"
+          ],
+          "sourceId": "a7b8bb72-cfce-4368-9c0f-8da062be4c6e"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "6bc75e2d-f9ef-442d-9d90-9347dc088d81",
+      "uuid": "6bc75e2d-f9ef-442d-9d90-9347dc088d81",
+      "title": "",
+      "pages": [
+        "持续进行贪吃蛇小游戏",
+        "如果死亡直接从头开始"
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "963d386d-e00a-4584-ae6b-aace879ef186",
+          "targetId": "a1638596-78f7-4be3-970c-93950b66ff42",
+          "label": "玩家走出门",
+          "labelPages": [
+            "玩家走出门"
+          ],
+          "sourceId": "6bc75e2d-f9ef-442d-9d90-9347dc088d81"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5",
+      "uuid": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5",
+      "title": "对话框4",
+      "pages": [
+        "玩家：也许，我还是适合呆在里面",
+        "就这样一直吃下去...."
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "b5b62f07-390a-4d49-925b-ffb2614bab9b",
+          "targetId": "6bc75e2d-f9ef-442d-9d90-9347dc088d81",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5"
+        },
+        {
+          "id": "8d360e10-6bbf-4fd7-ac3a-82c66c34d374",
+          "targetId": "a1638596-78f7-4be3-970c-93950b66ff42",
+          "label": "玩家走出门",
+          "labelPages": [
+            "玩家走出门"
+          ],
+          "sourceId": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5"
+        }
+      ],
+      "outletCount": 2,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "a1638596-78f7-4be3-970c-93950b66ff42",
+      "uuid": "a1638596-78f7-4be3-970c-93950b66ff42",
+      "title": "",
+      "pages": [
+        "进入地图2：荒野"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "5f899605-943a-44bf-8745-3a9a6a679c9c",
+          "targetId": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5",
+          "label": "与可蒂对话",
+          "labelPages": [
+            "与可蒂对话"
+          ],
+          "sourceId": "a1638596-78f7-4be3-970c-93950b66ff42"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "3ab85262-d563-46b7-9d8d-2f0d419f7f23",
+      "uuid": "3ab85262-d563-46b7-9d8d-2f0d419f7f23",
+      "title": "序章",
+      "pages": [
+        "序章"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "a1bcca1b-de2d-4352-ac78-b20a64575af1",
+          "targetId": "a7b8bb72-cfce-4368-9c0f-8da062be4c6e",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "3ab85262-d563-46b7-9d8d-2f0d419f7f23"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5",
+      "uuid": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5",
+      "title": "对话框",
+      "pages": [
+        "可蒂：你要吃掉我吗"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "56713d57-6a4f-4def-88a6-30bbbb3df02d",
+          "targetId": "85fa8087-be4c-4933-beff-02d2a65a3b22",
+          "label": "A“是的。”",
+          "labelPages": [
+            "A“是的。”"
+          ],
+          "sourceId": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5"
+        },
+        {
+          "id": "bed71a7c-9413-45e0-9bd0-a721ee3ab0ae",
+          "targetId": "8603f54c-2768-44d5-822f-31aca338630e",
+          "label": "B吃掉",
+          "labelPages": [
+            "B吃掉"
+          ],
+          "sourceId": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5"
+        }
+      ],
+      "outletCount": 2,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "85fa8087-be4c-4933-beff-02d2a65a3b22",
+      "uuid": "85fa8087-be4c-4933-beff-02d2a65a3b22",
+      "title": "",
+      "pages": [
+        "可蒂：哇————（大哭起来）"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "2abd61ea-4653-4991-91d5-88dd51487532",
+          "targetId": "c85f634e-20fb-4604-b1c5-142c7c85adae",
+          "label": "A“开玩笑的，我不会吃你的”",
+          "labelPages": [
+            "A“开玩笑的，我不会吃你的”"
+          ],
+          "sourceId": "85fa8087-be4c-4933-beff-02d2a65a3b22"
+        },
+        {
+          "id": "5bc5c751-55e1-4223-b1db-1bec4ddaf556",
+          "targetId": "6df11ec7-d84a-456c-921a-03353d1644ed",
+          "label": "B吃掉",
+          "labelPages": [
+            "B吃掉"
+          ],
+          "sourceId": "85fa8087-be4c-4933-beff-02d2a65a3b22"
+        },
+        {
+          "id": "56ac3d15-fafc-426a-b3a9-8ae9754c3566",
+          "targetId": "bf633ffb-a583-4ac8-bb64-dadf67fcff3c",
+          "label": "C离开",
+          "labelPages": [
+            "C离开"
+          ],
+          "sourceId": "85fa8087-be4c-4933-beff-02d2a65a3b22"
+        }
+      ],
+      "outletCount": 3,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "8603f54c-2768-44d5-822f-31aca338630e",
+      "uuid": "8603f54c-2768-44d5-822f-31aca338630e",
+      "title": "",
+      "pages": [
+        "可蒂被玩家吃掉，玩家身体长度+1"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "f22205cd-9552-42e0-8ade-10836ad3a41c",
+          "targetId": "94cc7a9e-81c4-4caf-9cf9-3d27785c45d7",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "8603f54c-2768-44d5-822f-31aca338630e"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+      "uuid": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+      "title": "",
+      "pages": [
+        "玩家继续自由探索"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "69420e73-a766-44f3-a617-9cc8365868ef",
+          "targetId": "98f1bcd9-f50c-409b-8ffe-51441d34f136",
+          "label": "30s后，强制吐出所有豆子（以及可蒂的尸体，如果有的话）",
+          "labelPages": [
+            "30s后，强制吐出所有豆子（以及可蒂的尸体，如果有的话）"
+          ],
+          "sourceId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "c85f634e-20fb-4604-b1c5-142c7c85adae",
+      "uuid": "c85f634e-20fb-4604-b1c5-142c7c85adae",
+      "title": "",
+      "pages": [
+        "可蒂：真的吗？这跟他们说的不一样...（啜泣）",
+        "啊！有怪物来了！（捂住眼睛）"
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "d1b90ed7-f7e6-49c5-84e4-a48cc0feb868",
+          "targetId": "360688cc-7492-422a-bf24-65ee409e7808",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "c85f634e-20fb-4604-b1c5-142c7c85adae"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "6df11ec7-d84a-456c-921a-03353d1644ed",
+      "uuid": "6df11ec7-d84a-456c-921a-03353d1644ed",
+      "title": "",
+      "pages": [
+        "可蒂被玩家吃掉，玩家身体长度+1"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "aeec43c1-9b2e-4893-9a0b-929bb23e0193",
+          "targetId": "360688cc-7492-422a-bf24-65ee409e7808",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "6df11ec7-d84a-456c-921a-03353d1644ed"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "bf633ffb-a583-4ac8-bb64-dadf67fcff3c",
+      "uuid": "bf633ffb-a583-4ac8-bb64-dadf67fcff3c",
+      "title": "",
+      "pages": [],
+      "sourceParagraphCount": 0,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "d7d58f81-0f01-4b0e-b059-2fc8129487b3",
+          "targetId": "360688cc-7492-422a-bf24-65ee409e7808",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "bf633ffb-a583-4ac8-bb64-dadf67fcff3c"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "360688cc-7492-422a-bf24-65ee409e7808",
+      "uuid": "360688cc-7492-422a-bf24-65ee409e7808",
+      "title": "",
+      "pages": [
+        "可蒂的哭声吸引来了2只史莱姆，史莱姆缓慢向可蒂移动。"
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 1,
+      "outputs": [
+        {
+          "id": "3ecfbff5-de96-41f9-a61b-83c0780861e3",
+          "targetId": "6f11e12a-a337-436d-b332-f27a7ea91755",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "360688cc-7492-422a-bf24-65ee409e7808"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "6f11e12a-a337-436d-b332-f27a7ea91755",
+      "uuid": "6f11e12a-a337-436d-b332-f27a7ea91755",
+      "title": "教学3",
+      "pages": [
+        "屏幕上方显示：吐出豆子可以对怪物造成伤害 。"
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 1,
+      "outputs": [
+        {
+          "id": "0d79d14e-bfb3-4918-adbd-1f3c779813f2",
+          "targetId": "f646b76c-370d-413e-9fa8-efd1d940fe6e",
+          "label": "击杀史莱姆",
+          "labelPages": [
+            "击杀史莱姆"
+          ],
+          "sourceId": "6f11e12a-a337-436d-b332-f27a7ea91755"
+        },
+        {
+          "id": "0deedf3e-e5f4-444c-beb2-b9dd74078052",
+          "targetId": "f505841f-ee2c-42f3-bd6b-8ae7555ead18",
+          "label": "可蒂死亡",
+          "labelPages": [
+            "可蒂死亡"
+          ],
+          "sourceId": "6f11e12a-a337-436d-b332-f27a7ea91755"
+        },
+        {
+          "id": "aa749234-7747-4294-9c8c-82e035940c55",
+          "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+          "label": "玩家直接离开",
+          "labelPages": [
+            "玩家直接离开"
+          ],
+          "sourceId": "6f11e12a-a337-436d-b332-f27a7ea91755"
+        }
+      ],
+      "outletCount": 3,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "f646b76c-370d-413e-9fa8-efd1d940fe6e",
+      "uuid": "f646b76c-370d-413e-9fa8-efd1d940fe6e",
+      "title": "",
+      "pages": [
+        "可蒂：是你救了我吗",
+        "可我...不能离开这里",
+        "请继续往前走吧，大人",
+        "最后，可以请你告诉我你的名字吗？"
+      ],
+      "sourceParagraphCount": 4,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "16ae23e2-b95f-44e4-98cd-81053000e24c",
+          "targetId": "e61c47b5-a4f5-4121-a8a5-642fc661cdf9",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "f646b76c-370d-413e-9fa8-efd1d940fe6e"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "f505841f-ee2c-42f3-bd6b-8ae7555ead18",
+      "uuid": "f505841f-ee2c-42f3-bd6b-8ae7555ead18",
+      "title": "",
+      "pages": [
+        "可蒂倒在地上"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "ae1e226a-f1dc-4814-85b3-2f98db0a4cb8",
+          "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+          "label": "玩家直接离开",
+          "labelPages": [
+            "玩家直接离开"
+          ],
+          "sourceId": "f505841f-ee2c-42f3-bd6b-8ae7555ead18"
+        },
+        {
+          "id": "3b3ed7b0-f398-403d-a299-d0b042a3051f",
+          "targetId": "5ad0b97c-edd8-4011-84ae-84f6837ee48e",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "f505841f-ee2c-42f3-bd6b-8ae7555ead18"
+        }
+      ],
+      "outletCount": 2,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "3da1f651-fc1f-44d9-90d1-f3b9673e12ea",
+      "uuid": "3da1f651-fc1f-44d9-90d1-f3b9673e12ea",
+      "title": "教学3",
+      "pages": [
+        "屏幕上方显示：吐出豆子可以对怪物造成伤害 。"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "6de401ed-8a3f-435f-a9d8-4aa9c87aa8a5",
+          "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+          "label": "击杀史莱姆",
+          "labelPages": [
+            "击杀史莱姆"
+          ],
+          "sourceId": "3da1f651-fc1f-44d9-90d1-f3b9673e12ea"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "e61c47b5-a4f5-4121-a8a5-642fc661cdf9",
+      "uuid": "e61c47b5-a4f5-4121-a8a5-642fc661cdf9",
+      "title": "",
+      "pages": [
+        "玩家输入名字：______蛇"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [],
+      "outletCount": 0,
+      "outletKind": "terminal",
+      "components": []
+    },
+    {
+      "id": "5ad0b97c-edd8-4011-84ae-84f6837ee48e",
+      "uuid": "5ad0b97c-edd8-4011-84ae-84f6837ee48e",
+      "title": "",
+      "pages": [
+        "可蒂被玩家吃掉，玩家身体长度+1"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "c0bf529d-3625-4db5-8449-dad5765b9b7d",
+          "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "5ad0b97c-edd8-4011-84ae-84f6837ee48e"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "98f1bcd9-f50c-409b-8ffe-51441d34f136",
+      "uuid": "98f1bcd9-f50c-409b-8ffe-51441d34f136",
+      "title": "对话框",
+      "pages": [
+        "一阵眩晕和恶心袭来，你过去的记忆似乎越来越模糊。",
+        "脑子里剩下的，只有“你”的名字"
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "fadd79b1-6ada-4d43-a969-81d51a3e3579",
+          "targetId": "e61c47b5-a4f5-4121-a8a5-642fc661cdf9",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "98f1bcd9-f50c-409b-8ffe-51441d34f136"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "94cc7a9e-81c4-4caf-9cf9-3d27785c45d7",
+      "uuid": "94cc7a9e-81c4-4caf-9cf9-3d27785c45d7",
+      "title": "",
+      "pages": [
+        "路上遇到两只史莱姆"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "c3822100-1894-4ca1-afc8-5cb712ff9958",
+          "targetId": "3da1f651-fc1f-44d9-90d1-f3b9673e12ea",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "94cc7a9e-81c4-4caf-9cf9-3d27785c45d7"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "18da6fe8-a4e2-40d4-878b-632c2a0e1f98",
+      "uuid": "18da6fe8-a4e2-40d4-878b-632c2a0e1f98",
+      "title": "",
+      "pages": [
+        "女人被玩家吃掉，玩家身体长度+1"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [],
+      "outletCount": 0,
+      "outletKind": "terminal",
+      "components": []
+    },
+    {
+      "id": "3bf88674-ad23-439d-83ef-1f704ffccc5e",
+      "uuid": "3bf88674-ad23-439d-83ef-1f704ffccc5e",
+      "title": "第一章",
+      "pages": [
+        "进度地图3：平原"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "777b313c-2fc8-4126-947f-55e12d4c578e",
+          "targetId": "e9c7b701-5839-4608-845a-94ff126edc01",
+          "label": "",
+          "labelPages": [],
+          "sourceId": "3bf88674-ad23-439d-83ef-1f704ffccc5e"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "e9c7b701-5839-4608-845a-94ff126edc01",
+      "uuid": "e9c7b701-5839-4608-845a-94ff126edc01",
+      "title": "关卡1",
+      "pages": [
+        "战斗+解密",
+        "吃蓝色水晶，吐到蓝色机关门上，门打开",
+        "遇到一个衣衫褴褛的女人"
+      ],
+      "sourceParagraphCount": 3,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "bd8b5205-9729-4265-8334-396241630a1e",
+          "targetId": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+          "label": "与女人对话",
+          "labelPages": [
+            "与女人对话"
+          ],
+          "sourceId": "e9c7b701-5839-4608-845a-94ff126edc01"
+        }
+      ],
+      "outletCount": 1,
+      "outletKind": "linear",
+      "components": []
+    },
+    {
+      "id": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+      "uuid": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+      "title": "",
+      "pages": [
+        "女人：天啊！你吃掉了我的女儿吗？"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "eda9e081-c351-4a05-8e16-2dc33a9d2dea",
+          "targetId": "f03dcb36-1cad-4e96-8838-f58cf881565e",
+          "label": "是的",
+          "labelPages": [
+            "是的"
+          ],
+          "sourceId": "f2b48594-308c-4bbc-8630-9b4407dc0e37"
+        },
+        {
+          "id": "c9612ce7-b40e-455f-a4ce-ef71c29b76a9",
+          "targetId": "a2436fff-6ba8-48e0-ac94-ef29736ba7b2",
+          "label": "没有",
+          "labelPages": [
+            "没有"
+          ],
+          "sourceId": "f2b48594-308c-4bbc-8630-9b4407dc0e37"
+        },
+        {
+          "id": "cb547f18-dfb6-4ecd-b3c2-21274f3b949e",
+          "targetId": "18da6fe8-a4e2-40d4-878b-632c2a0e1f98",
+          "label": "吃掉",
+          "labelPages": [
+            "吃掉"
+          ],
+          "sourceId": "f2b48594-308c-4bbc-8630-9b4407dc0e37"
+        }
+      ],
+      "outletCount": 3,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "f03dcb36-1cad-4e96-8838-f58cf881565e",
+      "uuid": "f03dcb36-1cad-4e96-8838-f58cf881565e",
+      "title": "",
+      "pages": [
+        "女人：请你也把我吃掉吧，让我们母女能够团聚。"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [
+        {
+          "id": "67383b81-3375-4739-a09a-f893b5cbeb9f",
+          "targetId": "18da6fe8-a4e2-40d4-878b-632c2a0e1f98",
+          "label": "吃掉",
+          "labelPages": [
+            "吃掉"
+          ],
+          "sourceId": "f03dcb36-1cad-4e96-8838-f58cf881565e"
+        },
+        {
+          "id": "f1493f89-f934-4b7a-8409-72e60c82fa1a",
+          "targetId": "122af3fb-62dc-4be8-9749-4150ed585f16",
+          "label": "我不会吃了你的",
+          "labelPages": [
+            "我不会吃了你的"
+          ],
+          "sourceId": "f03dcb36-1cad-4e96-8838-f58cf881565e"
+        }
+      ],
+      "outletCount": 2,
+      "outletKind": "branch",
+      "components": []
+    },
+    {
+      "id": "a2436fff-6ba8-48e0-ac94-ef29736ba7b2",
+      "uuid": "a2436fff-6ba8-48e0-ac94-ef29736ba7b2",
+      "title": "",
+      "pages": [
+        "女人：神啊！我的女儿应该在荒野，可以帮我把她带回来吗？",
+        "哪怕是她的尸骨...",
+        "为此我愿意付出任何代价！"
+      ],
+      "sourceParagraphCount": 3,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [],
+      "outletCount": 0,
+      "outletKind": "terminal",
+      "components": []
+    },
+    {
+      "id": "e83578b5-bdee-47f3-8bb0-5d27bd1a0501",
+      "uuid": "e83578b5-bdee-47f3-8bb0-5d27bd1a0501",
+      "title": "",
+      "pages": [
+        "备注：可蒂被豆子打到会浮上一行小字：“好痛！请不要打我”"
+      ],
+      "sourceParagraphCount": 1,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [],
+      "outletCount": 0,
+      "outletKind": "terminal",
+      "components": []
+    },
+    {
+      "id": "552d28cc-3f39-41e4-a5a6-79f3e81063b5",
+      "uuid": "552d28cc-3f39-41e4-a5a6-79f3e81063b5",
+      "title": "",
+      "pages": [
+        "其他点子：",
+        "食欲：随剧情上涨，吃人之后下降。也可以通过瑟瑟（甜椒）压制。"
+      ],
+      "sourceParagraphCount": 3,
+      "ignoredEmptyParagraphs": 1,
+      "outputs": [],
+      "outletCount": 0,
+      "outletKind": "terminal",
+      "components": []
+    },
+    {
+      "id": "122af3fb-62dc-4be8-9749-4150ed585f16",
+      "uuid": "122af3fb-62dc-4be8-9749-4150ed585f16",
+      "title": "",
+      "pages": [
+        "女人：我想要回女儿的尸骨...",
+        "为此我愿意付出任何代价！"
+      ],
+      "sourceParagraphCount": 2,
+      "ignoredEmptyParagraphs": 0,
+      "outputs": [],
+      "outletCount": 0,
+      "outletKind": "terminal",
+      "components": []
+    }
+  ],
+  "connections": [
+    {
+      "id": "8fd5a0be-dd4a-48f8-9cd1-9c2f288477da",
+      "uuid": "8fd5a0be-dd4a-48f8-9cd1-9c2f288477da",
+      "sourceId": "034cfd9e-d986-4c27-925d-c5a18487b9c6",
+      "targetId": "261c75d0-4046-4f2f-b054-2bf777774b9b",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "b3b1e3e8-e618-47da-aaaf-ab9fe092008c",
+      "uuid": "b3b1e3e8-e618-47da-aaaf-ab9fe092008c",
+      "sourceId": "261c75d0-4046-4f2f-b054-2bf777774b9b",
+      "targetId": "ef72a48c-a1db-4384-8e45-92ecc3196ee2",
+      "label": "玩家吐出三颗豆子",
+      "labelPages": [
+        "玩家吐出三颗豆子"
+      ]
+    },
+    {
+      "id": "61ef41ae-8517-4c5d-84d0-28caa933d30a",
+      "uuid": "61ef41ae-8517-4c5d-84d0-28caa933d30a",
+      "sourceId": "a7b8bb72-cfce-4368-9c0f-8da062be4c6e",
+      "targetId": "034cfd9e-d986-4c27-925d-c5a18487b9c6",
+      "label": "玩家吃完三颗豆子",
+      "labelPages": [
+        "玩家吃完三颗豆子"
+      ]
+    },
+    {
+      "id": "7f224f96-35b2-4087-bda0-1ab2f5439899",
+      "uuid": "7f224f96-35b2-4087-bda0-1ab2f5439899",
+      "sourceId": "ef72a48c-a1db-4384-8e45-92ecc3196ee2",
+      "targetId": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1",
+      "label": "玩家再次吃豆子，\n并向墙吐出，\n墙破裂",
+      "labelPages": [
+        "玩家再次吃豆子，",
+        "并向墙吐出，",
+        "墙破裂"
+      ]
+    },
+    {
+      "id": "e6fc4cc1-e981-4a60-a2ea-a0b3fa52c4c0",
+      "uuid": "e6fc4cc1-e981-4a60-a2ea-a0b3fa52c4c0",
+      "sourceId": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1",
+      "targetId": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5",
+      "label": "30s内玩家还没出去",
+      "labelPages": [
+        "30s内玩家还没出去"
+      ]
+    },
+    {
+      "id": "b5b62f07-390a-4d49-925b-ffb2614bab9b",
+      "uuid": "b5b62f07-390a-4d49-925b-ffb2614bab9b",
+      "sourceId": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5",
+      "targetId": "6bc75e2d-f9ef-442d-9d90-9347dc088d81",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "8d360e10-6bbf-4fd7-ac3a-82c66c34d374",
+      "uuid": "8d360e10-6bbf-4fd7-ac3a-82c66c34d374",
+      "sourceId": "3a8ecaa6-7ec4-4f37-90db-bd164babe2c5",
+      "targetId": "a1638596-78f7-4be3-970c-93950b66ff42",
+      "label": "玩家走出门",
+      "labelPages": [
+        "玩家走出门"
+      ]
+    },
+    {
+      "id": "71e80004-bb28-4b9c-85b8-44d35fdb0e75",
+      "uuid": "71e80004-bb28-4b9c-85b8-44d35fdb0e75",
+      "sourceId": "7feeae65-5e39-4cb2-8da3-8c7877cd8ab1",
+      "targetId": "a1638596-78f7-4be3-970c-93950b66ff42",
+      "label": "玩家走出门",
+      "labelPages": [
+        "玩家走出门"
+      ]
+    },
+    {
+      "id": "963d386d-e00a-4584-ae6b-aace879ef186",
+      "uuid": "963d386d-e00a-4584-ae6b-aace879ef186",
+      "sourceId": "6bc75e2d-f9ef-442d-9d90-9347dc088d81",
+      "targetId": "a1638596-78f7-4be3-970c-93950b66ff42",
+      "label": "玩家走出门",
+      "labelPages": [
+        "玩家走出门"
+      ]
+    },
+    {
+      "id": "a1bcca1b-de2d-4352-ac78-b20a64575af1",
+      "uuid": "a1bcca1b-de2d-4352-ac78-b20a64575af1",
+      "sourceId": "3ab85262-d563-46b7-9d8d-2f0d419f7f23",
+      "targetId": "a7b8bb72-cfce-4368-9c0f-8da062be4c6e",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "5f899605-943a-44bf-8745-3a9a6a679c9c",
+      "uuid": "5f899605-943a-44bf-8745-3a9a6a679c9c",
+      "sourceId": "a1638596-78f7-4be3-970c-93950b66ff42",
+      "targetId": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5",
+      "label": "与可蒂对话",
+      "labelPages": [
+        "与可蒂对话"
+      ]
+    },
+    {
+      "id": "56713d57-6a4f-4def-88a6-30bbbb3df02d",
+      "uuid": "56713d57-6a4f-4def-88a6-30bbbb3df02d",
+      "sourceId": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5",
+      "targetId": "85fa8087-be4c-4933-beff-02d2a65a3b22",
+      "label": "A“是的。”",
+      "labelPages": [
+        "A“是的。”"
+      ]
+    },
+    {
+      "id": "bed71a7c-9413-45e0-9bd0-a721ee3ab0ae",
+      "uuid": "bed71a7c-9413-45e0-9bd0-a721ee3ab0ae",
+      "sourceId": "49ae05e1-c9ec-4bd6-bd0d-b1c69e3893c5",
+      "targetId": "8603f54c-2768-44d5-822f-31aca338630e",
+      "label": "B吃掉",
+      "labelPages": [
+        "B吃掉"
+      ]
+    },
+    {
+      "id": "aa749234-7747-4294-9c8c-82e035940c55",
+      "uuid": "aa749234-7747-4294-9c8c-82e035940c55",
+      "sourceId": "6f11e12a-a337-436d-b332-f27a7ea91755",
+      "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+      "label": "玩家直接离开",
+      "labelPages": [
+        "玩家直接离开"
+      ]
+    },
+    {
+      "id": "ae1e226a-f1dc-4814-85b3-2f98db0a4cb8",
+      "uuid": "ae1e226a-f1dc-4814-85b3-2f98db0a4cb8",
+      "sourceId": "f505841f-ee2c-42f3-bd6b-8ae7555ead18",
+      "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+      "label": "玩家直接离开",
+      "labelPages": [
+        "玩家直接离开"
+      ]
+    },
+    {
+      "id": "2abd61ea-4653-4991-91d5-88dd51487532",
+      "uuid": "2abd61ea-4653-4991-91d5-88dd51487532",
+      "sourceId": "85fa8087-be4c-4933-beff-02d2a65a3b22",
+      "targetId": "c85f634e-20fb-4604-b1c5-142c7c85adae",
+      "label": "A“开玩笑的，我不会吃你的”",
+      "labelPages": [
+        "A“开玩笑的，我不会吃你的”"
+      ]
+    },
+    {
+      "id": "5bc5c751-55e1-4223-b1db-1bec4ddaf556",
+      "uuid": "5bc5c751-55e1-4223-b1db-1bec4ddaf556",
+      "sourceId": "85fa8087-be4c-4933-beff-02d2a65a3b22",
+      "targetId": "6df11ec7-d84a-456c-921a-03353d1644ed",
+      "label": "B吃掉",
+      "labelPages": [
+        "B吃掉"
+      ]
+    },
+    {
+      "id": "56ac3d15-fafc-426a-b3a9-8ae9754c3566",
+      "uuid": "56ac3d15-fafc-426a-b3a9-8ae9754c3566",
+      "sourceId": "85fa8087-be4c-4933-beff-02d2a65a3b22",
+      "targetId": "bf633ffb-a583-4ac8-bb64-dadf67fcff3c",
+      "label": "C离开",
+      "labelPages": [
+        "C离开"
+      ]
+    },
+    {
+      "id": "d1b90ed7-f7e6-49c5-84e4-a48cc0feb868",
+      "uuid": "d1b90ed7-f7e6-49c5-84e4-a48cc0feb868",
+      "sourceId": "c85f634e-20fb-4604-b1c5-142c7c85adae",
+      "targetId": "360688cc-7492-422a-bf24-65ee409e7808",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "aeec43c1-9b2e-4893-9a0b-929bb23e0193",
+      "uuid": "aeec43c1-9b2e-4893-9a0b-929bb23e0193",
+      "sourceId": "6df11ec7-d84a-456c-921a-03353d1644ed",
+      "targetId": "360688cc-7492-422a-bf24-65ee409e7808",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "d7d58f81-0f01-4b0e-b059-2fc8129487b3",
+      "uuid": "d7d58f81-0f01-4b0e-b059-2fc8129487b3",
+      "sourceId": "bf633ffb-a583-4ac8-bb64-dadf67fcff3c",
+      "targetId": "360688cc-7492-422a-bf24-65ee409e7808",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "3ecfbff5-de96-41f9-a61b-83c0780861e3",
+      "uuid": "3ecfbff5-de96-41f9-a61b-83c0780861e3",
+      "sourceId": "360688cc-7492-422a-bf24-65ee409e7808",
+      "targetId": "6f11e12a-a337-436d-b332-f27a7ea91755",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "0d79d14e-bfb3-4918-adbd-1f3c779813f2",
+      "uuid": "0d79d14e-bfb3-4918-adbd-1f3c779813f2",
+      "sourceId": "6f11e12a-a337-436d-b332-f27a7ea91755",
+      "targetId": "f646b76c-370d-413e-9fa8-efd1d940fe6e",
+      "label": "击杀史莱姆",
+      "labelPages": [
+        "击杀史莱姆"
+      ]
+    },
+    {
+      "id": "0deedf3e-e5f4-444c-beb2-b9dd74078052",
+      "uuid": "0deedf3e-e5f4-444c-beb2-b9dd74078052",
+      "sourceId": "6f11e12a-a337-436d-b332-f27a7ea91755",
+      "targetId": "f505841f-ee2c-42f3-bd6b-8ae7555ead18",
+      "label": "可蒂死亡",
+      "labelPages": [
+        "可蒂死亡"
+      ]
+    },
+    {
+      "id": "f22205cd-9552-42e0-8ade-10836ad3a41c",
+      "uuid": "f22205cd-9552-42e0-8ade-10836ad3a41c",
+      "sourceId": "8603f54c-2768-44d5-822f-31aca338630e",
+      "targetId": "94cc7a9e-81c4-4caf-9cf9-3d27785c45d7",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "6de401ed-8a3f-435f-a9d8-4aa9c87aa8a5",
+      "uuid": "6de401ed-8a3f-435f-a9d8-4aa9c87aa8a5",
+      "sourceId": "3da1f651-fc1f-44d9-90d1-f3b9673e12ea",
+      "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+      "label": "击杀史莱姆",
+      "labelPages": [
+        "击杀史莱姆"
+      ]
+    },
+    {
+      "id": "16ae23e2-b95f-44e4-98cd-81053000e24c",
+      "uuid": "16ae23e2-b95f-44e4-98cd-81053000e24c",
+      "sourceId": "f646b76c-370d-413e-9fa8-efd1d940fe6e",
+      "targetId": "e61c47b5-a4f5-4121-a8a5-642fc661cdf9",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "3b3ed7b0-f398-403d-a299-d0b042a3051f",
+      "uuid": "3b3ed7b0-f398-403d-a299-d0b042a3051f",
+      "sourceId": "f505841f-ee2c-42f3-bd6b-8ae7555ead18",
+      "targetId": "5ad0b97c-edd8-4011-84ae-84f6837ee48e",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "c0bf529d-3625-4db5-8449-dad5765b9b7d",
+      "uuid": "c0bf529d-3625-4db5-8449-dad5765b9b7d",
+      "sourceId": "5ad0b97c-edd8-4011-84ae-84f6837ee48e",
+      "targetId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "69420e73-a766-44f3-a617-9cc8365868ef",
+      "uuid": "69420e73-a766-44f3-a617-9cc8365868ef",
+      "sourceId": "df6d5c0b-bed7-4a27-852e-7b2188c90c4b",
+      "targetId": "98f1bcd9-f50c-409b-8ffe-51441d34f136",
+      "label": "30s后，强制吐出所有豆子（以及可蒂的尸体，如果有的话）",
+      "labelPages": [
+        "30s后，强制吐出所有豆子（以及可蒂的尸体，如果有的话）"
+      ]
+    },
+    {
+      "id": "fadd79b1-6ada-4d43-a969-81d51a3e3579",
+      "uuid": "fadd79b1-6ada-4d43-a969-81d51a3e3579",
+      "sourceId": "98f1bcd9-f50c-409b-8ffe-51441d34f136",
+      "targetId": "e61c47b5-a4f5-4121-a8a5-642fc661cdf9",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "c3822100-1894-4ca1-afc8-5cb712ff9958",
+      "uuid": "c3822100-1894-4ca1-afc8-5cb712ff9958",
+      "sourceId": "94cc7a9e-81c4-4caf-9cf9-3d27785c45d7",
+      "targetId": "3da1f651-fc1f-44d9-90d1-f3b9673e12ea",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "cb547f18-dfb6-4ecd-b3c2-21274f3b949e",
+      "uuid": "cb547f18-dfb6-4ecd-b3c2-21274f3b949e",
+      "sourceId": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+      "targetId": "18da6fe8-a4e2-40d4-878b-632c2a0e1f98",
+      "label": "吃掉",
+      "labelPages": [
+        "吃掉"
+      ]
+    },
+    {
+      "id": "c9612ce7-b40e-455f-a4ce-ef71c29b76a9",
+      "uuid": "c9612ce7-b40e-455f-a4ce-ef71c29b76a9",
+      "sourceId": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+      "targetId": "a2436fff-6ba8-48e0-ac94-ef29736ba7b2",
+      "label": "没有",
+      "labelPages": [
+        "没有"
+      ]
+    },
+    {
+      "id": "eda9e081-c351-4a05-8e16-2dc33a9d2dea",
+      "uuid": "eda9e081-c351-4a05-8e16-2dc33a9d2dea",
+      "sourceId": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+      "targetId": "f03dcb36-1cad-4e96-8838-f58cf881565e",
+      "label": "是的",
+      "labelPages": [
+        "是的"
+      ]
+    },
+    {
+      "id": "bd8b5205-9729-4265-8334-396241630a1e",
+      "uuid": "bd8b5205-9729-4265-8334-396241630a1e",
+      "sourceId": "e9c7b701-5839-4608-845a-94ff126edc01",
+      "targetId": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+      "label": "与女人对话",
+      "labelPages": [
+        "与女人对话"
+      ]
+    },
+    {
+      "id": "777b313c-2fc8-4126-947f-55e12d4c578e",
+      "uuid": "777b313c-2fc8-4126-947f-55e12d4c578e",
+      "sourceId": "3bf88674-ad23-439d-83ef-1f704ffccc5e",
+      "targetId": "e9c7b701-5839-4608-845a-94ff126edc01",
+      "label": "",
+      "labelPages": []
+    },
+    {
+      "id": "67383b81-3375-4739-a09a-f893b5cbeb9f",
+      "uuid": "67383b81-3375-4739-a09a-f893b5cbeb9f",
+      "sourceId": "f03dcb36-1cad-4e96-8838-f58cf881565e",
+      "targetId": "18da6fe8-a4e2-40d4-878b-632c2a0e1f98",
+      "label": "吃掉",
+      "labelPages": [
+        "吃掉"
+      ]
+    },
+    {
+      "id": "f1493f89-f934-4b7a-8409-72e60c82fa1a",
+      "uuid": "f1493f89-f934-4b7a-8409-72e60c82fa1a",
+      "sourceId": "f03dcb36-1cad-4e96-8838-f58cf881565e",
+      "targetId": "122af3fb-62dc-4be8-9749-4150ed585f16",
+      "label": "我不会吃了你的",
+      "labelPages": [
+        "我不会吃了你的"
+      ]
+    }
+  ],
+  "stats": {
+    "nodeCount": 34,
+    "connectionCount": 39,
+    "reachableCount": 25,
+    "ignoredEmptyParagraphs": 5,
+    "outletCounts": {
+      "zero": 6,
+      "one": 20,
+      "many": 8
+    }
+  },
+  "warnings": [
+    {
+      "code": "unreachable",
+      "elementId": "18da6fe8-a4e2-40d4-878b-632c2a0e1f98",
+      "title": ""
+    },
+    {
+      "code": "unreachable",
+      "elementId": "3bf88674-ad23-439d-83ef-1f704ffccc5e",
+      "title": "第一章"
+    },
+    {
+      "code": "unreachable",
+      "elementId": "e9c7b701-5839-4608-845a-94ff126edc01",
+      "title": "关卡1"
+    },
+    {
+      "code": "unreachable",
+      "elementId": "f2b48594-308c-4bbc-8630-9b4407dc0e37",
+      "title": ""
+    },
+    {
+      "code": "unreachable",
+      "elementId": "f03dcb36-1cad-4e96-8838-f58cf881565e",
+      "title": ""
+    },
+    {
+      "code": "unreachable",
+      "elementId": "a2436fff-6ba8-48e0-ac94-ef29736ba7b2",
+      "title": ""
+    },
+    {
+      "code": "unreachable",
+      "elementId": "e83578b5-bdee-47f3-8bb0-5d27bd1a0501",
+      "title": ""
+    },
+    {
+      "code": "unreachable",
+      "elementId": "552d28cc-3f39-41e4-a5a6-79f3e81063b5",
+      "title": ""
+    },
+    {
+      "code": "unreachable",
+      "elementId": "122af3fb-62dc-4be8-9749-4150ed585f16",
+      "title": ""
+    }
+  ]
+}

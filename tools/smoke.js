@@ -44,8 +44,9 @@ global.document={
   body:mkEl("body"),
   head:mkEl("head"),
 };
-let storedControls=coopMode?JSON.stringify({playerCount:2,bindings:{1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",cut:"KeyK",node:"KeyF"},2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",cut:"Numpad1",node:"Numpad2"}}}):null;
-global.localStorage={getItem(){return storedControls},setItem(k,v){storedControls=v}};
+const storedValues=new Map();
+if(coopMode)storedValues.set("imsnake_controls_v1",JSON.stringify({playerCount:2,bindings:{1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",cut:"KeyK",node:"KeyF"},2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",cut:"Numpad1",node:"Numpad2"}}}));
+global.localStorage={getItem(k){return storedValues.has(k)?storedValues.get(k):null},setItem(k,v){storedValues.set(k,String(v))},removeItem(k){storedValues.delete(k)}};
 const listeners={};
 global.addEventListener=(ev,fn)=>{(listeners[ev]=listeners[ev]||[]).push(fn)};
 let rafCbs=[],simTime=0;
@@ -100,9 +101,18 @@ try{
     console.log("[coop one player down + teammate continues] OK");els["pauseHome"].onclick();frames(2);
   }
   els["ovBtn"].onclick();
+  const storySlot=els["pickList"].children[0];
+  if(!storySlot)throw new Error("Story save slot selection did not open");
+  storySlot.onclick();
   fire({key:"r",code:"KeyR",preventDefault(){},repeat:false},"keydown");
   frames(2);
   if(sandbox.__IMS.gameState!=="play"||!els["stat"].textContent.includes("序章"))throw new Error("Story mode did not start");
+  if(coopMode&&sandbox.CoopMode.active())throw new Error("Story mode incorrectly started P2");
+  if(!storedValues.has("imsnake.story.slot.1"))throw new Error("Story checkpoint was not auto-saved");
+  els["pauseHome"].onclick();frames(2);els["ovBtn"].onclick();
+  if(els["pickList"].children.length<6)throw new Error("Existing story save actions were not listed");
+  els["pickList"].children[0].onclick();frames(2);
+  if(sandbox.__IMS.gameState!=="play"||sandbox.storyDirector().slot!==1)throw new Error("Story save did not resume from the slot picker");
   console.log("[story prologue stage 1] OK");
   frames(360);
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 1 did not open its dialogue");

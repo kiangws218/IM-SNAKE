@@ -167,6 +167,7 @@
 <script src="story-runtime.js"></script>
 <script src="story-dialogue.js"></script>
 <script src="story-data.js"></script>
+<script src="story-save.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -1278,7 +1279,8 @@ function updateIntro(dt){
   }
 }
 function storyApi(){return typeof window!=="undefined"?window.IMS_STORY_API:null;}
-function startStoryMode(){const api=storyApi();if(api)api.start();}
+function startStoryMode(slot){const api=storyApi();if(api)api.start(slot||1);}
+function continueStoryMode(slot){const api=storyApi();return api?api.resume(slot||1):{ok:false};}
 function startStoryStage(){const api=storyApi();if(api)api.retry();}
 function storyGoalText(){const api=storyApi();return api?api.goalText():"按剧情继续";}
 function storyProgressText(){const api=storyApi();return api?api.progressText():"剧情模式";}
@@ -2021,7 +2023,7 @@ document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   if(gameState==="victory"){
     if(victoryRetry==="boss")startBossFight();
-    else if(victoryRetry==="story")callRuntime("startStoryMode",startStoryMode);
+    else if(victoryRetry==="story"){const api=storyApi();startStoryMode(api&&api.currentSlot()||1);}
     else showMenu();
     return;
   }
@@ -2033,7 +2035,7 @@ document.getElementById("ovBtn").onclick=()=>{
     else startGame();
     return;
   }
-  callRuntime("startStoryMode",startStoryMode);
+  showStorySaves();
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
@@ -2049,6 +2051,44 @@ document.getElementById("ovBtn4").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   showLevelSelect();
 };
+function storySaveTime(value){
+  if(!value)return"尚无时间";
+  try{return new Date(value).toLocaleString("zh-CN",{hour12:false});}catch(error){return String(value);}
+}
+function storyPickContent(button,title,detail){
+  button.innerHTML="";
+  const heading=document.createElement("b"),line=document.createElement("span");
+  heading.textContent=title;line.textContent=detail||"";button.appendChild(heading);button.appendChild(line);
+}
+function showStorySaves(){
+  gameState="menu";
+  const api=storyApi(),saves=api&&api.listSaves?api.listSaves():[];
+  document.getElementById("ovTitle").textContent="剧情模式 · 单人";
+  document.getElementById("ovText").textContent="选择一个存档位。新游戏会从序章开始；继续游戏会从最近的地图入口恢复。";
+  document.getElementById("ovBtns").style.display="none";
+  const box=document.getElementById("pickList");box.innerHTML="";
+  for(let slot=1;slot<=3;slot++){
+    const item=saves.find(save=>save.slot===slot)||{slot,exists:false};
+    const primary=document.createElement("button");primary.className="pick-btn";
+    if(item.corrupted){
+      storyPickContent(primary,"存档 "+slot+" · 数据损坏",(item.error&&item.error.message||"无法读取")+" · 点击可覆盖并重新开始");
+      primary.onclick=()=>startStoryMode(slot);
+    }else if(item.exists){
+      const state=item.completed?"已完成":(item.currentMap||item.chapter||"序章");
+      storyPickContent(primary,"存档 "+slot+" · 继续游戏",(item.playerName||"未命名")+" ｜ "+state+" ｜ "+storySaveTime(item.updatedAt)+(item.legacy?" ｜ 旧版存档（继续后自动升级）":""));
+      primary.onclick=()=>continueStoryMode(slot);
+      const fresh=document.createElement("button");fresh.className="pick-btn";storyPickContent(fresh,"存档 "+slot+" · 覆盖并开始新游戏","原进度会在进入序章后被替换");fresh.onclick=()=>startStoryMode(slot);box.appendChild(primary);box.appendChild(fresh);
+      const remove=document.createElement("button");remove.className="pick-btn";storyPickContent(remove,"存档 "+slot+" · 删除","删除后无法恢复");remove.onclick=()=>{if(typeof confirm!=="function"||confirm("确定删除存档 "+slot+" 吗？")){api.deleteSave(slot);showStorySaves();}};box.appendChild(remove);
+      continue;
+    }else{
+      storyPickContent(primary,"存档 "+slot+" · 新游戏","空存档");
+      primary.onclick=()=>startStoryMode(slot);
+    }
+    box.appendChild(primary);
+  }
+  const back=document.createElement("button");back.className="pick-btn";storyPickContent(back,"← 返回主菜单","");back.onclick=showMenu;box.appendChild(back);
+  document.getElementById("overlay").classList.add("show");
+}
 function showLevelSelect(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="选择关卡";
@@ -2108,7 +2148,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：从序章开始，边玩边了解蛇的身体、豆子和这个世界。<br><br>"+
+    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
@@ -2124,6 +2164,7 @@ function showMenu(){
   document.getElementById("ovBtn5").style.display="";
   document.getElementById("ovBtn7").textContent="设置";
   document.getElementById("ovBtn7").style.display="";
+  document.getElementById("ovBtns").style.display="";
   document.getElementById("pickList").innerHTML="";
   document.getElementById("tut").classList.remove("show");
   document.getElementById("overlay").classList.add("show");

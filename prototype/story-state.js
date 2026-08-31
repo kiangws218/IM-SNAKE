@@ -8,7 +8,7 @@
     return {
       schemaVersion:1,storyId:"prologue",chapter:"prologue",
       currentNode:"Start",currentMap:null,
-      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false},
+      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false},
       actors:{keti:{status:"unknown",met:false,corpsePresent:false}},
       counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0},
       player:{name:"",bodyLength:4},checkpoint:null
