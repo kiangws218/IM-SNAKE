@@ -116,6 +116,14 @@ try{
   console.log("[story prologue stage 1] OK");
   frames(360);
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 1 did not open its dialogue");
+  const dialoguePage=els["npcSay"].textContent;
+  fire({key:"j",code:"KeyJ",preventDefault(){},repeat:false},"keydown");frames(2);fire({key:"j",code:"KeyJ",preventDefault(){},repeat:false},"keyup");
+  if(els["npcSay"].textContent!==dialoguePage)throw new Error("Fire key incorrectly advanced story dialogue");
+  frames(10);fire({key:"Enter",code:"Enter",preventDefault(){},repeat:false},"keydown");frames(1);
+  const secondDialoguePage=els["npcSay"].textContent;
+  fire({key:"Enter",code:"Enter",preventDefault(){},repeat:false},"keydown");frames(1);
+  if(els["npcSay"].textContent!==secondDialoguePage)throw new Error("Held confirm key skipped more than one dialogue page");
+  fire({key:"Enter",code:"Enter",preventDefault(){},repeat:false},"keyup");frames(10);
   fire({key:"ArrowRight",code:"ArrowRight",preventDefault(){},repeat:false},"keydown");
   fire({key:"d",code:"KeyD",preventDefault(){},repeat:false},"keydown");
   fire({key:"r",code:"KeyR",preventDefault(){},repeat:false},"keydown");
@@ -123,9 +131,9 @@ try{
   console.log("[story dialogue input lock] OK");
   const chooseStory=label=>{
     for(let guard=0;guard<20;guard++){
-      const buttons=[...els["npcOpts"].children],wanted=buttons.find(button=>button.textContent===label);
+      const buttons=[...els["npcOpts"].children],wanted=buttons.find(button=>button.textContent.startsWith(label));
       if(wanted){wanted.onclick();frames(1);return;}
-      const next=buttons.find(button=>button.textContent==="继续");
+      const next=buttons.find(button=>button.textContent.startsWith("继续"));
       if(!next)throw new Error("Story choice not found: "+label);
       next.onclick();frames(1);
     }
@@ -134,10 +142,10 @@ try{
   chooseStory("吐出来！");
   frames(2);
   frames(200);
-  const storyFire=coopMode?"j":" ";
-  fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){},repeat:false},"keydown");
+  const storyFire="j";
+  fire({key:storyFire,code:"KeyJ",preventDefault(){},repeat:false},"keydown");
   frames(190);
-  fire({key:storyFire,code:coopMode?"KeyJ":"Space",preventDefault(){}},"keyup");
+  fire({key:storyFire,code:"KeyJ",preventDefault(){}},"keyup");
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
   console.log("[story prologue stage 2] OK");
   const gate=sandbox.__IMS.mechs.find(m=>m.kind==="gate");
@@ -174,9 +182,23 @@ try{
   sandbox.dieNPC(doomedKeti);frames(1);
   if(sandbox.storyDirector().runtime.node.id!=="keti_dead")throw new Error("Keti death before dialogue left the story stuck");
   console.log("[story early actor death fallback] OK");
+  const corpseLen=sandbox.__IMS.snake.len;chooseStory("吃掉尸体");frames(1);
+  if(sandbox.__IMS.stomach.slots.find(slot=>slot.id==="ketiCorpse").count!==1||sandbox.__IMS.snake.len!==corpseLen+2)
+    throw new Error("Keti corpse was not added to the stomach with body length");
+  fire({key:"e",code:"KeyE",preventDefault(){},repeat:false},"keydown");fire({key:"e",code:"KeyE",preventDefault(){}},"keyup");
+  if(sandbox.__IMS.stomach.selected.id!=="ketiCorpse")throw new Error("Stomach next-slot input did not select Keti corpse");
+  fire({key:"j",code:"KeyJ",preventDefault(){},repeat:false},"keydown");frames(2);fire({key:"j",code:"KeyJ",preventDefault(){}},"keyup");
+  if(sandbox.__IMS.stomach.selected.count!==0||sandbox.__IMS.snake.len!==corpseLen||!sandbox.__IMS.projs.some(p=>p.payloadId==="ketiCorpse"))
+    throw new Error("Selected Keti corpse was not launched and consumed");
+  sandbox.__IMS.projs.find(p=>p.payloadId==="ketiCorpse").life=0;frames(1);
+  const corpseDrop=sandbox.__IMS.stomachPickups[0];if(!corpseDrop)throw new Error("Launched corpse did not return as a world pickup");
+  sandbox.__IMS.snake.fx=corpseDrop.x;sandbox.__IMS.snake.fy=corpseDrop.y;sandbox.pickUps();
+  if(sandbox.__IMS.stomach.selected.count!==1||sandbox.__IMS.snake.len!==corpseLen+2)throw new Error("Corpse world pickup could not be eaten back into the stomach");
+  console.log("[story stomach corpse pickup + select + launch] OK");
   sandbox.startStoryStage();frames(2);
   if(sandbox.storyDirector().runtime.node.id!=="wilderness_keti_wait"||!sandbox.__IMS.npcs.some(n=>n.kind==="keti"))
     throw new Error("Story map checkpoint retry did not restore the wilderness entry state");
+  if(sandbox.__IMS.stomach.slots.some(slot=>slot.id==="ketiCorpse"&&slot.count>0))throw new Error("Story checkpoint retry kept post-checkpoint stomach items");
   console.log("[story map checkpoint retry] OK");
   els["pauseHome"].onclick();
   frames(2);
@@ -186,8 +208,8 @@ try{
   fire({key:"w",preventDefault(){},repeat:false},"keydown");
   frames(200);
   console.log("[sandbox move 200 frames] OK");
-  const sandboxFire=coopMode?"j":" ";
-  fire({key:sandboxFire,code:coopMode?"KeyJ":"Space",preventDefault(){},repeat:false},"keydown");
+  const sandboxFire="j";
+  fire({key:sandboxFire,code:"KeyJ",preventDefault(){},repeat:false},"keydown");
   frames(100);
   console.log("[sandbox stance fire 100 frames] OK");
   fire({key:"f",preventDefault(){},repeat:false},"keydown");

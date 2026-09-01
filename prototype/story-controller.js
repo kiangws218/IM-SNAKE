@@ -21,11 +21,15 @@
   const count=key=>snapshot()&&snapshot().counters[key]||0;
   const currentNode=()=>director&&director.runtime.node&&director.runtime.node.id||"";
   const updateState=(mutator,reason)=>director&&director.runtime.state.update(mutator,reason);
+  const hint=action=>Dialogue.actionHint?Dialogue.actionHint(action,1):"";
+  const movementHint=()=>["up","left","down","right"].map(action=>root.InputMap&&root.InputMap.bindingLabel(1,action)).filter(Boolean).join("/");
+  const withHints=text=>String(text||"").replace(/\{fire\}/g,hint("fire")).replace(/\{interact\}/g,hint("interact")).replace(/\{move\}/g,"["+movementHint()+"]");
 
   function closeDialogue(){
     if(typeof root.closePanel==="function")root.closePanel();
     panelOpen=false;freeze=false;moveLock=false;panelNpc=null;npcNode=null;
     const say=document.getElementById("npcSay");if(say)say.onclick=null;
+    if(typeof root.clearPanelInputGate==="function")root.clearPanelInputGate();
   }
 
   function setOwnership(map){
@@ -78,7 +82,9 @@
     groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
     enemies.length=0;npcs.length=0;
     const spawn=(args.entry&&map.entryPoints&&map.entryPoints[args.entry])||map.spawn;
-    snake.fx=spawn.x;snake.fy=spawn.y;dir=spawn.dir;snake.len=CFG.initLen;
+    snake.fx=spawn.x;snake.fy=spawn.y;dir=spawn.dir;
+    if(typeof root.restoreStomachInventory==="function")root.restoreStomachInventory(snapshot().inventory);
+    snake.len=Math.max(CFG.initLen,Number(snapshot().player.bodyLength)||CFG.initLen,CFG.minLen+(typeof stomach!=="undefined"?stomach.getLengthContribution():0));
     coilPath();computeSegs();computeEnclosure();
     const rules=map.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;
     for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();
@@ -99,14 +105,15 @@
     document.getElementById("pickList").innerHTML="";
     ensurePrimarySpawnSafe();
     emit("MAP_LOADED",{mapId:id,spawnId:args.entry||null,clearForwardSeconds:3});
-    banner(id===TM?"序章 · 教学地图：沿走廊前进":"地图 2 · 荒野：寻找哭声");
+    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":"地图 2 · 荒野：寻找哭声");
     rememberCheckpoint(id===TM?"prologue_start":"wilderness_start");
   }
 
   function dialogue(args){
-    const data=Dialogue.normalize(args),pages=data.pages;
+    const data=Dialogue.normalize(args),pages=data.pages.map(withHints);
     let pageIndex=0;
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;panelNpc=null;npcNode=null;
+    if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
     const panel=ensurePanel(),say=document.getElementById("npcSay"),options=document.getElementById("npcOpts");
     panel.style.display="flex";
     document.getElementById("npcName").textContent=data.speaker||"我";
@@ -114,15 +121,16 @@
     drawPortraitInto(document.getElementById("npcPortrait"),data.portrait||"snake_self",!!data.crying);
 
     const render=()=>{
+      if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
       say.textContent=pages[pageIndex];options.innerHTML="";say.onclick=null;
       if(pageIndex<pages.length-1){
-        const next=document.createElement("button");next.className="npc-opt";next.textContent="继续";
+        const next=document.createElement("button");next.className="npc-opt";next.textContent="继续 "+hint("interact");
         const advance=()=>{pageIndex++;render();};
         next.onclick=advance;say.onclick=advance;options.appendChild(next);
       }else{
         (data.choices||[{id:"continue",label:"继续"}]).forEach(choice=>{
           const button=document.createElement("button");
-          button.className="npc-opt"+(choice.danger?" red":"");button.textContent=choice.label;
+          button.className="npc-opt"+(choice.danger?" red":"");button.textContent=withHints(choice.label)+" "+hint("interact");
           button.onclick=()=>{closeDialogue();director.runtime.choose(choice.id);};
           options.appendChild(button);
         });
@@ -134,6 +142,7 @@
 
   function nameInput(args){
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;
+    if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
     const panel=ensurePanel();panel.style.display="flex";
     document.getElementById("npcName").textContent="我";
     document.getElementById("npcSub").textContent="序章 · 输入名字";
@@ -150,12 +159,16 @@
   }
 
   function eatKeti(){const npc=director&&director.keti;if(npc&&npcs.includes(npc))root.eatNPC(npc);}
-  function eatCorpse(){updateState(state=>{state.actors.keti.status="eaten";state.actors.keti.corpsePresent=false;},"keti_corpse_eaten");emit("ACTOR_EATEN",{actorId:"keti",corpse:true});}
+  function eatCorpse(){
+    const added=typeof root.addStomachItem==="function"?root.addStomachItem("ketiCorpse",1,"keti_corpse_eaten"):null;
+    updateState(state=>{state.actors.keti.status="eaten";state.actors.keti.corpsePresent=false;state.player.bodyLength=snake.len;},"keti_corpse_eaten");
+    saveCurrent();emit("ACTOR_EATEN",{actorId:"keti",corpse:true,itemAdded:!!(added&&added.added)});
+  }
   function spawnSlimes(){director.spawned=true;enemies.length=0;enemyAt({type:"slime",x:54.5,y:21.5});enemyAt({type:"slime",x:54.5,y:27.5});observedEnemies=enemies.length;}
   function freeExplore(){closeDialogue();banner("自由探索：30 秒后会出现记忆模糊");director.runtime.startTimer("free_explore_memory",30);}
   function memoryBlur(){
-    updateState(state=>{state.flags.memoryBlurSeen=true;state.player.bodyLength=CFG.minLen;},"memory_blur");
-    snake.len=CFG.minLen;computeSegs();
+    snake.len=typeof minBodyLength==="function"?minBodyLength():CFG.minLen;
+    updateState(state=>{state.flags.memoryBlurSeen=true;state.player.bodyLength=snake.len;},"memory_blur");computeSegs();
   }
   function storyEnd(args){
     updateState(state=>{state.flags.storyCompleted=true;},"story_complete");saveCurrent();
@@ -229,6 +242,8 @@
       const actor=payload&&payload.actor;if(!actor||!owns("actor",actor))return;
       const eaten=name==="actorEaten";
       updateState(state=>{state.actors.keti.status=eaten?"eaten":"dead";state.actors.keti.corpsePresent=!eaten;},eaten?"keti_eaten":"keti_dead");emit(eaten?"ACTOR_EATEN":"ACTOR_DIED",{actorId:targetId(actor)});
+    }else if(name==="inventoryChanged"){
+      updateState(state=>{state.inventory=payload.inventory;state.player.bodyLength=payload.bodyLength||snake.len;},payload.reason||"inventory_changed");saveCurrent();
     }
   }
 
@@ -247,7 +262,7 @@
     observedEnemies=enemies.length;
   }
 
-  function goalText(){const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target;return goal.text||"按剧情继续";}
+  function goalText(){const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";const suffix=goal.inputHint?" "+(goal.inputHint==="move"?"["+movementHint()+"]":hint(goal.inputHint)):"";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target+suffix;return (goal.text||"按剧情继续")+suffix;}
   function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
 
   function createDirector(state,slot){

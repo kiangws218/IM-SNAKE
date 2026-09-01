@@ -22,7 +22,7 @@ require("../prototype/story-data.js");
 const { EventBus, TYPES } = global.IMS_STORY_EVENTS;
 const { StoryStateStore, mergeDefaults } = global.IMS_STORY_STATE;
 const { StoryRuntime } = global.IMS_STORY_RUNTIME;
-const { splitPages } = global.IMS_STORY_DIALOGUE;
+const { splitPages, createInputGate } = global.IMS_STORY_DIALOGUE;
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -50,6 +50,7 @@ function testStateDefaultsAndPersistence() {
   assert.strictEqual(merged.flags.tutorialExitUnlocked, false, "缺失的嵌套默认值应保留");
   assert.strictEqual(merged.player.name, "小明");
   assert.strictEqual(merged.player.bodyLength, 4, "缺失的玩家默认值应保留");
+  assert.strictEqual(merged.inventory.slots[0].id, "bean", "旧剧情状态应补上默认胃袋");
 
   const store = new StoryStateStore();
   store.update(state => { state.player.name = "测试玩家"; state.flags.memoryBlurSeen = true; }, "test");
@@ -67,6 +68,17 @@ function testDialoguePageSplitting() {
     "空行应分页，普通换行应保留在同一页"
   );
   assert.deepStrictEqual(splitPages(["第一页", "", " 第二页 "]), ["第一页", "第二页"]);
+}
+
+function testDialogueInputGate() {
+  const gate = createInputGate(100);
+  gate.open("KeyJ", 1000);
+  assert.strictEqual(gate.canAdvance(1200), false, "触发对白的按键仍按住时不可确认");
+  gate.keyup("KeyJ");
+  assert.strictEqual(gate.canAdvance(1050), false, "松键后仍应经过输入门闩");
+  assert.strictEqual(gate.canAdvance(1100), true, "松键并经过门闩后可确认");
+  assert.strictEqual(gate.consume(1100), true, "确认应只消费一次");
+  assert.strictEqual(gate.canAdvance(1200), false, "同一确认不可重复消费");
 }
 
 function testStoryDataReferences() {
@@ -159,6 +171,7 @@ async function testStopDetachesWait() {
   testEventSubscriptions();
   testStateDefaultsAndPersistence();
   testDialoguePageSplitting();
+  testDialogueInputGate();
   testStoryDataReferences();
   await testRuntimeFlow();
   await testPredicateAndTimerCleanup();

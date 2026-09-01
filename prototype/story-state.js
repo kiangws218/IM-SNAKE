@@ -11,7 +11,7 @@
       flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false},
       actors:{keti:{status:"unknown",met:false,corpsePresent:false}},
       counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0},
-      player:{name:"",bodyLength:4},checkpoint:null
+      player:{name:"",bodyLength:4},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
     };
   }
 
@@ -29,6 +29,7 @@
     actorIds.forEach(id=>{out.actors[id]=Object.assign({},base.actors[id]||{},(input.actors&&input.actors[id])||{});});
     out.counters=Object.assign({},base.counters,input.counters||{});
     out.player=Object.assign({},base.player,input.player||{});
+    out.inventory=clone(input.inventory||base.inventory);
     return out;
   }
 

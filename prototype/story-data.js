@@ -4,7 +4,7 @@
   const MAPS=root.IMS_STORY_MAPS.TYPES;
   const progress=(step,total=8)=>({chapter:"序章",step,total});
   const textGoal=text=>({kind:"text",text});
-  const counterGoal=(label,counter,target)=>({kind:"counter",label,counter,target});
+  const counterGoal=(label,counter,target,inputHint)=>({kind:"counter",label,counter,target,inputHint});
 
   const PROLOGUE={
     id:"prologue",
@@ -12,10 +12,10 @@
     nodes:{
       prologue_start:{
         id:"prologue_start",enter:{action:"loadMap",mapId:MAPS.TUTORIAL},next:"tutorial_1",
-        progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3)
+        progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3,"move")
       },
       tutorial_1:{
-        id:"tutorial_1",progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3),
+        id:"tutorial_1",progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3,"move"),
         wait:{events:["PLAYER_BEAN_EATEN"],condition:"tutorialBeans3",target:"dialogue_1"}
       },
       dialogue_1:{
@@ -23,11 +23,11 @@
         dialogue:{speaker:"我",sub:"序章 · 对话 1",pages:[
           "我究竟像这样吃了多久……",
           "感觉……有点恶心。",
-          "要吐了！"
+          "要吐了！\n\n（长按 {fire} 吐出豆子；用 {interact} 推进对话。）"
         ],choices:[{id:"go",label:"吐出来！",next:"tutorial_2"}]}
       },
       tutorial_2:{
-        id:"tutorial_2",progress:progress(3),goal:counterGoal("目标 吐出","tutorialBeansSpit",3),
+        id:"tutorial_2",progress:progress(3),goal:counterGoal("目标 吐出","tutorialBeansSpit",3,"fire"),
         wait:{events:["PLAYER_BEAN_SPIT"],condition:"tutorialSpit3",target:"dialogue_2"}
       },
       dialogue_2:{

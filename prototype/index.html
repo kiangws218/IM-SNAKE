@@ -108,6 +108,8 @@
   .npc-opt.red{ color:#ff5d5d;border-color:#7a2d35; }
   .npc-opt.red:hover{ border-color:#ff5d5d; }
   .npc-opt.sel{ border-color:#ffd76e;background:#2c2d44;box-shadow:0 0 0 1px #ffd76e; }
+  #stomachHud{display:inline-flex;align-items:center;gap:5px;max-width:520px;overflow:hidden;vertical-align:middle}
+  #stomachSlots{display:inline-flex;gap:4px;align-items:center}
   #pauseMenu{
     position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; background:rgba(8,8,16,.66); z-index:20;
@@ -131,6 +133,7 @@
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
   <span class="chip">断尾 <span class="bar"><i id="cdCut" style="background:#e86a8a"></i></span></span>
   <span class="chip">节点 <span id="nodes"></span></span>
+  <span class="chip" id="stomachHud">胃袋 <small id="stomachPrev"></small><span id="stomachSlots"></span><small id="stomachNext"></small></span>
   <span id="coopHud" style="display:none"><span class="chip" style="color:#7fd1e8"><b>P2</b> ❤ <span id="p2Hearts"></span></span> <span class="chip">身长 <b id="p2Len"></b></span> <span class="chip">豆伤 <b id="p2Dmg" style="color:#7fd1e8"></b></span> <span class="chip">火力 <span class="bar"><i id="p2Fire" style="background:#7fd1e8"></i></span></span> <span class="chip">断尾 <span class="bar"><i id="p2Cut" style="background:#4389a8"></i></span></span> <span class="chip">节点 <span id="p2Nodes"></span></span></span>
   <span id="stat"></span>
 </div>
@@ -138,7 +141,9 @@
 <canvas id="cv"></canvas>
 <div id="help">
   <b>移动</b> <kbd>WASD</kbd>/<kbd>方向键</kbd>（8方向<b>即时转向</b> · 点按转向 长按<b>2倍速冲刺</b> · 不能停）
-　<b>站桩吐豆</b> 长按<kbd>J</kbd>/<kbd>空格</kbd>
+　<b>站桩吐豆</b> 长按<kbd id="helpFire">J</kbd>
+　<b>对话确认</b> <kbd id="helpInteract">回车</kbd>
+　<b>胃袋切换</b> <kbd id="helpPrev">Q</kbd>/<kbd id="helpNext">E</kbd>
 　<b>断尾</b> 点按<kbd>K</kbd>/<kbd>Shift</kbd>
 　<b>放节点</b> <kbd>F</kbd>
 　<b>P2 默认</b> <kbd>方向键</kbd> / <kbd>小键盘 0·1·2</kbd>（所有键位均可在设置中修改）
@@ -159,6 +164,7 @@
 <script src="enemies.js"></script>
 <script src="player-core.js"></script>
 <script src="input.js"></script>
+<script src="stomach-inventory.js"></script>
 <script src="settings.js"></script>
 <script src="coop-mode.js"></script>
 <script src="story-events.js"></script>
@@ -211,10 +217,12 @@ const api={
 const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
 let touchMode=false;
 let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
-let intro=null,introSeen=false,fireKey=false;
+let intro=null,introSeen=false,fireKey=false,fireNeedsRelease=false;
 let curses=[];
 let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false;
 let storyActive=false,storyStage=-1,storyTransitioning=false;
+let stomach=new IMS_STOMACH.StomachInventory(),stomachPickups=[];
+let panelInputGate=null;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -421,11 +429,11 @@ function reset(forTutorial){
   for(let i=1;i<=CFG.initLen+3;i++)snake.path.push({x:6.5-i,y:sy+.5});
   hearts=RUN.maxHearts;invuln=0;cutCd=0;alive=true;primaryDown=false;paused=false;shake=0;biteAcc=0;
   danger=null;hurtFlash=0;
-  firing=false;fireT=0;
+  firing=false;fireT=0;fireNeedsRelease=false;
   segPos=[];occSet=new Set();
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
-  flyingBeans=[];curses=[];
+  flyingBeans=[];curses=[];stomachPickups=[];stomach=new IMS_STOMACH.StomachInventory();
   npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;
   const oldPanel=document.getElementById("npcPanel");if(oldPanel&&oldPanel.remove)oldPanel.remove();
   npcPanelEl=null;panelOpts=[];panelSel=0;panelOpen=false;freeze=false;
@@ -597,6 +605,29 @@ function nearNode(x,y){
   return false;
 }
 
+function stomachSpecialWeight(){return stomach?stomach.getLengthContribution():0;}
+function minBodyLength(){return CFG.minLen+stomachSpecialWeight();}
+function beanAmmo(){return Math.max(0,snake.len-minBodyLength());}
+function syncStomachStory(reason){
+  if(playMode==="story")notifyStoryEvent("inventoryChanged",{inventory:stomach.snapshot(),bodyLength:snake.len,reason:reason||"inventory"});
+}
+function addStomachItem(id,amount,reason){
+  const result=stomach.add(id,amount||1);
+  if(result.addedWeight>0){snake.len+=result.addedWeight;computeSegs();syncStomachStory(reason||"pickup");}
+  return result;
+}
+function restoreStomachInventory(state){
+  stomach=new IMS_STOMACH.StomachInventory();
+  if(state)stomach.restore(state);
+  return stomach.snapshot();
+}
+function cycleStomach(direction){
+  if(!stomach||panelOpen||paused||freeze)return;
+  const selected=stomach.cycle(direction);
+  ftext(snake.fx,snake.fy-1,"主位："+selected.item.shortName+(selected.id==="bean"?"":" ×"+selected.count),"#ffd76e");
+  syncStomachStory("selection");
+}
+
 function pickUps(){
   for(let i=groundBeans.length-1;i>=0;i--){
     const b=groundBeans[i];
@@ -613,6 +644,14 @@ function pickUps(){
         }
       if(Math.random()<RUN.greedy){snake.len++;ftext(b.x+.5,b.y,"贪食 +1","#ffd76e");}
       ftext(b.x+.5,b.y+.3,"+1","#8fe36b");puff(b.x+.5,b.y+.5,"#8fe36b");
+    }
+  }
+  for(let i=stomachPickups.length-1;i>=0;i--){
+    const p=stomachPickups[i];
+    if(Math.hypot(p.x-snake.fx,p.y-snake.fy)<RUN.pickupR){
+      const added=addStomachItem(p.id,1,"special_pickup");
+      if(added.added){stomachPickups.splice(i,1);ftext(p.x,p.y-.5,"吞入胃袋："+added.item.shortName,"#ffd76e");puff(p.x,p.y,added.item.color||"#f5f5fa");}
+      else if(gameTime-(p.lastNotice||-99)>1){p.lastNotice=gameTime;ftext(p.x,p.y-.5,"胃袋里已经有了","#8b88a3");}
     }
   }
   for(let i=curses.length-1;i>=0;i--){
@@ -636,9 +675,20 @@ function pickUps(){
 }
 
 function stanceShot(){
-  if(snake.len<=CFG.minLen){
-    firing=false;
-    ftext(snake.fx,snake.fy-1,"弹匣打空了！","#ff5d5d");
+  const selected=stomach.selected();
+  if(selected.id!=="bean"){
+    const used=stomach.consumeSelected();
+    if(!used.fired){firing=false;fireNeedsRelease=true;ftext(snake.fx,snake.fy-1,selected.item.shortName+" 已经空了！","#ff5d5d");return;}
+    snake.len=Math.max(minBodyLength(),snake.len-used.removedWeight);computeSegs();
+    const speed=CFG.spitSpeed*RUN.spitSpeedMult*.75;
+    const sx=snake.fx+dir.x*1.2,sy=snake.fy+dir.y*1.2;
+    projs.push({owner:1,payloadId:used.id,payload:used.item,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
+    firing=false;fireNeedsRelease=true;shake=Math.max(shake,.18);
+    ftext(snake.fx,snake.fy-1,"吐出："+used.item.shortName,"#ffd76e");syncStomachStory("special_fired");return;
+  }
+  if(beanAmmo()<=0){
+    firing=false;fireNeedsRelease=true;
+    ftext(snake.fx,snake.fy-1,"豆子打空了！","#ff5d5d");
     return;
   }
   snake.len--;
@@ -797,8 +847,11 @@ function updateProjs(dt){
     dead=p.life<=0||Math.hypot(p.vx,p.vy)<CFG.beanStop;
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
-      if(spot)groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
-      puff(p.x,p.y,"#d95763");
+      if(spot){
+        if(p.payloadId)stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});
+        else groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
+      }
+      puff(p.x,p.y,p.payload&&p.payload.color||"#d95763");
       projs.splice(i,1);
     }
   }
@@ -1168,13 +1221,14 @@ function updateSpawner(dt){
 function cutTail(){
   if(gameState!=="play"||!alive||primaryDown||paused||freeze)return;
   if(cutCd>0)return;
-  if(snake.len<=CFG.cutKeep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
+  const keep=Math.max(CFG.cutKeep,minBodyLength());
+  if(snake.len<=keep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
   cutCd=RUN.cutCd;
   cutUsed++;
-  const cutN=snake.len-CFG.cutKeep;
+  const cutN=snake.len-keep;
   const recover=Math.floor(cutN*CFG.cutRecover);
   const tailPt=segPos[snake.len-1]||{x:snake.fx,y:snake.fy};
-  snake.len=CFG.cutKeep;
+  snake.len=keep;
   if(recover>0)scatterBeans(Math.floor(tailPt.x),Math.floor(tailPt.y),recover,2);
   ftext(tailPt.x,tailPt.y-.6,"-"+(cutN-recover)+" 节","#e86a8a");
   shake=.25;puff(tailPt.x,tailPt.y,"#e86a8a");
@@ -1471,6 +1525,15 @@ function advanceTut(){
   openTutPanel(tutIdx);
 }
 let panelOpts=[],panelSel=0;
+const heldInputCodes=new Set();
+function armPanelInputGate(triggerCode){
+  if(!IMS_STORY_DIALOGUE||typeof IMS_STORY_DIALOGUE.createInputGate!=="function"){panelInputGate=null;return;}
+  panelInputGate=IMS_STORY_DIALOGUE.createInputGate(140);
+  const guarded=[InputMap.bindingFor(1,"fire"),InputMap.bindingFor(1,"interact")];
+  const held=triggerCode||guarded.find(code=>heldInputCodes.has(code))||null;
+  panelInputGate.open(held,performance.now());
+}
+function clearPanelInputGate(){panelInputGate=null;}
 function trackPanelOpts(container){
   panelOpts=Array.prototype.slice.call(container.querySelectorAll(".npc-opt"));
   panelSel=0;
@@ -1490,7 +1553,7 @@ function confirmPanel(){
 function openTutPanel(i){
   try{
     const s=TUT2[i];
-    panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
+    panelOpen=true;freeze=true;panelNpc=null;npcNode=null;armPanelInputGate();
     const p=ensurePanel();p.style.display="flex";
     document.getElementById("npcName").textContent="我";
     document.getElementById("npcSub").textContent="自言自语 · 教学 "+(i+1)+"/"+TUT2.length;
@@ -1507,7 +1570,7 @@ function openTutPanel(i){
   }catch(e){uiFatal("教学面板:"+(e&&e.message));}
 }
 function finishTutorial(){
-  panelOpen=true;freeze=true;
+  panelOpen=true;freeze=true;armPanelInputGate();
   const p=ensurePanel();p.style.display="flex";
   document.getElementById("npcName").textContent="恭喜完成教学！";
   document.getElementById("npcSub").textContent=TUT2.length+"/"+TUT2.length;
@@ -1584,7 +1647,7 @@ function uiFatal(msg){
 function openPanel(n,nodeId){
   try{
     if(!n||!npcs.includes(n)){closePanel();return;}
-    panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
+    panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;armPanelInputGate();
     const T=NPC_TYPES[n.kind];
     const p=ensurePanel();
     p.style.display="flex";
@@ -1651,7 +1714,7 @@ function panelTrade(n){
       (cost>g.cost?" <span style='color:#ff5d5d'>(原价 "+g.cost+")</span>":"")+"<br>"+
       "<span style='opacity:.65;font-size:11px'>"+g.desc+"</span>";
     b.onclick=()=>{
-      if(snake.len<CFG.minLen+cost){
+      if(snake.len<minBodyLength()+cost){
         b.lastElementChild.textContent="身长不够，做不了这买卖！";
         return;
       }
@@ -1681,6 +1744,7 @@ function closePanel(){
   p.classList.remove("open");
   setTimeout(()=>{if(!panelOpen)p.style.display="none";},400);
   panelOpen=false;panelNpc=null;npcNode=null;
+  panelInputGate=null;
   freeze=false;moveLock=false;
   if(!(dir.x===-1&&dir.y===0))dir={x:1,y:0};
 }
@@ -1810,7 +1874,7 @@ function updateBoss(dt){
       }
       if(hitIdx>0){
         const oldLen=snake.len;
-        snake.len=Math.max(CFG.minLen,hitIdx);
+        snake.len=Math.max(minBodyLength(),hitIdx);
         const lost=oldLen-snake.len;
         for(let i2=hitIdx;i2<oldLen;i2++){
           const sgm=segPos[i2];if(!sgm)break;
@@ -1965,13 +2029,18 @@ function pushCombo(){PlayerCore.queueDirection({dir,dirQueue},comboVec(),3);}
 addEventListener("keydown",ev=>{
   const k=ev.key.toLowerCase();
   const action=InputMap.actionFor(1,ev);
+  const code=InputMap.eventCode(ev);heldInputCodes.add(code);
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))ev.preventDefault();
   // 剧情对话期间只允许操作对话本身；移动、发射、重开和暂停键都不能
   // 把面板关掉或改变蛇的位置，否则玩家可能永远回不到当前剧情节点。
   if(panelOpen&&gameState==="play"){
-    if(k==="arrowup"||k==="w"){ev.preventDefault();selPanel(-1);return;}
-    if(k==="arrowdown"||k==="s"){ev.preventDefault();selPanel(1);return;}
-    if(k===" "||k==="j"||k==="enter"){ev.preventDefault();confirmPanel();return;}
+    if(action==="up"){ev.preventDefault();if(!ev.repeat)selPanel(-1);return;}
+    if(action==="down"){ev.preventDefault();if(!ev.repeat)selPanel(1);return;}
+    if(action==="interact"){
+      ev.preventDefault();
+      if(ev.repeat||panelInputGate&&!panelInputGate.canAdvance(performance.now()))return;
+      if(panelInputGate)panelInputGate.consume(performance.now());confirmPanel();if(panelOpen)armPanelInputGate(code);return;
+    }
     return;
   }
   if(k==="r"){
@@ -1992,6 +2061,8 @@ addEventListener("keydown",ev=>{
     if(gameState==="intro"){advanceIntro();return;}
     fireKey=true;
   }
+  else if(action==="prevItem"&&!ev.repeat)cycleStomach(-1);
+  else if(action==="nextItem"&&!ev.repeat)cycleStomach(1);
   else if(action==="cut")cutTail();
   else if(action==="node")placeNode();
   else if(k==="p"||k==="escape"){
@@ -2011,11 +2082,12 @@ document.getElementById("pauseHome").onclick=()=>{
 };
 addEventListener("keyup",ev=>{
   const action=InputMap.actionFor(1,ev);
+  const code=InputMap.eventCode(ev);heldInputCodes.delete(code);if(panelInputGate)panelInputGate.keyup(code);
   heldKeys.delete(action);
-  if(action==="fire")fireKey=false;
+  if(action==="fire"){fireKey=false;fireNeedsRelease=false;}
   if(MOVE_KEYS[action])pushCombo();
 });
-addEventListener("blur",()=>{heldKeys.clear();firing=false;fireKey=false;});
+addEventListener("blur",()=>{heldKeys.clear();heldInputCodes.clear();firing=false;fireKey=false;fireNeedsRelease=false;if(panelInputGate)panelInputGate.keyup();});
 addEventListener("pointerdown",()=>{
   if(gameState==="intro")advanceIntro();
 });
@@ -2150,7 +2222,8 @@ function showMenu(){
   document.getElementById("ovText").innerHTML=
     "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
-    "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
+    "长按 "+InputMap.bindingLabel(1,"fire")+" 站桩吐豆 ｜ "+InputMap.bindingLabel(1,"interact")+" 确认对话<br>"+
+    InputMap.bindingLabel(1,"prevItem")+" / "+InputMap.bindingLabel(1,"nextItem")+" 切换胃袋主位（豆子或特殊物品）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
     (InputMap.getPlayerCount()===2?"P2：方向键移动 ｜ 小键盘 0 吐豆 · 1 断尾 · 2 节点<br>":"")+
     "P 暂停 ｜ R 重开 ｜ M 静音 ｜ 设置中可自定义全部键位";
@@ -2289,6 +2362,14 @@ function render(){
     ctx.strokeStyle="#ffd76e";ctx.lineWidth=3;
     ctx.beginPath();ctx.arc(px,py+bob,T*.36,0,7);ctx.stroke();
     ctx.fillStyle="rgba(255,215,110,.15)";ctx.beginPath();ctx.arc(px,py+bob,T*.5,0,7);ctx.fill();
+  }
+
+  for(const p of stomachPickups){
+    const px=p.x*T,py=p.y*T,bob=Math.sin(gameTime*4)*2;
+    ctx.fillStyle="rgba(245,245,250,.18)";ctx.beginPath();ctx.arc(px,py+bob,T*.52,0,7);ctx.fill();
+    ctx.fillStyle="#f5f5fa";ctx.fillRect(px-T*.28,py-T*.22+bob,T*.56,T*.48);
+    ctx.fillStyle="#3a2b23";ctx.fillRect(px-T*.19,py-T*.12+bob,T*.38,T*.1);
+    ctx.fillStyle="#7fd1e8";ctx.fillRect(px-T*.14,py+T*.03+bob,T*.08,T*.13);ctx.fillRect(px+T*.07,py+T*.03+bob,T*.08,T*.13);
   }
 
   for(const b of groundBeans){
@@ -2557,13 +2638,14 @@ function render(){
     ctx.beginPath();ctx.arc(s.x*T-2,s.y*T-2,T*.09,0,7);ctx.fill();
   }
   for(const p of projs){
+    const projectileColor=p.payload&&p.payload.color||"#ff6b7a",projectileRadius=p.payloadId?.42:.3;
     for(let i=0;i<p.trail.length;i++){
       const t=p.trail[i];
       ctx.fillStyle="rgba(217,87,99,"+(i/p.trail.length*.35)+")";
       ctx.beginPath();ctx.arc(t.x*T,t.y*T,T*.18*(i/p.trail.length+.4),0,7);ctx.fill();
     }
-    ctx.fillStyle="#ff6b7a";
-    ctx.beginPath();ctx.arc(p.x*T,p.y*T,T*.3,0,7);ctx.fill();
+    ctx.fillStyle=projectileColor;
+    ctx.beginPath();ctx.arc(p.x*T,p.y*T,T*projectileRadius,0,7);ctx.fill();
     ctx.fillStyle="#ffe0e3";
     ctx.beginPath();ctx.arc(p.x*T-2,p.y*T-2,T*.09,0,7);ctx.fill();
   }
@@ -2616,6 +2698,17 @@ function updateHud(){
   document.getElementById("cdCut").style.width=((1-cutCd/RUN.cutCd)*100)+"%";
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
+  const stomachStatus=stomach.status();
+  document.getElementById("stomachPrev").textContent=InputMap.bindingLabel(1,"prevItem")+" ◀";
+  document.getElementById("stomachNext").textContent="▶ "+InputMap.bindingLabel(1,"nextItem");
+  document.getElementById("stomachSlots").textContent=stomachStatus.slots.map(slot=>{
+    const count=slot.id==="bean"?beanAmmo():slot.count,label=slot.item.shortName+" "+(count>0?"×"+count:"空");
+    return slot.selected?"【"+label+"】":label;
+  }).join("  ");
+  document.getElementById("helpFire").textContent=InputMap.bindingLabel(1,"fire");
+  document.getElementById("helpInteract").textContent=InputMap.bindingLabel(1,"interact");
+  document.getElementById("helpPrev").textContent=InputMap.bindingLabel(1,"prevItem");
+  document.getElementById("helpNext").textContent=InputMap.bindingLabel(1,"nextItem");
   document.getElementById("stat").textContent=
     (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?storyProgressText()+" ｜ "+storyGoalText()+" ｜ ":"")+
     (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
@@ -2637,7 +2730,8 @@ function loop(now){
     cutCd=Math.max(0,cutCd-dt);
     shake=Math.max(0,shake-dt);
     if(!primaryDown)updateMovement(dt);
-    const wantFire=(fireKey||VInput.fire)&&alive&&!primaryDown&&!paused;
+    if(!fireKey&&!VInput.fire)fireNeedsRelease=false;
+    const wantFire=(fireKey||VInput.fire)&&!fireNeedsRelease&&alive&&!primaryDown&&!paused;
     if(wantFire&&!firing){firing=true;stanceShot();fireT=1/(CFG.spitRate*RUN.spitRateMult);}
     if(!wantFire){firing=false;fireStreak=0;}
     if(firing){
@@ -2684,6 +2778,7 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   get alive(){return alive;},get moveLock(){return moveLock;},
   get mechs(){return MECHS;},get boss(){return boss;},get bossStakes(){return bossStakes;},
   get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
+  get stomach(){return stomach.status();},get stomachPickups(){return stomachPickups;},get projs(){return projs;},
   openPanel,closePanel,openCurseCard,CURSED_POOL
 };
 </script>
