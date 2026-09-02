@@ -69,9 +69,9 @@
     addEventListener("orientationchange",()=>setTimeout(()=>{fitCanvas();layout();},300));
     statusChip();
     if(hasTouch&&mode!=="kb")gear();
-    if(mode==="touch"){buildTouch();if(globalThis.GameSettings)GameSettings.onInputChosen("touch");}
-    else if(mode==="kb"){touchMode=false;if(globalThis.GameSettings)GameSettings.onInputChosen("kb");}
-    else buildChooser();
+    // 启动时始终让玩家确认操作方式；否则上次保存在本地的选择会让
+    // 键盘/触屏和单双人入口看起来像是“消失”了。
+    buildChooser();
     addEventListener("resize",portraitHint);
     portraitHint();
   }
@@ -118,7 +118,7 @@
     statusChip();
     if(m==="touch")buildTouch();
     else touchMode=false;
-    if(globalThis.GameSettings)GameSettings.onInputChosen(m);
+    if(globalThis.GameSettings)GameSettings.onInputChosen(m,m==="kb");
     fitCanvas();layout();portraitHint();
   }
 

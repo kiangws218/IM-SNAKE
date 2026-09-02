@@ -108,6 +108,8 @@
   .npc-opt.red{ color:#ff5d5d;border-color:#7a2d35; }
   .npc-opt.red:hover{ border-color:#ff5d5d; }
   .npc-opt.sel{ border-color:#ffd76e;background:#2c2d44;box-shadow:0 0 0 1px #ffd76e; }
+  #stomachHud{display:inline-flex;align-items:center;gap:5px;max-width:520px;overflow:hidden;vertical-align:middle}
+  #stomachSlots{display:inline-flex;gap:4px;align-items:center}
   #pauseMenu{
     position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; background:rgba(8,8,16,.66); z-index:20;
@@ -131,6 +133,7 @@
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
   <span class="chip">断尾 <span class="bar"><i id="cdCut" style="background:#e86a8a"></i></span></span>
   <span class="chip">节点 <span id="nodes"></span></span>
+  <span class="chip" id="stomachHud">胃袋 <small id="stomachPrev"></small><span id="stomachSlots"></span><small id="stomachNext"></small></span>
   <span id="coopHud" style="display:none"><span class="chip" style="color:#7fd1e8"><b>P2</b> ❤ <span id="p2Hearts"></span></span> <span class="chip">身长 <b id="p2Len"></b></span> <span class="chip">豆伤 <b id="p2Dmg" style="color:#7fd1e8"></b></span> <span class="chip">火力 <span class="bar"><i id="p2Fire" style="background:#7fd1e8"></i></span></span> <span class="chip">断尾 <span class="bar"><i id="p2Cut" style="background:#4389a8"></i></span></span> <span class="chip">节点 <span id="p2Nodes"></span></span></span>
   <span id="stat"></span>
 </div>
@@ -138,7 +141,9 @@
 <canvas id="cv"></canvas>
 <div id="help">
   <b>移动</b> <kbd>WASD</kbd>/<kbd>方向键</kbd>（8方向<b>即时转向</b> · 点按转向 长按<b>2倍速冲刺</b> · 不能停）
-　<b>站桩吐豆</b> 长按<kbd>J</kbd>/<kbd>空格</kbd>
+　<b>站桩吐豆</b> 长按<kbd id="helpFire">J</kbd>
+　<b>对话确认</b> <kbd id="helpInteract">回车</kbd>
+　<b>胃袋切换</b> <kbd id="helpPrev">Q</kbd>/<kbd id="helpNext">E</kbd>
 　<b>断尾</b> 点按<kbd>K</kbd>/<kbd>Shift</kbd>
 　<b>放节点</b> <kbd>F</kbd>
 　<b>P2 默认</b> <kbd>方向键</kbd> / <kbd>小键盘 0·1·2</kbd>（所有键位均可在设置中修改）
@@ -150,7 +155,7 @@
   <summary>▶ 数值调参面板（改完立即生效，用于玩法验证）</summary>
   <div class="grid" id="tune"></div>
 </details>
-<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
+<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">剧情模式</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
 <div id="pauseMenu"><h2>已暂停</h2><button id="pauseResume">继 续</button><button id="pauseSettings">设 置</button><button id="pauseHome">返回首页</button></div>
 
 <script>
@@ -755,14 +760,15 @@ const SANDBOX_CAPS={
 /* 可持久化的“物理按键 -> 玩家动作”映射。 */
 (function(root){
   const STORAGE_KEY="imsnake_controls_v1";
-  const ACTIONS=["up","down","left","right","fire","cut","node"];
-  const LABELS={up:"上移",down:"下移",left:"左移",right:"右移",fire:"吐豆",cut:"断尾",node:"放节点"};
+  const ACTIONS=["up","down","left","right","fire","interact","prevItem","nextItem","cut","node"];
+  const LABELS={up:"上移",down:"下移",left:"左移",right:"右移",fire:"吐豆",interact:"确认/交互",prevItem:"胃袋上一格",nextItem:"胃袋下一格",cut:"断尾",node:"放节点"};
   const DEFAULTS={
-    1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",cut:"KeyK",node:"KeyF"},
-    2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",cut:"Numpad1",node:"Numpad2"}
+    1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",interact:"Enter",prevItem:"KeyQ",nextItem:"KeyE",cut:"KeyK",node:"KeyF"},
+    2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",interact:"NumpadEnter",prevItem:"Numpad4",nextItem:"Numpad6",cut:"Numpad1",node:"Numpad2"}
   };
-  const SOLO_ALIASES={up:["ArrowUp"],down:["ArrowDown"],left:["ArrowLeft"],right:["ArrowRight"],fire:["Space"],cut:["ShiftLeft","ShiftRight"]};
-  const KEY_TO_CODE={" ":"Space",space:"Space",shift:"ShiftLeft",enter:"Enter",
+  // 空格不再作为吐豆兼容键，确认动作单独使用 Enter。
+  const SOLO_ALIASES={up:["ArrowUp"],down:["ArrowDown"],left:["ArrowLeft"],right:["ArrowRight"],cut:["ShiftLeft","ShiftRight"]};
+  const KEY_TO_CODE={" ":"Space",space:"Space",shift:"ShiftLeft",enter:"Enter",numpadenter:"NumpadEnter",
     arrowup:"ArrowUp",arrowdown:"ArrowDown",arrowleft:"ArrowLeft",arrowright:"ArrowRight"};
   function copyDefaults(){return{1:Object.assign({},DEFAULTS[1]),2:Object.assign({},DEFAULTS[2])};}
   function load(){
@@ -804,13 +810,173 @@ const SANDBOX_CAPS={
   function resetBindings(){config.bindings=copyDefaults();save();}
   function keyLabel(code){
     const pretty={Space:"空格",ShiftLeft:"左 Shift",ShiftRight:"右 Shift",ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",
-      Numpad0:"小键盘 0",Numpad1:"小键盘 1",Numpad2:"小键盘 2"};
+      Enter:"回车",NumpadEnter:"小键盘回车",Numpad0:"小键盘 0",Numpad1:"小键盘 1",Numpad2:"小键盘 2",Numpad4:"小键盘 4",Numpad6:"小键盘 6"};
     return pretty[code]||String(code).replace(/^Key/,"").replace(/^Digit/,"");
   }
+  function bindingFor(playerId,action){
+    const id=Number(playerId)||1;return config.bindings[id]&&config.bindings[id][action]||null;
+  }
+  function bindingLabel(playerId,action){return keyLabel(bindingFor(playerId,action));}
   function snapshot(){return JSON.parse(JSON.stringify(config));}
   root.InputMap={STORAGE_KEY,ACTIONS,LABELS,DEFAULTS,SOLO_ALIASES,eventCode,actionFor,conflict,setBinding,
-    setPlayerCount,getPlayerCount,needsPlayerChoice,resetBindings,keyLabel,snapshot,save};
+    setPlayerCount,getPlayerCount,needsPlayerChoice,resetBindings,keyLabel,bindingFor,bindingLabel,snapshot,save};
 })(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory();
+  else root.IMS_STOMACH = factory();
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  // The bean slot is deliberately permanent: an empty bean supply is still a
+  // meaningful selected weapon and keeps the hotkey behaviour predictable.
+  var DEFAULT_ITEMS = {
+    // Bean ammunition is already represented by the snake's ordinary body
+    // length. Only special stomach contents add reserved length here.
+    bean: { id: "bean", name: "豆子", shortName: "豆子", maxStack: Infinity, length: 0 },
+    ketiCorpse: { id: "ketiCorpse", name: "可蒂的尸体", shortName: "可蒂尸体", maxStack: 1, length: 2, color: "#f5f5fa" }
+  };
+
+  function copy(value) {
+    if (!value || typeof value !== "object") return value;
+    if (Array.isArray(value)) return value.map(copy);
+    var result = {};
+    Object.keys(value).forEach(function (key) { result[key] = copy(value[key]); });
+    return result;
+  }
+
+  function clampInt(value, fallback) {
+    var n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+  }
+
+  function StomachInventory(options) {
+    options = options || {};
+    this.items = Object.assign({}, DEFAULT_ITEMS, options.items || {});
+    this.slots = [];
+    this.selectedIndex = 0;
+    this._ensureSlot("bean");
+    this.slots[0].count = clampInt(options.beans, 0);
+    if (options.state) this.restore(options.state);
+  }
+
+  StomachInventory.prototype._item = function (id) {
+    return this.items[id] || { id: id, name: id, shortName: id, maxStack: 99, length: 1 };
+  };
+
+  StomachInventory.prototype._ensureSlot = function (id) {
+    for (var i = 0; i < this.slots.length; i += 1) {
+      if (this.slots[i].id === id) return this.slots[i];
+    }
+    var item = this._item(id);
+    var slot = { id: id, count: 0 };
+    this.slots.push(slot);
+    return slot;
+  };
+
+  StomachInventory.prototype._normalizeSelection = function () {
+    if (!this.slots.length) this._ensureSlot("bean");
+    if (this.selectedIndex < 0 || this.selectedIndex >= this.slots.length) this.selectedIndex = 0;
+  };
+
+  StomachInventory.prototype.add = function (id, amount) {
+    amount = clampInt(amount, 1);
+    if (!amount) return { added: 0, addedWeight: 0, count: this.getCount(id), item: copy(this._item(id)) };
+    var slot = this._ensureSlot(id);
+    var item = this._item(id);
+    var room = item.maxStack === Infinity ? amount : Math.max(0, item.maxStack - slot.count);
+    var added = Math.min(amount, room);
+    slot.count += added;
+    return { added: added, addedWeight: added * (Number(item.length) || 0), count: slot.count, item: copy(item) };
+  };
+
+  StomachInventory.prototype.addBeans = function (amount) { return this.add("bean", amount); };
+
+  StomachInventory.prototype.getCount = function (id) {
+    for (var i = 0; i < this.slots.length; i += 1) if (this.slots[i].id === id) return this.slots[i].count;
+    return 0;
+  };
+
+  StomachInventory.prototype.getSelected = function () {
+    this._normalizeSelection();
+    var slot = this.slots[this.selectedIndex];
+    return { index: this.selectedIndex, id: slot.id, count: slot.count, item: copy(this._item(slot.id)), available: slot.count > 0 };
+  };
+
+  StomachInventory.prototype.select = function (index) {
+    this._normalizeSelection();
+    var n = Number(index);
+    if (!Number.isInteger(n)) return this.getSelected();
+    this.selectedIndex = ((n % this.slots.length) + this.slots.length) % this.slots.length;
+    return this.getSelected();
+  };
+
+  // E/Q are represented as next/previous so key mapping stays outside this module.
+  StomachInventory.prototype.cycle = function (direction) {
+    this._normalizeSelection();
+    var step = Number(direction) < 0 ? -1 : 1;
+    return this.select(this.selectedIndex + step);
+  };
+  StomachInventory.prototype.next = function () { return this.cycle(1); };
+  StomachInventory.prototype.previous = function () { return this.cycle(-1); };
+
+  StomachInventory.prototype.useSelected = function () {
+    var selected = this.getSelected();
+    if (!selected.available) return { fired: false, reason: "empty", selected: selected };
+    var slot = this.slots[selected.index];
+    slot.count -= 1;
+    var result = { fired: true, id: slot.id, item: copy(selected.item), remaining: slot.count, removedWeight: Number(selected.item.length) || 0 };
+    // Keep the empty slot selected. Equipment choice is explicit: the game
+    // never silently switches back to beans after the player fires an item.
+    result.selected = this.getSelected();
+    return result;
+  };
+
+  // Naming aliases keep the adapter readable at call sites (pickup/launch/HUD).
+  StomachInventory.prototype.consumeSelected = function () { return this.useSelected(); };
+  StomachInventory.prototype.selected = function () { return this.getSelected(); };
+  StomachInventory.prototype.status = function () {
+    return { selected: this.getSelected(), slots: this.getSlots(), lengthContribution: this.getLengthContribution() };
+  };
+
+  StomachInventory.prototype.getLengthContribution = function () {
+    return this.slots.reduce(function (total, slot) {
+      var item = this._item(slot.id);
+      return total + slot.count * (Number(item.length) || 0);
+    }.bind(this), 0);
+  };
+
+  StomachInventory.prototype.getSlots = function () {
+    return this.slots.map(function (slot, index) {
+      var item = this._item(slot.id);
+      return { index: index, id: slot.id, count: slot.count, item: copy(item), selected: index === this.selectedIndex, available: slot.count > 0 };
+    }.bind(this));
+  };
+
+  StomachInventory.prototype.snapshot = function () {
+    return { version: 1, selectedIndex: this.selectedIndex, slots: this.slots.map(function (slot) { return { id: slot.id, count: slot.count }; }) };
+  };
+
+  StomachInventory.prototype.restore = function (state) {
+    if (!state || !Array.isArray(state.slots)) return false;
+    this.slots = [];
+    state.slots.forEach(function (raw) {
+      if (!raw || typeof raw.id !== "string") return;
+      var slot = this._ensureSlot(raw.id);
+      slot.count = clampInt(raw.count, 0);
+      var max = this._item(raw.id).maxStack;
+      if (max !== Infinity) slot.count = Math.min(slot.count, max);
+    }, this);
+    this._ensureSlot("bean");
+    this.selectedIndex = clampInt(state.selectedIndex, 0);
+    this._normalizeSelection();
+    return true;
+  };
+
+  return { StomachInventory: StomachInventory, DEFAULT_ITEMS: copy(DEFAULT_ITEMS) };
+});
 
 </script>
 <script>
@@ -885,10 +1051,10 @@ const SANDBOX_CAPS={
     S.panel.style.display="flex";render();
   }
   function closePanel(){if(S.capture)S.capture=null;if(S.panel)S.panel.style.display="none";}
-  function onInputChosen(mode){
+  function onInputChosen(mode,forceCountChoice){
     S.inputMode=mode;
     if(mode==="touch"){if(InputMap.needsPlayerChoice())InputMap.setPlayerCount(1);return;}
-    if(mode==="kb"&&InputMap.needsPlayerChoice())open(true);
+    if(mode==="kb"&&(forceCountChoice||InputMap.needsPlayerChoice()))open(true);
   }
   function init(){
     build();
@@ -910,7 +1076,7 @@ const SANDBOX_CAPS={
   function enabled(){return S.enabled;}
   function active(){return !!(S.enabled&&S.p&&S.p.alive);}
   function reset(){
-    S.enabled=InputMap.getPlayerCount()===2&&playMode!=="tutorial"&&playMode!=="intro";
+    S.enabled=InputMap.getPlayerCount()===2&&playMode!=="tutorial"&&playMode!=="intro"&&playMode!=="story";
     S.downReason="";
     if(!S.enabled){S.p=null;return;}
     const sy=Math.floor(CFG.rows/2)+4,saved=playMode==="campaign"?(S.carry||carry):null;
@@ -944,6 +1110,10 @@ const SANDBOX_CAPS={
   function pathHead(){return PlayerCore.pathHead(S.p);}
   function selfBite(x,y,r){return PlayerCore.selfBite(S.p,x,y,r||.62,Math.max(2,CFG.neckGuard),nearNode);}
   function enterDanger(type){S.p.danger={type,timer:.5};shake=Math.max(shake,.18);}
+  function primaryBodyHit(x,y){
+    return typeof alive!=="undefined"&&alive&&!primaryDown&&
+      segPos.slice(1).some(s=>Math.hypot(x-s.x,y-s.y)<.62);
+  }
 
   function updateMovement(dt){
     const p=S.p;applyQueue();
@@ -951,8 +1121,8 @@ const SANDBOX_CAPS={
       p.danger.timer-=dt;
       const spd=CFG.snakeSpeed*(p.held.size>0&&!p.firing?CFG.speedBoost:1);
       const step=Math.max(spd*dt,.05),nx=p.snake.fx+p.dir.x*step,ny=p.snake.fy+p.dir.y*step;
-      if(!hitWall(nx,ny,.26)&&!selfBite(nx,ny,.5))p.danger=null;
-      else{if(p.danger.timer<=0)defeat(p.danger.type==="wall"?"P2 撞上了墙":"P2 咬到了自己的尾巴");return;}
+      if(!hitWall(nx,ny,.26)&&!selfBite(nx,ny,.5)&&!primaryBodyHit(nx,ny))p.danger=null;
+      else{if(p.danger.timer<=0)defeat(p.danger.type==="wall"?"P2 撞上了墙":p.danger.type==="player"?"撞上了 P1 的身体":"P2 咬到了自己的尾巴");return;}
     }
     if(p.firing||!p.alive)return;
     let spd=CFG.snakeSpeed*(p.held.size>0?CFG.speedBoost:1)*RUN.speedMult;
@@ -1042,15 +1212,59 @@ const SANDBOX_CAPS={
     for(let i=hitIdx;i<oldLen;i++){const s=p.segPos[i];if(!s)break;const a=Math.atan2(s.y-b.y,s.x-b.x)+(Math.random()-.5)*.7,spd=7+Math.random()*4;flyingBeans.push({x:s.x,y:s.y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,t:.9});}
     shake=Math.max(shake,.4);ftext(p.snake.fx,p.snake.fy-1,"P2 -"+lost+" 节！","#7fd1e8");puff(p.snake.fx,p.snake.fy,"#7fd1e8");compute();computeEnclosure();
   }
-  function update(dt){if(!active())return;const p=S.p;p.invuln=Math.max(0,p.invuln-dt);p.cutCd=Math.max(0,p.cutCd-dt);updateMovement(dt);if(active())updateFire(dt);}
+  function ensureSafeSpawn(){
+    if(!S.p)return true;
+    const p=S.p,old={x:p.snake.fx,y:p.snake.fy,dir:{x:p.dir.x,y:p.dir.y},path:p.snake.path.map(q=>({x:q.x,y:q.y}))};
+    const px=Math.floor(old.x),py=Math.floor(old.y),candidates=[];
+    for(let y=0;y<CFG.rows;y++)for(let x=0;x<CFG.cols;x++)
+      candidates.push({x,y,d:Math.abs(x-px)+Math.abs(y-py)});
+    candidates.sort((a,b)=>a.d-b.d);
+    for(const c of candidates){
+      p.snake.fx=c.x+.5;p.snake.fy=c.y+.5;p.dir={x:1,y:0};p.snake.path=[];
+      for(let i=1;i<=p.snake.len+3;i++)p.snake.path.push({x:p.snake.fx-i,y:p.snake.fy});
+      compute();
+      const wallHit=p.segPos.some(s=>hitWall(s.x,s.y,.34));
+      const playerHit=typeof alive!=="undefined"&&alive&&!primaryDown&&
+        p.segPos.some(a=>segPos.some(b=>Math.hypot(a.x-b.x,a.y-b.y)<.72));
+      const laneHit=!spawnLaneClear(p.snake.fx,p.snake.fy,3);
+      if(!wallHit&&!playerHit&&!laneHit)return true;
+    }
+    p.snake.fx=old.x;p.snake.fy=old.y;p.dir=old.dir;p.snake.path=old.path;compute();
+    return false;
+  }
+
+  function enterPrimaryDanger(){
+    danger={type:"player",timer:.5};
+    shake=Math.max(shake,.18);
+  }
+
+  function checkPlayerBodyCollision(){
+    const p=S.p,primaryUp=typeof alive!=="undefined"&&alive&&!primaryDown;
+    if(!primaryUp)return;
+    const p1Hit=p.segPos.slice(1).some(b=>Math.hypot(snake.fx-b.x,snake.fy-b.y)<.62);
+    const p2Hit=p.segPos.length>0&&segPos.slice(1).some(b=>Math.hypot(p.snake.fx-b.x,p.snake.fy-b.y)<.62);
+    if(p1Hit&&!danger)enterPrimaryDanger();
+    if(p2Hit&&!p.danger)enterDanger("player");
+  }
+
+  function update(dt){
+    if(!active())return;
+    const p=S.p;
+    p.invuln=Math.max(0,p.invuln-dt);
+    p.cutCd=Math.max(0,p.cutCd-dt);
+    updateMovement(dt);
+    if(active())updateFire(dt);
+    checkPlayerBodyCollision();
+  }
 
   function draw(ctx,T){
     if(!active())return;const p=S.p;
     for(let i=p.segPos.length-1;i>=0;i--){
       const s=p.segPos[i],x=s.x*T,y=s.y*T;
       if(i===0){
-        let col=p.light;if(p.invuln>0&&Math.sin(gameTime*30)>0)col="#ffffff";ctx.fillStyle=col;roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
+        let col=p.light;if(p.danger&&Math.sin(gameTime*40)>0)col="#ff5d5d";else if(p.invuln>0&&Math.sin(gameTime*30)>0)col="#ffffff";ctx.fillStyle=col;roundRect(x-T/2+2,y-T/2+2,T-4,T-4,7);ctx.fill();
         ctx.fillStyle="#1a1023";const ex=p.dir.x*4,ey=p.dir.y*4;ctx.fillRect(x-6+ex,y-6+ey,4,5);ctx.fillRect(x+2+ex,y-6+ey,4,5);
+        if(p.danger){ctx.fillStyle="#ff5d5d";ctx.font="bold 16px Consolas";ctx.fillText("!",x,y-T*.9);}
         ctx.textAlign="center";ctx.font="bold 10px Consolas";ctx.fillStyle="#bdefff";ctx.fillText("P2",x,y-T*.75);
       }else{const shade=.75+.25*(1-i/p.segPos.length);ctx.fillStyle=rgb(55,120+shade*45,165+shade*35);roundRect(x-T/2+2.5,y-T/2+2.5,T-5,T-5,5);ctx.fill();}
     }
@@ -1069,9 +1283,450 @@ const SANDBOX_CAPS={
   function keyup(ev){if(!S.p)return;const action=InputMap.actionFor(2,ev);if(!action)return;S.p.held.delete(action);if(action==="fire")S.p.fireHeld=false;if(MOVE[action])pushCombo();}
   addEventListener("keydown",keydown);addEventListener("keyup",keyup);addEventListener("blur",clearInput);
 
-  root.CoopMode={state:S,enabled,active,reset,resetRun,captureCarry,update,draw,hud,view,bodyHas,bodyCells,damage,hurt,hitBySeed,defeat,trimAt,
+  root.CoopMode={state:S,enabled,active,reset,resetRun,captureCarry,ensureSafeSpawn,update,draw,hud,view,bodyHas,bodyCells,damage,hurt,hitBySeed,defeat,trimAt,
     cutTail,placeNode,refundCharge,needsCharge,heal,grow,clearInput};
 })(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+
+(function(root){
+  const TYPES=Object.freeze({
+    NODE_ENTERED:"story.node_entered",
+    DIALOGUE_OPTION_SELECTED:"dialogue.option_selected",
+    PLAYER_BEAN_EATEN:"player.bean_eaten",
+    PLAYER_BEAN_SPIT:"player.bean_spit",
+    FRAGILE_GATE_BROKEN:"map.fragile_gate_broken",
+    MAP_EXIT_ENTERED:"map.exit_entered",
+    MAP_LOADED:"map.loaded",
+    ACTOR_INTERACTED:"actor.interacted",
+    ACTOR_DIED:"actor.died",
+    ACTOR_EATEN:"actor.eaten",
+    ENEMIES_DEFEATED:"combat.enemies_defeated",
+    PLAYER_LEFT_AREA:"player.left_area",
+    TIMER_EXPIRED:"story.timer_expired",
+    RUN_STARTED:"run.started",
+    RUN_ENDED:"run.ended"
+  });
+
+  class EventBus{
+    constructor(){this.listeners=new Map();this.sequence=0;}
+    on(type,handler){
+      if(typeof handler!=="function")throw new TypeError("Story event handler must be a function");
+      let set=this.listeners.get(type);
+      if(!set){set=new Set();this.listeners.set(type,set);}
+      set.add(handler);
+      return ()=>this.off(type,handler);
+    }
+    once(type,handler){
+      const off=this.on(type,event=>{off();handler(event);});
+      return off;
+    }
+    off(type,handler){
+      const set=this.listeners.get(type);if(!set)return;
+      set.delete(handler);if(!set.size)this.listeners.delete(type);
+    }
+    emit(type,payload){
+      const event=Object.freeze({type,payload:payload||{},sequence:++this.sequence,time:Date.now()});
+      const targets=new Set([...(this.listeners.get(type)||[]),...(this.listeners.get("*")||[])]);
+      targets.forEach(handler=>{
+        try{handler(event);}catch(error){setTimeout(()=>{throw error;},0);}
+      });
+      return event;
+    }
+    clear(){this.listeners.clear();}
+    listenerCount(type){const set=this.listeners.get(type);return set?set.size:0;}
+  }
+
+  root.IMS_STORY_EVENTS={TYPES,EventBus,bus:new EventBus()};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+
+(function(root){
+  const busRef=()=>root.IMS_STORY_EVENTS&&root.IMS_STORY_EVENTS.bus;
+  const clone=value=>JSON.parse(JSON.stringify(value));
+
+  function defaultState(){
+    return {
+      schemaVersion:1,storyId:"prologue",chapter:"prologue",
+      currentNode:"Start",currentMap:null,
+      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false},
+      actors:{keti:{status:"unknown",met:false,corpsePresent:false}},
+      counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0},
+      player:{name:"",bodyLength:4},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
+    };
+  }
+
+  function mergeDefaults(input){
+    const base=defaultState(),out=clone(base);
+    if(!input||typeof input!=="object")return out;
+    Object.keys(input).forEach(key=>{
+      const value=input[key];
+      if(value&&typeof value==="object"&&!Array.isArray(value))out[key]=Object.assign({},out[key]||{},value);
+      else if(value!==undefined)out[key]=value;
+    });
+    out.flags=Object.assign({},base.flags,input.flags||{});
+    out.actors={};
+    const actorIds=new Set([...Object.keys(base.actors),...Object.keys(input.actors||{})]);
+    actorIds.forEach(id=>{out.actors[id]=Object.assign({},base.actors[id]||{},(input.actors&&input.actors[id])||{});});
+    out.counters=Object.assign({},base.counters,input.counters||{});
+    out.player=Object.assign({},base.player,input.player||{});
+    out.inventory=clone(input.inventory||base.inventory);
+    return out;
+  }
+
+  class StoryStateStore{
+    constructor(initial){this.state=mergeDefaults(initial);this.listeners=new Set();}
+    snapshot(){return clone(this.state);}
+    get(path,fallback){
+      if(!path)return this.snapshot();
+      const value=path.split(".").reduce((obj,key)=>obj==null?undefined:obj[key],this.state);
+      return value===undefined?fallback:value;
+    }
+    replace(next,reason){
+      this.state=mergeDefaults(next);const snapshot=this.snapshot();
+      this.listeners.forEach(fn=>fn(snapshot,reason||"replace"));
+      const bus=busRef();if(bus)bus.emit("story.state_changed",{state:snapshot,reason:reason||"replace"});
+      return snapshot;
+    }
+    update(mutator,reason){const draft=this.snapshot();mutator(draft);return this.replace(draft,reason||"update");}
+    reset(reason){return this.replace(defaultState(),reason||"reset");}
+    subscribe(fn){this.listeners.add(fn);return ()=>this.listeners.delete(fn);}
+    save(slot){
+      try{localStorage.setItem("imsnake.story."+String(slot||"main"),JSON.stringify(this.state));return true;}
+      catch(error){return false;}
+    }
+    load(slot){
+      try{const raw=localStorage.getItem("imsnake.story."+String(slot||"main"));if(!raw)return false;this.replace(JSON.parse(raw),"load");return true;}
+      catch(error){return false;}
+    }
+  }
+
+  root.IMS_STORY_STATE={defaultState,mergeDefaults,StoryStateStore};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+(function(root){
+const TYPES=Object.freeze({TUTORIAL:"prologue_tutorial",WILDERNESS:"prologue_wilderness"});
+const STORY_MAPS={
+[TYPES.TUTORIAL]:{id:TYPES.TUTORIAL,name:"教学地图",kind:"story",spawn:{x:8.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},cleanMap:true,solidOutside:[4,16,51,16],obstacles:[],beans:[[16,24],[24,24],[32,24],[42,24],[48,24],[51,24]],gates:[{id:"tutorial_fragile_gate",kind:"fragile_gate",x:48,y:16,w:3,h:1,need:3,breakEvent:"map.fragile_gate_broken"}],exits:[{id:"tutorial_exit",rect:[47,14,5,3],requiresGate:"tutorial_fragile_gate",targetMap:TYPES.WILDERNESS,targetSpawn:"wilderness_entry"}],interactions:{mechanics:["tutorial_fragile_gate"],exits:["tutorial_exit"]},npcs:[],enemySpawns:[],rules:{allowFreeSnakeAfterTimeout:true,exitRequiresGate:true,beanTarget:0}},
+[TYPES.WILDERNESS]:{id:TYPES.WILDERNESS,name:"荒野",kind:"story",spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,12,60,1],[4,36,60,1],[4,12,1,11],[4,28,1,8],[63,12,1,25],[20,18,2,2],[31,29,2,2],[48,16,2,2]],beans:[],gates:[],exits:[],interactions:{actors:["keti"]},npcs:[{id:"keti",kind:"keti",x:42.5,y:24.5}],enemySpawns:[],entryPoints:{wilderness_entry:{x:7.5,y:24.5,dir:{x:1,y:0}}},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:10,initialRandomBeans:8,beanRespawn:3}}
+};
+root.IMS_STORY_MAPS={TYPES,STORY_MAPS,clone:value=>JSON.parse(JSON.stringify(value))};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+(function(root){
+const events=root.IMS_STORY_EVENTS,types=events&&events.TYPES||{},stateApi=root.IMS_STORY_STATE;
+class StoryRuntime{
+constructor(o){o=o||{};this.bus=o.bus||(events&&events.bus);this.state=o.state||new stateApi.StoryStateStore();this.graph=o.graph||{};this.adapters=o.adapters||{};this.node=null;this.choices=null;this.waiting=null;this.timers=new Map();this.unsubscribers=[];}
+registerGraph(g){this.graph=g||{};return this;}
+start(id){this.stopWait();this.state.update(s=>{s.currentNode=id;},"start");return this.enter(id);}
+enter(id){const n=this.graph[id];if(!n)throw new Error("Unknown story node: "+id);this.node=n;this.choices=n.choices||(n.onEnter&&n.onEnter.args&&n.onEnter.args.choices)||null;this.state.update(s=>{s.currentNode=id;},"node_enter");if(this.bus)this.bus.emit(types.NODE_ENTERED||"story.node_entered",{nodeId:id,node:n});if(n.onEnter)this.runCommand(n.onEnter);if(n.wait)this.waitFor(n.wait);if(n.auto)this.follow(n.auto);return n;}
+follow(id){return id?this.enter(id):null;}
+choose(id){if(!this.node||!this.choices)throw new Error("No choices available");const c=this.choices.find(x=>x.id===id);if(!c)throw new Error("Unknown choice: "+id);if(c.set)this.state.update(s=>applyPatch(s,c.set),"choice:"+id);if(this.bus)this.bus.emit(types.DIALOGUE_OPTION_SELECTED||"dialogue.option_selected",{nodeId:this.node.id,choiceId:id});if(c.run)c.run({runtime:this,state:this.state,choice:c});return this.follow(c.next);}
+waitFor(w){this.stopWait();if(!this.bus||!w||!Array.isArray(w.events))return;const h=e=>{if(!w.events.includes(e.type))return;if(w.predicate&&!w.predicate(e,this.state.snapshot()))return;this.stopWait();const target=typeof w.target==="function"?w.target(e,this.state.snapshot()):w.target;this.state.update(s=>{s.lastEvent={type:e.type,payload:e.payload};},"event:"+e.type);if(target)this.follow(target);};this.unsubscribers.push(this.bus.on("*",h));this.waiting=w;}
+runCommand(c){const n=c&&(c.name||c),a=this.adapters[n];if(typeof a==="function")a(c.args||{},this.state,this);}
+stopWait(){this.unsubscribers.splice(0).forEach(x=>x());this.waiting=null;}
+startTimer(id,seconds,onExpire){this.stopTimer(id);this.timers.set(id,setTimeout(()=>{this.timers.delete(id);if(this.bus)this.bus.emit(types.TIMER_EXPIRED||"story.timer_expired",{id});if(onExpire)onExpire();},Math.max(0,seconds)*1000));}
+stopTimer(id){const t=this.timers.get(id);if(t){clearTimeout(t);this.timers.delete(id);}}
+stop(){this.stopWait();this.timers.forEach(t=>clearTimeout(t));this.timers.clear();this.node=null;this.choices=null;}
+}
+function applyPatch(t,p){Object.keys(p||{}).forEach(path=>{const a=path.split(".");let c=t;for(let i=0;i<a.length-1;i++)c=c[a[i]]||(c[a[i]]={});c[a[a.length-1]]=p[path];});return t;}
+root.IMS_STORY_RUNTIME={StoryRuntime,applyPatch};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+
+(function(root){
+  function splitPages(value){
+    if(Array.isArray(value))return value.map(page=>String(page||"").trim()).filter(Boolean);
+    return String(value||"")
+      .replace(/\r\n?/g,"\n")
+      .split(/\n[ \t]*\n+/)
+      .map(page=>page.trim())
+      .filter(Boolean);
+  }
+
+  function normalize(dialogue){
+    const source=dialogue||{};
+    const pages=splitPages(source.pages||source.text||"");
+    return Object.assign({},source,{pages:pages.length?pages:[""]});
+  }
+
+  // 对白由某个键触发时，必须先松开该键，并经过极短的输入窗口，才能确认下一页。
+  function createInputGate(delayMs){
+    let openedAt=0,triggerCode=null,released=false,consumed=false;
+    const requested=Number(delayMs),delay=Math.max(0,Number.isFinite(requested)?requested:100);
+    const clock=now=>Number.isFinite(Number(now))?Number(now):Date.now();
+    return {
+      open(code,now){openedAt=clock(now);triggerCode=code||null;released=!triggerCode;consumed=false;},
+      keyup(code){if(!triggerCode||!code||code===triggerCode)released=true;},
+      canAdvance(now){return !consumed&&released&&clock(now)-openedAt>=delay;},
+      consume(now){if(consumed||!released||clock(now)-openedAt<delay)return false;consumed=true;return true;},
+      get released(){return released;},get triggerCode(){return triggerCode;}
+    };
+  }
+
+  function actionHint(action,playerId){
+    const input=root.InputMap;
+    if(!input)return "";
+    const id=playerId||1;
+    const label=typeof input.bindingLabel==="function"?input.bindingLabel(id,action):input.keyLabel(input.snapshot().bindings[id][action]);
+    return label?"["+label+"]":"";
+  }
+
+  root.IMS_STORY_DIALOGUE={splitPages,normalize,createInputGate,actionHint};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+
+(function(root){
+  const MAPS=root.IMS_STORY_MAPS.TYPES;
+  const progress=(step,total=8)=>({chapter:"序章",step,total});
+  const textGoal=text=>({kind:"text",text});
+  const counterGoal=(label,counter,target,inputHint)=>({kind:"counter",label,counter,target,inputHint});
+
+  const PROLOGUE={
+    id:"prologue",
+    start:"prologue_start",
+    nodes:{
+      prologue_start:{
+        id:"prologue_start",enter:{action:"loadMap",mapId:MAPS.TUTORIAL},next:"tutorial_1",
+        progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3,"move")
+      },
+      tutorial_1:{
+        id:"tutorial_1",progress:progress(1),goal:counterGoal("目标 吃豆","tutorialBeansEaten",3,"move"),
+        wait:{events:["PLAYER_BEAN_EATEN"],condition:"tutorialBeans3",target:"dialogue_1"}
+      },
+      dialogue_1:{
+        id:"dialogue_1",progress:progress(2),goal:textGoal("阅读对话"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 1",pages:[
+          "我究竟像这样吃了多久……",
+          "感觉……有点恶心。",
+          "要吐了！\n\n（长按 {fire} 吐出豆子；用 {interact} 推进对话。）"
+        ],choices:[{id:"go",label:"吐出来！",next:"tutorial_2"}]}
+      },
+      tutorial_2:{
+        id:"tutorial_2",progress:progress(3),goal:counterGoal("目标 吐出","tutorialBeansSpit",3,"fire"),
+        wait:{events:["PLAYER_BEAN_SPIT"],condition:"tutorialSpit3",target:"dialogue_2"}
+      },
+      dialogue_2:{
+        id:"dialogue_2",progress:progress(4),goal:textGoal("吃豆并破坏脆弱墙"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 2",pages:[
+          "吐出来舒服多了。",
+          "但是我的身体也变短了。",
+          "上面有一堵脆弱的墙？",
+          "似乎可以靠这个破坏它。"
+        ],choices:[{id:"go",label:"继续前进",action:"waitForWall"}]}
+      },
+      dialogue_3:{
+        id:"dialogue_3",progress:progress(5),goal:textGoal("找到门并走出教学地图"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 3",pages:[
+          "外面会是什么样子呢？",
+          "从来没有出去过，去看看好了。"
+        ],choices:[{id:"go",label:"走向门",action:"waitForExit"}]}
+      },
+      dialogue_4:{
+        id:"dialogue_4",progress:progress(5),goal:textGoal("找到门并走出教学地图"),
+        dialogue:{speaker:"我",sub:"序章 · 对话 4",pages:[
+          "也许，我还是适合待在里面。",
+          "就这样一直吃下去……"
+        ],choices:[
+          {id:"stay",label:"继续小游戏",next:"tutorial_free_play"},
+          {id:"leave",label:"还是出去看看",next:"tutorial_free_play"}
+        ]}
+      },
+      tutorial_free_play:{
+        id:"tutorial_free_play",progress:progress(5),goal:textGoal("找到门并走出教学地图"),
+        enter:{action:"banner",text:"自由探索：找到已经打开的门，走出教学地图"},
+        wait:{events:["MAP_EXIT_ENTERED"],target:"wilderness_start"}
+      },
+      wilderness_start:{
+        id:"wilderness_start",enter:{action:"loadMap",mapId:MAPS.WILDERNESS,entry:"wilderness_entry"},
+        next:"wilderness_keti_wait",progress:progress(6),goal:textGoal("找到哭声的主人")
+      },
+      wilderness_keti_wait:{
+        id:"wilderness_keti_wait",progress:progress(6),goal:textGoal("找到哭声的主人"),
+        wait:{events:["ACTOR_INTERACTED","ACTOR_DIED","ACTOR_EATEN"],condition:"ketiEvent",targetResolver:"ketiFirstContact"}
+      },
+      keti_question:{
+        id:"keti_question",progress:progress(6),goal:textGoal("与可蒂交谈"),
+        dialogue:{speaker:"可蒂",sub:"地图 2 · 荒野",portrait:"keti",crying:true,pages:["你要吃掉我吗？"],choices:[
+          {id:"yes",label:"是的。",next:"keti_cry"},
+          {id:"eat",label:"吃掉",next:"keti_eaten",danger:true}
+        ]}
+      },
+      keti_cry:{
+        id:"keti_cry",progress:progress(6),goal:textGoal("回应可蒂"),
+        dialogue:{speaker:"可蒂",sub:"可蒂哭了",portrait:"keti",crying:true,pages:["哇————！","你会吃掉我吗？"],choices:[
+          {id:"save",label:"开玩笑的，我不会吃你的",next:"keti_reassured"},
+          {id:"eat",label:"吃掉",next:"keti_eaten",danger:true},
+          {id:"leave",label:"离开",next:"free_explore"}
+        ]}
+      },
+      keti_reassured:{
+        id:"keti_reassured",progress:progress(7),goal:textGoal("保护可蒂"),
+        dialogue:{speaker:"可蒂",sub:"可蒂稍微安心了",portrait:"keti",crying:true,pages:[
+          "真的吗？这跟他们说的不一样……",
+          "啊！有怪物来了！"
+        ],choices:[{id:"fight",label:"挡在她前面",next:"wilderness_slimes"}]}
+      },
+      keti_eaten:{id:"keti_eaten",enter:{action:"eatKeti"},next:"eaten_slimes",progress:progress(7),goal:textGoal("击败史莱姆")},
+      eaten_slimes:{
+        id:"eaten_slimes",enter:{action:"spawnSlimes"},progress:progress(7),goal:textGoal("击败两只史莱姆"),
+        wait:{events:["ENEMIES_DEFEATED"],condition:"enemiesCleared",target:"free_explore"}
+      },
+      wilderness_slimes:{
+        id:"wilderness_slimes",enter:{action:"spawnSlimes"},progress:progress(7),goal:textGoal("击败两只史莱姆"),
+        wait:{events:["ENEMIES_DEFEATED"],condition:"enemiesCleared",targetResolver:"ketiOutcome"}
+      },
+      keti_saved:{
+        id:"keti_saved",progress:progress(8),goal:textGoal("完成序章"),
+        dialogue:{speaker:"可蒂",sub:"可蒂存活",portrait:"keti",pages:[
+          "是你救了我吗？",
+          "可我……不能离开这里。",
+          "请继续往前走吧，大人。",
+          "最后，可以请你告诉我你的名字吗？"
+        ],choices:[{id:"name",label:"告诉她我的名字",next:"input_player_name"}]}
+      },
+      keti_dead:{
+        id:"keti_dead",progress:progress(8),goal:textGoal("决定如何处理"),
+        dialogue:{speaker:"我",sub:"可蒂死亡",pages:["哭声消失了。","她的尸体还留在这里。"],choices:[
+          {id:"leave",label:"离开",next:"free_explore"},
+          {id:"eat",label:"吃掉尸体",next:"keti_eaten_after_death",danger:true}
+        ]}
+      },
+      keti_eaten_after_death:{id:"keti_eaten_after_death",enter:{action:"eatCorpse"},next:"free_explore",progress:progress(8),goal:textGoal("自由探索")},
+      free_explore:{
+        id:"free_explore",enter:{action:"freeExplore"},progress:progress(8),goal:textGoal("自由探索"),
+        wait:{events:["TIMER_EXPIRED"],condition:"freeExploreTimer",target:"memory_blur"}
+      },
+      memory_blur:{id:"memory_blur",enter:{action:"memoryBlur"},next:"memory_blur_dialogue",progress:progress(8),goal:textGoal("回忆自己的名字")},
+      memory_blur_dialogue:{
+        id:"memory_blur_dialogue",progress:progress(8),goal:textGoal("回忆自己的名字"),
+        dialogue:{speaker:"我",sub:"记忆模糊",pages:["我……刚才吃了什么？","脑子里只剩下一片空白。"],choices:[{id:"name",label:"回忆自己的名字",next:"input_player_name"}]}
+      },
+      input_player_name:{id:"input_player_name",enter:{action:"nameInput",next:"prologue_complete"},progress:progress(8),goal:textGoal("输入名字")},
+      prologue_complete:{id:"prologue_complete",enter:{action:"storyEnd",title:"序章试玩完成",text:"名字和选择已经记录。后续章节会从这里继续。"},progress:progress(8),goal:textGoal("序章完成")}
+    }
+  };
+
+  root.IMS_STORY_DATA={PROLOGUE};
+})(typeof window!=="undefined"?window:globalThis);
+
+</script>
+<script>
+"use strict";
+
+(function(root){
+  const SLOT_COUNT=3;
+  const KEY_PREFIX="imsnake.story.slot.";
+  const LEGACY_KEY="imsnake.story.main";
+  const CURRENT_SCHEMA=1;
+  const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
+  const validSlot=slot=>{
+    const n=Number(slot);
+    return Number.isInteger(n)&&n>=1&&n<=SLOT_COUNT?n:null;
+  };
+  const storageOf=provided=>provided||(root&&root.localStorage);
+  const errorResult=(code,message,error)=>({ok:false,error:{code,message,detail:error&&String(error.message||error)}});
+
+  class StorySaveStore{
+    constructor(options){
+      options=options||{};
+      this.storage=storageOf(options.storage);
+      this.now=options.now||(()=>new Date().toISOString());
+      this.schemaVersion=options.schemaVersion||CURRENT_SCHEMA;
+      this.migrations=new Map();
+      (options.migrations||[]).forEach(m=>this.registerMigration(m.from,m.to,m.migrate));
+    }
+    key(slot){const n=validSlot(slot);return n?KEY_PREFIX+n:null;}
+    registerMigration(from,to,migrate){
+      if(!Number.isInteger(from)||!Number.isInteger(to)||typeof migrate!=="function")throw new Error("Invalid story save migration");
+      this.migrations.set(from+"->"+to,migrate);return this;
+    }
+    migrate(envelope){
+      let value=clone(envelope),version=Number(value&&value.schemaVersion)||0;
+      while(version<this.schemaVersion){
+        const next=version+1,fn=this.migrations.get(version+"->"+next);
+        if(!fn)return errorResult("SCHEMA_UNSUPPORTED","没有可用的存档版本迁移：v"+version+" → v"+next);
+        try{value=fn(clone(value));version=next;value.schemaVersion=version;}
+        catch(error){return errorResult("SCHEMA_MIGRATION_FAILED","存档版本迁移失败",error);}
+      }
+      if(version>this.schemaVersion)return errorResult("SCHEMA_TOO_NEW","存档版本高于当前游戏版本");
+      return {ok:true,value};
+    }
+    readRaw(key){
+      if(!this.storage||typeof this.storage.getItem!=="function")return errorResult("STORAGE_UNAVAILABLE","当前环境不支持存档");
+      try{return {ok:true,raw:this.storage.getItem(key)};}catch(error){return errorResult("STORAGE_READ_FAILED","读取存档失败",error);}
+    }
+    decode(key,raw,legacy){
+      if(raw===null||raw===undefined)return {ok:true,empty:true};
+      let parsed;try{parsed=JSON.parse(raw);}catch(error){return errorResult("CORRUPT_JSON","存档数据损坏，无法解析",error);}
+      if(legacy&&parsed&&typeof parsed==="object"&&!parsed.state){
+        parsed={schemaVersion:1,meta:{storyId:parsed.storyId||"prologue",chapter:parsed.chapter||null,currentNode:parsed.currentNode||null,currentMap:parsed.currentMap||null,playerName:parsed.player&&parsed.player.name||""},state:parsed};
+      }
+      const migrated=this.migrate(parsed);if(!migrated.ok)return migrated;
+      const value=migrated.value;
+      if(!value||typeof value!=="object"||!value.state||typeof value.state!=="object")return errorResult("INVALID_SAVE","存档格式无效");
+      return {ok:true,value};
+    }
+    metadata(slot,envelope,legacy){
+      const m=envelope&&envelope.meta||{};
+      return {slot,exists:true,updatedAt:m.updatedAt||null,storyId:m.storyId||null,chapter:m.chapter||null,currentNode:m.currentNode||null,currentMap:m.currentMap||null,playerName:m.playerName||"",completed:!!m.completed,legacy:!!legacy};
+    }
+    save(slot,state,metadata){
+      const n=validSlot(slot);if(!n)return errorResult("INVALID_SLOT","存档位必须是 1、2 或 3");
+      if(!state||typeof state!=="object")return errorResult("INVALID_STATE","无法保存空的剧情状态");
+      const s=clone(state),m=metadata||{};
+      const envelope={schemaVersion:this.schemaVersion,meta:{slot:n,updatedAt:m.updatedAt||this.now(),storyId:m.storyId||s.storyId||"prologue",chapter:m.chapter||s.chapter||null,currentNode:m.currentNode||s.currentNode||null,currentMap:m.currentMap!==undefined?m.currentMap:(s.currentMap||null),playerName:m.playerName!==undefined?m.playerName:((s.player&&s.player.name)||""),completed:m.completed!==undefined?!!m.completed:!!(s.flags&&s.flags.storyCompleted)},state:s};
+      if(!this.storage||typeof this.storage.setItem!=="function")return errorResult("STORAGE_UNAVAILABLE","当前环境不支持存档");
+      try{this.storage.setItem(this.key(n),JSON.stringify(envelope));return {ok:true,meta:this.metadata(n,envelope,false),data:clone(s)};}catch(error){return errorResult("STORAGE_WRITE_FAILED","保存存档失败",error);}
+    }
+    load(slot){
+      const n=validSlot(slot);if(!n)return errorResult("INVALID_SLOT","存档位必须是 1、2 或 3");
+      let read=this.readRaw(this.key(n));if(!read.ok)return read;
+      let legacy=false,key=this.key(n),raw=read.raw;
+      // The historical single-slot save maps to slot 1 only; never make it
+      // appear as three separate saves in the slot picker.
+      if(raw===null&&n===1){const old=this.readRaw(LEGACY_KEY);if(!old.ok)return old;if(old.raw!==null){raw=old.raw;legacy=true;key=LEGACY_KEY;}}
+      const decoded=this.decode(key,raw,legacy);if(!decoded.ok)return decoded;
+      if(decoded.empty)return {ok:true,empty:true,slot:n};
+      return {ok:true,slot:n,legacy,meta:this.metadata(n,decoded.value,legacy),data:clone(decoded.value.state)};
+    }
+    list(){
+      const result=[];
+      for(let n=1;n<=SLOT_COUNT;n++){
+        const loaded=this.load(n);
+        if(!loaded.ok)result.push({slot:n,exists:true,corrupted:true,error:loaded.error});
+        else if(loaded.empty)result.push({slot:n,exists:false,legacy:false});
+        else result.push(loaded.meta);
+      }
+      return result;
+    }
+    delete(slot){
+      const n=validSlot(slot);if(!n)return errorResult("INVALID_SLOT","存档位必须是 1、2 或 3");
+      if(!this.storage||typeof this.storage.removeItem!=="function")return errorResult("STORAGE_UNAVAILABLE","当前环境不支持存档");
+      try{this.storage.removeItem(this.key(n));if(n===1)this.storage.removeItem(LEGACY_KEY);return {ok:true,slot:n};}catch(error){return errorResult("STORAGE_DELETE_FAILED","删除存档失败",error);}
+    }
+  }
+  root.IMS_STORY_SAVE={StorySaveStore,SLOT_COUNT,KEY_PREFIX,LEGACY_KEY,CURRENT_SCHEMA};
+  if(typeof module!=="undefined"&&module.exports)module.exports=root.IMS_STORY_SAVE;
+})(typeof window!=="undefined"?window:globalThis);
+
 </script>
 <script>
 "use strict";
@@ -1116,9 +1771,12 @@ const api={
 const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
 let touchMode=false;
 let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
-let intro=null,introSeen=false,fireKey=false;
+let intro=null,introSeen=false,fireKey=false,fireNeedsRelease=false;
 let curses=[];
 let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false;
+let storyActive=false,storyStage=-1,storyTransitioning=false;
+let stomach=new IMS_STOMACH.StomachInventory(),stomachPickups=[];
+let panelInputGate=null;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -1168,7 +1826,7 @@ let snake={fx:0,fy:0,len:4,path:[],pathLen:0};
 let dir={x:1,y:0}, dirQueue=[];
 let firing=false, fireT=0, fireStreak=0;
 let segPos=[], occSet=new Set();
-let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats;
+let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats, voidCells=new Set();
 let flyingBeans=[];
 let danger=null, hurtFlash=0;
 let gameState="menu", playMode="sandbox", tutIdx=-1;
@@ -1196,9 +1854,20 @@ function nearestPlayer(x,y){
 }
 function bodyHas(key){return occSet.has(key)||CoopMode.bodyHas(key);}
 function hurtPlayerById(id,reason){if(id===2)CoopMode.hurt(reason);else hurtPlayer(reason);}
+function routeStoryInteraction(kind,target,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const handler=rootRef&&rootRef.storyControllerInteraction;
+  return typeof handler==="function"?!!handler(kind,target,payload):false;
+}
+function notifyStoryEvent(name,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const api=rootRef&&rootRef.IMS_STORY_API;
+  if(api&&typeof api.engineEvent==="function")api.engineEvent(name,payload||{});
+}
 
 function buildObstacles(){
   obstacles=new Set();
+  voidCells=new Set();
   const rects=[
     [8,5,3,2],[18,5,3,2],[28,5,3,2],[38,6,3,2],[50,5,3,2],[60,6,3,2],
     [8,20,3,2],[20,22,2,2],[34,19,3,2],[48,21,3,2],[62,20,3,2],
@@ -1288,6 +1957,18 @@ function updateFlyingBeans(dt){
 }
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
+function recordGateHit(m){
+  if(!m||m.done)return false;
+  m.prog=Math.min(m.need,m.prog+1);
+  ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
+  if(m.prog>=m.need){
+    m.done=true;
+    for(const idx of m.cellIdx||[])obstacles.delete(idx);
+    grantReward(m.reward);computeEnclosure();
+    ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
+  }
+  return true;
+}
 function beanDamage(owner){
   if(owner===2)return CoopMode.damage();
   const base=4+RUN.dmgBonus;
@@ -1302,12 +1983,14 @@ function reset(forTutorial){
   for(let i=1;i<=CFG.initLen+3;i++)snake.path.push({x:6.5-i,y:sy+.5});
   hearts=RUN.maxHearts;invuln=0;cutCd=0;alive=true;primaryDown=false;paused=false;shake=0;biteAcc=0;
   danger=null;hurtFlash=0;
-  firing=false;fireT=0;
+  firing=false;fireT=0;fireNeedsRelease=false;
   segPos=[];occSet=new Set();
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
-  flyingBeans=[];curses=[];
-  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;npcPanelEl=null;panelOpen=false;freeze=false;
+  flyingBeans=[];curses=[];stomachPickups=[];stomach=new IMS_STOMACH.StomachInventory();
+  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;
+  const oldPanel=document.getElementById("npcPanel");if(oldPanel&&oldPanel.remove)oldPanel.remove();
+  npcPanelEl=null;panelOpts=[];panelSel=0;panelOpen=false;freeze=false;
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
@@ -1430,10 +2113,10 @@ function updateMovement(dt){
     const spd=CFG.snakeSpeed*(heldKeys.size>0&&!firing?CFG.speedBoost:1);
     const step=Math.max(spd*dt,.05);
     const nx=snake.fx+dir.x*step,ny=snake.fy+dir.y*step;
-    if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)){
+    if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)&&!coopBodyHit(nx,ny)){
       danger=null;
     }else{
-      if(danger.timer<=0)defeatPrimary(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");
+      if(danger.timer<=0)defeatPrimary(danger.type==="wall"?"撞上了墙":danger.type==="player"?"撞上了 P2 的身体":"咬到了自己的尾巴");
       return;
     }
   }
@@ -1464,6 +2147,10 @@ function enterDanger(type){
 function selfBiteProbe(px,py,r){
   return PlayerCore.selfBite({segPos},px,py,r||.62,Math.max(2,CFG.neckGuard),nearNode);
 }
+function coopBodyHit(px,py){
+  const p2=CoopMode.view();
+  return !!(p2&&p2.segPos.slice(1).some(s=>Math.hypot(px-s.x,py-s.y)<.62));
+}
 function path0(){return PlayerCore.pathHead({snake});}
 
 function nearNode(x,y){
@@ -1472,28 +2159,53 @@ function nearNode(x,y){
   return false;
 }
 
+function stomachSpecialWeight(){return stomach?stomach.getLengthContribution():0;}
+function minBodyLength(){return CFG.minLen+stomachSpecialWeight();}
+function beanAmmo(){return Math.max(0,snake.len-minBodyLength());}
+function syncStomachStory(reason){
+  if(playMode==="story")notifyStoryEvent("inventoryChanged",{inventory:stomach.snapshot(),bodyLength:snake.len,reason:reason||"inventory"});
+}
+function addStomachItem(id,amount,reason){
+  const result=stomach.add(id,amount||1);
+  if(result.addedWeight>0){snake.len+=result.addedWeight;computeSegs();syncStomachStory(reason||"pickup");}
+  return result;
+}
+function restoreStomachInventory(state){
+  stomach=new IMS_STOMACH.StomachInventory();
+  if(state)stomach.restore(state);
+  return stomach.snapshot();
+}
+function cycleStomach(direction){
+  if(!stomach||panelOpen||paused||freeze)return;
+  const selected=stomach.cycle(direction);
+  ftext(snake.fx,snake.fy-1,"主位："+selected.item.shortName+(selected.id==="bean"?"":" ×"+selected.count),"#ffd76e");
+  syncStomachStory("selection");
+}
+
 function pickUps(){
   for(let i=groundBeans.length-1;i>=0;i--){
     const b=groundBeans[i];
     if(Math.hypot(b.x+.5-snake.fx,b.y+.5-snake.fy)<RUN.pickupR){
       if(b.fromProj)projRecycled++;
       groundBeans.splice(i,1);
-      snake.len++;beansEaten++;
-      for(const m of MECHS){
-        if(m.done||m.kind!=="gate")continue;
-        if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
-          m.prog++;
-          ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
-          if(m.prog>=m.need){
-            m.done=true;
-            for(const idx of m.cellIdx)obstacles.delete(idx);
-            grantReward(m.reward);computeEnclosure();
-            ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
+      snake.len++;beansEaten++;notifyStoryEvent("beanEaten",{bean:b});
+        for(const m of MECHS){
+          if(m.done||m.kind!=="gate")continue;
+          if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
+            const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"pickup",bean:b,apply:()=>recordGateHit(m)});
+            if(!handled)recordGateHit(m);
           }
         }
-      }
       if(Math.random()<RUN.greedy){snake.len++;ftext(b.x+.5,b.y,"贪食 +1","#ffd76e");}
       ftext(b.x+.5,b.y+.3,"+1","#8fe36b");puff(b.x+.5,b.y+.5,"#8fe36b");
+    }
+  }
+  for(let i=stomachPickups.length-1;i>=0;i--){
+    const p=stomachPickups[i];
+    if(Math.hypot(p.x-snake.fx,p.y-snake.fy)<RUN.pickupR){
+      const added=addStomachItem(p.id,1,"special_pickup");
+      if(added.added){stomachPickups.splice(i,1);ftext(p.x,p.y-.5,"吞入胃袋："+added.item.shortName,"#ffd76e");puff(p.x,p.y,added.item.color||"#f5f5fa");}
+      else if(gameTime-(p.lastNotice||-99)>1){p.lastNotice=gameTime;ftext(p.x,p.y-.5,"胃袋里已经有了","#8b88a3");}
     }
   }
   for(let i=curses.length-1;i>=0;i--){
@@ -1517,12 +2229,24 @@ function pickUps(){
 }
 
 function stanceShot(){
-  if(snake.len<=CFG.minLen){
-    firing=false;
-    ftext(snake.fx,snake.fy-1,"弹匣打空了！","#ff5d5d");
+  const selected=stomach.selected();
+  if(selected.id!=="bean"){
+    const used=stomach.consumeSelected();
+    if(!used.fired){firing=false;fireNeedsRelease=true;ftext(snake.fx,snake.fy-1,selected.item.shortName+" 已经空了！","#ff5d5d");return;}
+    snake.len=Math.max(minBodyLength(),snake.len-used.removedWeight);computeSegs();
+    const speed=CFG.spitSpeed*RUN.spitSpeedMult*.75;
+    const sx=snake.fx+dir.x*1.2,sy=snake.fy+dir.y*1.2;
+    projs.push({owner:1,payloadId:used.id,payload:used.item,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
+    firing=false;fireNeedsRelease=true;shake=Math.max(shake,.18);
+    ftext(snake.fx,snake.fy-1,"吐出："+used.item.shortName,"#ffd76e");syncStomachStory("special_fired");return;
+  }
+  if(beanAmmo()<=0){
+    firing=false;fireNeedsRelease=true;
+    ftext(snake.fx,snake.fy-1,"豆子打空了！","#ff5d5d");
     return;
   }
   snake.len--;
+  notifyStoryEvent("beanSpit",{});
   const spd=CFG.spitSpeed*RUN.spitSpeedMult;
   let sx=snake.fx+dir.x*.9,sy=snake.fy+dir.y*.9;
   for(const k of[.9,1.4,1.9,2.4,2.9]){
@@ -1618,15 +2342,9 @@ function updateProjs(dt){
       for(const m of MECHS){
         if(m.done||m.kind!=="gate"||!m.cellIdx)continue;
         if(m.cellIdx.includes(K(hit.cx,hit.cy))){
-          m.prog++;
           puff(p.x,p.y,"#7fd1e8");
-          ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
-          if(m.prog>=m.need){
-            m.done=true;
-            for(const idx of m.cellIdx)obstacles.delete(idx);
-            grantReward(m.reward);computeEnclosure();
-            ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
-          }
+          const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"projectile",projectile:p,apply:()=>recordGateHit(m)});
+          if(!handled)recordGateHit(m);
           fed=true;break;
         }
       }
@@ -1683,8 +2401,11 @@ function updateProjs(dt){
     dead=p.life<=0||Math.hypot(p.vx,p.vy)<CFG.beanStop;
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
-      if(spot)groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
-      puff(p.x,p.y,"#d95763");
+      if(spot){
+        if(p.payloadId)stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});
+        else groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
+      }
+      puff(p.x,p.y,p.payload&&p.payload.color||"#d95763");
       projs.splice(i,1);
     }
   }
@@ -1779,7 +2500,9 @@ function updateNPCs(dt){
     if(n.hp<=0){dieNPC(n);continue;}
     if(alive&&!panelOpen&&gameState==="play"){
       const near=nearestPlayer(n.x,n.y),d=near?Math.hypot(n.x-near.x,n.y-near.y):Infinity;
-      if(d<0.85&&!n.inside)openPanel(n);
+      if(d<0.85&&!n.inside){
+        if(!routeStoryInteraction("actor",n))openPanel(n);
+      }
       else if(d>1.25)n.inside=false;
     }
   }
@@ -1808,6 +2531,7 @@ function dieNPC(n){
   puff(n.x,n.y,"#c77dff");
   ftext(n.x,n.y-.8,T.name+"倒下了","#c77dff");
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorDied",{actor:n});
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
 }
 function eatNPC(n){
@@ -1816,6 +2540,7 @@ function eatNPC(n){
   puff(n.x,n.y,"#8fe36b");
   const wasOpen=(panelNpc===n);
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorEaten",{actor:n});
   if(wasOpen)closePanel();
   const T=NPC_TYPES[n.kind];
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
@@ -2037,7 +2762,7 @@ function updateSpawner(dt){
     if(playMode==="sandbox"){
       const keys=Object.keys(SANDBOX_CAPS).filter(k=>cnt(k)<SANDBOX_CAPS[k]);
       if(keys.length)spawnEnemy(keys[rnd(keys.length)]);
-    }else{
+    }else if(playMode==="campaign"){
       if(cnt("slime")<curCaps.slime)spawnEnemy("slime");
       else if(cnt("rat")<curCaps.rat)spawnEnemy("rat");
       else if(cnt("flower")<curCaps.flower)spawnEnemy("flower");
@@ -2050,13 +2775,14 @@ function updateSpawner(dt){
 function cutTail(){
   if(gameState!=="play"||!alive||primaryDown||paused||freeze)return;
   if(cutCd>0)return;
-  if(snake.len<=CFG.cutKeep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
+  const keep=Math.max(CFG.cutKeep,minBodyLength());
+  if(snake.len<=keep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
   cutCd=RUN.cutCd;
   cutUsed++;
-  const cutN=snake.len-CFG.cutKeep;
+  const cutN=snake.len-keep;
   const recover=Math.floor(cutN*CFG.cutRecover);
   const tailPt=segPos[snake.len-1]||{x:snake.fx,y:snake.fy};
-  snake.len=CFG.cutKeep;
+  snake.len=keep;
   if(recover>0)scatterBeans(Math.floor(tailPt.x),Math.floor(tailPt.y),recover,2);
   ftext(tailPt.x,tailPt.y-.6,"-"+(cutN-recover)+" 节","#e86a8a");
   shake=.25;puff(tailPt.x,tailPt.y,"#e86a8a");
@@ -2064,7 +2790,13 @@ function cutTail(){
 }
 
 function buildFromLevel(L){
-  buildObstacles();
+  if(L.cleanMap){obstacles=new Set();voidCells=new Set();}
+  else buildObstacles();
+  if(L.solidOutside){
+    const[ax,ay,aw,ah]=L.solidOutside;
+    for(let x=0;x<CFG.cols;x++)for(let y=0;y<CFG.rows;y++)
+      if(x<ax||x>=ax+aw||y<ay||y>=ay+ah){const i=K(x,y);obstacles.add(i);voidCells.add(i);}
+  }
   for(const r of(L.obstacles||[])){
     const[rx,ry,rw,rh]=r;
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
@@ -2084,7 +2816,7 @@ function buildFromLevel(L){
   curCaps=Object.assign({slime:0,rat:0,flower:0},L.caps);
   curBeanTarget=L.beans||8;
   curGoal=L.goal;levelStartT=gameTime;
-  if(playMode!=="intro")(L.npcs||["merchant"]).forEach(k=>spawnNPC(k));
+  if(playMode!=="intro")(Array.isArray(L.npcs)?L.npcs:["merchant"]).forEach(k=>spawnNPC(k));
 }
 function startCampaign(){
   if(!introSeen){
@@ -2133,6 +2865,7 @@ function advanceIntro(){
 function endIntro(){
   intro=null;
   const sk=document.getElementById("introSkip");if(sk)sk.remove();
+  if(storyActive){startStoryStage(0);return;}
   startCampaign();
 }
 function updateIntro(dt){
@@ -2153,6 +2886,13 @@ function updateIntro(dt){
     }else intro.arrived=true;
   }
 }
+function storyApi(){return typeof window!=="undefined"?window.IMS_STORY_API:null;}
+function startStoryMode(slot){const api=storyApi();if(api)api.start(slot||1);}
+function continueStoryMode(slot){const api=storyApi();return api?api.resume(slot||1):{ok:false};}
+function startStoryStage(){const api=storyApi();if(api)api.retry();}
+function storyGoalText(){const api=storyApi();return api?api.goalText():"按剧情继续";}
+function storyProgressText(){const api=storyApi();return api?api.progressText():"剧情模式";}
+function storyCheckProgress(){}
 function drawBossUI(){
   const W=cv.width;
   const bw=Math.min(W*.52,430),bx=(W-bw)/2,by=10;
@@ -2302,7 +3042,7 @@ function buildTutArena(){
   for(const[rx,ry,rw,rh]of[[30,17,8,1],[30,23,8,1],[30,18,1,5]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   computeEnclosure();
-  enemies.push({type:"flower",x:34,y:20,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.5,vx:0,vy:0,shootT:2,warned:false});
+  enemies.push({type:"flower",x:34.5,y:21.5,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.5,vx:0,vy:0,shootT:2,warned:false});
 }
 function startTutorial(){
   playMode="tutorial";
@@ -2339,6 +3079,15 @@ function advanceTut(){
   openTutPanel(tutIdx);
 }
 let panelOpts=[],panelSel=0;
+const heldInputCodes=new Set();
+function armPanelInputGate(triggerCode){
+  if(!IMS_STORY_DIALOGUE||typeof IMS_STORY_DIALOGUE.createInputGate!=="function"){panelInputGate=null;return;}
+  panelInputGate=IMS_STORY_DIALOGUE.createInputGate(140);
+  const guarded=[InputMap.bindingFor(1,"fire"),InputMap.bindingFor(1,"interact")];
+  const held=triggerCode||guarded.find(code=>heldInputCodes.has(code))||null;
+  panelInputGate.open(held,performance.now());
+}
+function clearPanelInputGate(){panelInputGate=null;}
 function trackPanelOpts(container){
   panelOpts=Array.prototype.slice.call(container.querySelectorAll(".npc-opt"));
   panelSel=0;
@@ -2358,7 +3107,7 @@ function confirmPanel(){
 function openTutPanel(i){
   try{
     const s=TUT2[i];
-    panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
+    panelOpen=true;freeze=true;panelNpc=null;npcNode=null;armPanelInputGate();
     const p=ensurePanel();p.style.display="flex";
     document.getElementById("npcName").textContent="我";
     document.getElementById("npcSub").textContent="自言自语 · 教学 "+(i+1)+"/"+TUT2.length;
@@ -2375,7 +3124,7 @@ function openTutPanel(i){
   }catch(e){uiFatal("教学面板:"+(e&&e.message));}
 }
 function finishTutorial(){
-  panelOpen=true;freeze=true;
+  panelOpen=true;freeze=true;armPanelInputGate();
   const p=ensurePanel();p.style.display="flex";
   document.getElementById("npcName").textContent="恭喜完成教学！";
   document.getElementById("npcSub").textContent=TUT2.length+"/"+TUT2.length;
@@ -2452,7 +3201,7 @@ function uiFatal(msg){
 function openPanel(n,nodeId){
   try{
     if(!n||!npcs.includes(n)){closePanel();return;}
-    panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
+    panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;armPanelInputGate();
     const T=NPC_TYPES[n.kind];
     const p=ensurePanel();
     p.style.display="flex";
@@ -2469,8 +3218,8 @@ function openPanel(n,nodeId){
       list=(node.options||[]).map(o=>({label:o.t,
         fn:()=>{
           if(!npcs.includes(n))return closePanel();
-          if(o.action==="eat")return eatNPC(n);
-          if(o.action==="end")return closePanel();
+          if(o.action==="eat"){eatNPC(n);return;}
+          if(o.action==="end"){closePanel();return;}
           return openPanel(n,o.next);
         }}));
     }else{
@@ -2495,8 +3244,8 @@ function handleOption(n,o){
   if(!npcs.includes(n))return closePanel();
   if(o.action==="trade")return panelTrade(n);
   if(o.action==="dialog")return openPanel(n,o.arg||"start");
-  if(o.action==="eat")return eatNPC(n);
-  if(o.action==="leave")return closePanel();
+  if(o.action==="eat"){eatNPC(n);return;}
+  if(o.action==="leave"){closePanel();return;}
 }
 function merchantMarkup(n){
   const T=NPC_TYPES[n.kind];
@@ -2519,7 +3268,7 @@ function panelTrade(n){
       (cost>g.cost?" <span style='color:#ff5d5d'>(原价 "+g.cost+")</span>":"")+"<br>"+
       "<span style='opacity:.65;font-size:11px'>"+g.desc+"</span>";
     b.onclick=()=>{
-      if(snake.len<CFG.minLen+cost){
+      if(snake.len<minBodyLength()+cost){
         b.lastElementChild.textContent="身长不够，做不了这买卖！";
         return;
       }
@@ -2549,6 +3298,7 @@ function closePanel(){
   p.classList.remove("open");
   setTimeout(()=>{if(!panelOpen)p.style.display="none";},400);
   panelOpen=false;panelNpc=null;npcNode=null;
+  panelInputGate=null;
   freeze=false;moveLock=false;
   if(!(dir.x===-1&&dir.y===0))dir={x:1,y:0};
 }
@@ -2573,6 +3323,28 @@ function resumeFromUI(){
   paused=false;panelOpen=false;freeze=false;moveLock=true;
 }
 
+function spawnLaneClear(x,y,seconds){
+  const speed=CFG.snakeSpeed*RUN.speedMult,step=.05;
+  for(let t=0;t<=seconds;t+=step)if(hitWall(x+speed*t,y,.34))return false;
+  return true;
+}
+function ensurePrimarySpawnSafe(){
+  const old={x:snake.fx,y:snake.fy,dir:{x:dir.x,y:dir.y},path:snake.path.map(p=>({x:p.x,y:p.y}))};
+  const px=Math.floor(old.x),py=Math.floor(old.y),candidates=[];
+  for(let y=0;y<CFG.rows;y++)for(let x=0;x<CFG.cols;x++)
+    candidates.push({x,y,d:Math.abs(x-px)+Math.abs(y-py)});
+  candidates.sort((a,b)=>a.d-b.d);
+  for(const c of candidates){
+    snake.fx=c.x+.5;snake.fy=c.y+.5;dir={x:1,y:0};coilPath();computeSegs();
+    const p2=CoopMode.view();
+    const wallHit=segPos.some(s=>hitWall(s.x,s.y,.34));
+    const playerHit=p2&&segPos.some(a=>p2.segPos.some(b=>Math.hypot(a.x-b.x,a.y-b.y)<.72));
+    const laneHit=!spawnLaneClear(snake.fx,snake.fy,3);
+    if(!wallHit&&!playerHit&&!laneHit)return true;
+  }
+  snake.fx=old.x;snake.fy=old.y;dir=old.dir;snake.path=old.path;computeSegs();
+  return false;
+}
 function startBossFight(){
   playMode="boss";
   resetRun();
@@ -2580,6 +3352,8 @@ function startBossFight(){
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
   for(const[rx,ry,rw,rh]of[[8,8,2,2],[30,6,2,2],[52,8,2,2],[54,22,2,3],[28,40,2,2],[52,38,2,2],[20,12,2,2],[12,34,2,2],[40,16,2,1],[44,34,2,2],[60,30,2,2],[16,30,2,2]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
+  ensurePrimarySpawnSafe();
+  CoopMode.ensureSafeSpawn();
   tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
   boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
     phase2:false,patT:2.2,patIdx:0,sumT:9,stun:0,spin:0,flash:0,vx:0,vy:0,
@@ -2654,7 +3428,7 @@ function updateBoss(dt){
       }
       if(hitIdx>0){
         const oldLen=snake.len;
-        snake.len=Math.max(CFG.minLen,hitIdx);
+        snake.len=Math.max(minBodyLength(),hitIdx);
         const lost=oldLen-snake.len;
         for(let i2=hitIdx;i2<oldLen;i2++){
           const sgm=segPos[i2];if(!sgm)break;
@@ -2729,8 +3503,8 @@ function updateBoss(dt){
   for(const s of bossStakes){
     if(s.dead)continue;
     const sr=prisonMask[K(Math.floor(s.x),Math.floor(s.y))];
-    if(sr>=0&&prisonRegionBody[sr]){s.cap+=dt;s.hot=true;}
-    else{s.cap=Math.max(0,s.cap-dt*.6);s.hot=false;}
+    if(sr>=0&&prisonRegionBody[sr]){s.cap=Math.min(s.need,s.cap+dt);s.hot=true;}
+    else{s.hot=false;}
     if(s.cap>=s.need){
       s.dead=true;
       boss.shield=Math.max(0,boss.shield-25);
@@ -2792,6 +3566,11 @@ function buildPanel(){
 
 const MOVE_KEYS={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
 const heldKeys=new Set();
+function callRuntime(name,fallback,...args){
+  const appRoot=typeof window!=="undefined"?window:globalThis;
+  const fn=appRoot&&appRoot[name];
+  return typeof fn==="function"?fn(...args):fallback(...args);
+}
 function comboVec(){
   let x=0,y=0;
   if(heldKeys.has("up"))y--;
@@ -2804,20 +3583,29 @@ function pushCombo(){PlayerCore.queueDirection({dir,dirQueue},comboVec(),3);}
 addEventListener("keydown",ev=>{
   const k=ev.key.toLowerCase();
   const action=InputMap.actionFor(1,ev);
+  const code=InputMap.eventCode(ev);heldInputCodes.add(code);
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))ev.preventDefault();
+  // 剧情对话期间只允许操作对话本身；移动、发射、重开和暂停键都不能
+  // 把面板关掉或改变蛇的位置，否则玩家可能永远回不到当前剧情节点。
+  if(panelOpen&&gameState==="play"){
+    if(action==="up"){ev.preventDefault();if(!ev.repeat)selPanel(-1);return;}
+    if(action==="down"){ev.preventDefault();if(!ev.repeat)selPanel(1);return;}
+    if(action==="interact"){
+      ev.preventDefault();
+      if(ev.repeat||panelInputGate&&!panelInputGate.canAdvance(performance.now()))return;
+      if(panelInputGate)panelInputGate.consume(performance.now());confirmPanel();if(panelOpen)armPanelInputGate(code);return;
+    }
+    return;
+  }
   if(k==="r"){
     if(playMode==="intro"){endIntro();return;}
     if(playMode==="tutorial"){if(gameState==="dead")restartCurrentTut();else startTutorial();}
     else if(playMode==="campaign"&&gameState!=="victory"&&levelIdx<LEVELS.length)startLevel();
+    else if(playMode==="story")callRuntime("startStoryStage",startStoryStage,Math.max(0,storyStage));
     else startGame();
     return;
   }
   if(gameState==="intro"){if(k===" "||k==="j"){advanceIntro();return;}}
-  if(panelOpen&&gameState==="play"){
-    if(k==="arrowup"||k==="w"){ev.preventDefault();selPanel(-1);return;}
-    if(k==="arrowdown"||k==="s"){ev.preventDefault();selPanel(1);return;}
-    if(k===" "||k==="j"||k==="enter"||k==="arrowright"||k==="d"){ev.preventDefault();confirmPanel();return;}
-  }
   if(gameState!=="play"&&gameState!=="intro")return;
   if(MOVE_KEYS[action]){
     heldKeys.add(action);
@@ -2827,6 +3615,8 @@ addEventListener("keydown",ev=>{
     if(gameState==="intro"){advanceIntro();return;}
     fireKey=true;
   }
+  else if(action==="prevItem"&&!ev.repeat)cycleStomach(-1);
+  else if(action==="nextItem"&&!ev.repeat)cycleStomach(1);
   else if(action==="cut")cutTail();
   else if(action==="node")placeNode();
   else if(k==="p"||k==="escape"){
@@ -2846,11 +3636,12 @@ document.getElementById("pauseHome").onclick=()=>{
 };
 addEventListener("keyup",ev=>{
   const action=InputMap.actionFor(1,ev);
+  const code=InputMap.eventCode(ev);heldInputCodes.delete(code);if(panelInputGate)panelInputGate.keyup(code);
   heldKeys.delete(action);
-  if(action==="fire")fireKey=false;
+  if(action==="fire"){fireKey=false;fireNeedsRelease=false;}
   if(MOVE_KEYS[action])pushCombo();
 });
-addEventListener("blur",()=>{heldKeys.clear();firing=false;fireKey=false;});
+addEventListener("blur",()=>{heldKeys.clear();heldInputCodes.clear();firing=false;fireKey=false;fireNeedsRelease=false;if(panelInputGate)panelInputGate.keyup();});
 addEventListener("pointerdown",()=>{
   if(gameState==="intro")advanceIntro();
 });
@@ -2858,6 +3649,7 @@ document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   if(gameState==="victory"){
     if(victoryRetry==="boss")startBossFight();
+    else if(victoryRetry==="story"){const api=storyApi();startStoryMode(api&&api.currentSlot()||1);}
     else showMenu();
     return;
   }
@@ -2865,10 +3657,11 @@ document.getElementById("ovBtn").onclick=()=>{
     if(playMode==="campaign")startLevel();
     else if(playMode==="boss")startBossFight();
     else if(playMode==="tutorial")restartCurrentTut();
+    else if(playMode==="story")callRuntime("startStoryStage",startStoryStage,Math.max(0,storyStage));
     else startGame();
     return;
   }
-  startCampaign();
+  showStorySaves();
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
@@ -2884,6 +3677,44 @@ document.getElementById("ovBtn4").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   showLevelSelect();
 };
+function storySaveTime(value){
+  if(!value)return"尚无时间";
+  try{return new Date(value).toLocaleString("zh-CN",{hour12:false});}catch(error){return String(value);}
+}
+function storyPickContent(button,title,detail){
+  button.innerHTML="";
+  const heading=document.createElement("b"),line=document.createElement("span");
+  heading.textContent=title;line.textContent=detail||"";button.appendChild(heading);button.appendChild(line);
+}
+function showStorySaves(){
+  gameState="menu";
+  const api=storyApi(),saves=api&&api.listSaves?api.listSaves():[];
+  document.getElementById("ovTitle").textContent="剧情模式 · 单人";
+  document.getElementById("ovText").textContent="选择一个存档位。新游戏会从序章开始；继续游戏会从最近的地图入口恢复。";
+  document.getElementById("ovBtns").style.display="none";
+  const box=document.getElementById("pickList");box.innerHTML="";
+  for(let slot=1;slot<=3;slot++){
+    const item=saves.find(save=>save.slot===slot)||{slot,exists:false};
+    const primary=document.createElement("button");primary.className="pick-btn";
+    if(item.corrupted){
+      storyPickContent(primary,"存档 "+slot+" · 数据损坏",(item.error&&item.error.message||"无法读取")+" · 点击可覆盖并重新开始");
+      primary.onclick=()=>startStoryMode(slot);
+    }else if(item.exists){
+      const state=item.completed?"已完成":(item.currentMap||item.chapter||"序章");
+      storyPickContent(primary,"存档 "+slot+" · 继续游戏",(item.playerName||"未命名")+" ｜ "+state+" ｜ "+storySaveTime(item.updatedAt)+(item.legacy?" ｜ 旧版存档（继续后自动升级）":""));
+      primary.onclick=()=>continueStoryMode(slot);
+      const fresh=document.createElement("button");fresh.className="pick-btn";storyPickContent(fresh,"存档 "+slot+" · 覆盖并开始新游戏","原进度会在进入序章后被替换");fresh.onclick=()=>startStoryMode(slot);box.appendChild(primary);box.appendChild(fresh);
+      const remove=document.createElement("button");remove.className="pick-btn";storyPickContent(remove,"存档 "+slot+" · 删除","删除后无法恢复");remove.onclick=()=>{if(typeof confirm!=="function"||confirm("确定删除存档 "+slot+" 吗？")){api.deleteSave(slot);showStorySaves();}};box.appendChild(remove);
+      continue;
+    }else{
+      storyPickContent(primary,"存档 "+slot+" · 新游戏","空存档");
+      primary.onclick=()=>startStoryMode(slot);
+    }
+    box.appendChild(primary);
+  }
+  const back=document.createElement("button");back.className="pick-btn";storyPickContent(back,"← 返回主菜单","");back.onclick=showMenu;box.appendChild(back);
+  document.getElementById("overlay").classList.add("show");
+}
 function showLevelSelect(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="选择关卡";
@@ -2924,7 +3755,7 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
+playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试当前地图":"再来一局";
   document.getElementById("ovBtn2").textContent="回到首页";
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
@@ -2933,16 +3764,19 @@ function die(reason){
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
+  const story=storyApi();if(story)story.stop();
+  storyActive=false;storyStage=-1;storyTransitioning=false;
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>"+
+    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
-    "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
+    "长按 "+InputMap.bindingLabel(1,"fire")+" 站桩吐豆 ｜ "+InputMap.bindingLabel(1,"interact")+" 确认对话<br>"+
+    InputMap.bindingLabel(1,"prevItem")+" / "+InputMap.bindingLabel(1,"nextItem")+" 切换胃袋主位（豆子或特殊物品）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
     (InputMap.getPlayerCount()===2?"P2：方向键移动 ｜ 小键盘 0 吐豆 · 1 断尾 · 2 节点<br>":"")+
     "P 暂停 ｜ R 重开 ｜ M 静音 ｜ 设置中可自定义全部键位";
-  document.getElementById("ovBtn").textContent="开始闯关";
+  document.getElementById("ovBtn").textContent="剧情模式";
   document.getElementById("ovBtn2").textContent="教学关卡";
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="";
@@ -2952,6 +3786,7 @@ function showMenu(){
   document.getElementById("ovBtn5").style.display="";
   document.getElementById("ovBtn7").textContent="设置";
   document.getElementById("ovBtn7").style.display="";
+  document.getElementById("ovBtns").style.display="";
   document.getElementById("pickList").innerHTML="";
   document.getElementById("tut").classList.remove("show");
   document.getElementById("overlay").classList.add("show");
@@ -2987,9 +3822,15 @@ function render(){
   for(let x=x0;x<x1;x++)for(let y=y0;y<y1;y++){
     if((x+y)%2===0){ctx.fillStyle="#151627";ctx.fillRect(x*T,y*T,T,T);}
   }
+  ctx.fillStyle="#080912";
+  for(const o of voidCells){
+    const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
+    if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
+  }
   ctx.fillStyle="#2c2d44";
   for(const o of obstacles){
     const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
+    if(voidCells.has(o))continue;
     if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
   }
   ctx.strokeStyle="#34355a";ctx.lineWidth=4;
@@ -3070,6 +3911,14 @@ function render(){
     ctx.strokeStyle="#ffd76e";ctx.lineWidth=3;
     ctx.beginPath();ctx.arc(px,py+bob,T*.36,0,7);ctx.stroke();
     ctx.fillStyle="rgba(255,215,110,.15)";ctx.beginPath();ctx.arc(px,py+bob,T*.5,0,7);ctx.fill();
+  }
+
+  for(const p of stomachPickups){
+    const px=p.x*T,py=p.y*T,bob=Math.sin(gameTime*4)*2;
+    ctx.fillStyle="rgba(245,245,250,.18)";ctx.beginPath();ctx.arc(px,py+bob,T*.52,0,7);ctx.fill();
+    ctx.fillStyle="#f5f5fa";ctx.fillRect(px-T*.28,py-T*.22+bob,T*.56,T*.48);
+    ctx.fillStyle="#3a2b23";ctx.fillRect(px-T*.19,py-T*.12+bob,T*.38,T*.1);
+    ctx.fillStyle="#7fd1e8";ctx.fillRect(px-T*.14,py+T*.03+bob,T*.08,T*.13);ctx.fillRect(px+T*.07,py+T*.03+bob,T*.08,T*.13);
   }
 
   for(const b of groundBeans){
@@ -3338,13 +4187,14 @@ function render(){
     ctx.beginPath();ctx.arc(s.x*T-2,s.y*T-2,T*.09,0,7);ctx.fill();
   }
   for(const p of projs){
+    const projectileColor=p.payload&&p.payload.color||"#ff6b7a",projectileRadius=p.payloadId?.42:.3;
     for(let i=0;i<p.trail.length;i++){
       const t=p.trail[i];
       ctx.fillStyle="rgba(217,87,99,"+(i/p.trail.length*.35)+")";
       ctx.beginPath();ctx.arc(t.x*T,t.y*T,T*.18*(i/p.trail.length+.4),0,7);ctx.fill();
     }
-    ctx.fillStyle="#ff6b7a";
-    ctx.beginPath();ctx.arc(p.x*T,p.y*T,T*.3,0,7);ctx.fill();
+    ctx.fillStyle=projectileColor;
+    ctx.beginPath();ctx.arc(p.x*T,p.y*T,T*projectileRadius,0,7);ctx.fill();
     ctx.fillStyle="#ffe0e3";
     ctx.beginPath();ctx.arc(p.x*T-2,p.y*T-2,T*.09,0,7);ctx.fill();
   }
@@ -3397,8 +4247,19 @@ function updateHud(){
   document.getElementById("cdCut").style.width=((1-cutCd/RUN.cutCd)*100)+"%";
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
+  const stomachStatus=stomach.status();
+  document.getElementById("stomachPrev").textContent=InputMap.bindingLabel(1,"prevItem")+" ◀";
+  document.getElementById("stomachNext").textContent="▶ "+InputMap.bindingLabel(1,"nextItem");
+  document.getElementById("stomachSlots").textContent=stomachStatus.slots.map(slot=>{
+    const count=slot.id==="bean"?beanAmmo():slot.count,label=slot.item.shortName+" "+(count>0?"×"+count:"空");
+    return slot.selected?"【"+label+"】":label;
+  }).join("  ");
+  document.getElementById("helpFire").textContent=InputMap.bindingLabel(1,"fire");
+  document.getElementById("helpInteract").textContent=InputMap.bindingLabel(1,"interact");
+  document.getElementById("helpPrev").textContent=InputMap.bindingLabel(1,"prevItem");
+  document.getElementById("helpNext").textContent=InputMap.bindingLabel(1,"nextItem");
   document.getElementById("stat").textContent=
-    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":"")+
+    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?storyProgressText()+" ｜ "+storyGoalText()+" ｜ ":"")+
     (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 
@@ -3418,7 +4279,8 @@ function loop(now){
     cutCd=Math.max(0,cutCd-dt);
     shake=Math.max(0,shake-dt);
     if(!primaryDown)updateMovement(dt);
-    const wantFire=(fireKey||VInput.fire)&&alive&&!primaryDown&&!paused;
+    if(!fireKey&&!VInput.fire)fireNeedsRelease=false;
+    const wantFire=(fireKey||VInput.fire)&&!fireNeedsRelease&&alive&&!primaryDown&&!paused;
     if(wantFire&&!firing){firing=true;stanceShot();fireT=1/(CFG.spitRate*RUN.spitRateMult);}
     if(!wantFire){firing=false;fireStreak=0;}
     if(firing){
@@ -3437,9 +4299,11 @@ function loop(now){
     updateBoss(dt);
     if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
-    if(playMode==="sandbox"||playMode==="campaign")updateSpawner(dt);
+    if(typeof window!=="undefined"&&typeof window.storyControllerTick==="function")window.storyControllerTick();
+    if(playMode==="sandbox"||playMode==="campaign"||playMode==="story")updateSpawner(dt);
     computeEnclosure();
     updateCamera(dt);
+    storyCheckProgress();
     if(playMode==="campaign"&&curGoal&&alive){
       const g=curGoal,t=gameTime-levelStartT;
       if((g.type==="kills"&&kills>=g.count)||
@@ -3456,13 +4320,317 @@ function loop(now){
 }
 
 buildPanel();GameSettings.init();reset(false);showMenu();requestAnimationFrame(loop);
-if(typeof window!=="undefined")window.__IMS={
+const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debugRoot.__IMS={
   get npcs(){return npcs;},get snake(){return snake;},get panelOpen(){return panelOpen;},
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},
   get alive(){return alive;},get moveLock(){return moveLock;},
+  get mechs(){return MECHS;},get boss(){return boss;},get bossStakes(){return bossStakes;},
+  get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
+  get stomach(){return stomach.status();},get stomachPickups(){return stomachPickups;},get projs(){return projs;},
   openPanel,closePanel,openCurseCard,CURSED_POOL
 };
+</script>
+<script>
+"use strict";
+
+(function(root){
+  const RuntimeApi=root.IMS_STORY_RUNTIME;
+  const StateApi=root.IMS_STORY_STATE;
+  const Events=root.IMS_STORY_EVENTS;
+  const Maps=root.IMS_STORY_MAPS;
+  const Dialogue=root.IMS_STORY_DIALOGUE;
+  const SaveApi=root.IMS_STORY_SAVE;
+  const Story=root.IMS_STORY_DATA.PROLOGUE;
+  const T=Events.TYPES,B=Events.bus,TM=Maps.TYPES.TUTORIAL,WM=Maps.TYPES.WILDERNESS,MS=Maps.STORY_MAPS;
+
+  let director=null,lastMap=null,gateSent=false,exitSent=false,observedEnemies=0;
+  let exitTimeoutHandle=null,exitTimeoutPending=false;
+  let ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};
+  const saveStore=SaveApi?new SaveApi.StorySaveStore():null;
+
+  const eventType=name=>T[name]||name;
+  const emit=(name,payload)=>B.emit(eventType(name),payload||{});
+  const snapshot=()=>director&&director.runtime.state.snapshot();
+  const count=key=>snapshot()&&snapshot().counters[key]||0;
+  const currentNode=()=>director&&director.runtime.node&&director.runtime.node.id||"";
+  const updateState=(mutator,reason)=>director&&director.runtime.state.update(mutator,reason);
+  const hint=action=>Dialogue.actionHint?Dialogue.actionHint(action,1):"";
+  const movementHint=()=>["up","left","down","right"].map(action=>root.InputMap&&root.InputMap.bindingLabel(1,action)).filter(Boolean).join("/");
+  const withHints=text=>String(text||"").replace(/\{fire\}/g,hint("fire")).replace(/\{interact\}/g,hint("interact")).replace(/\{move\}/g,"["+movementHint()+"]");
+
+  function closeDialogue(){
+    if(typeof root.closePanel==="function")root.closePanel();
+    panelOpen=false;freeze=false;moveLock=false;panelNpc=null;npcNode=null;
+    const say=document.getElementById("npcSay");if(say)say.onclick=null;
+    if(typeof root.clearPanelInputGate==="function")root.clearPanelInputGate();
+  }
+
+  function setOwnership(map){
+    const interactions=map&&map.interactions||{};
+    ownership={
+      actors:new Set(interactions.actors||[]),
+      mechanics:new Set(interactions.mechanics||interactions.mechs||[]),
+      exits:new Set(interactions.exits||[])
+    };
+  }
+
+  function targetId(target){return typeof target==="string"?target:target&&(target.storyId||target.id||target.kind)||"";}
+  function owns(kind,target){
+    const key=kind==="actor"?"actors":kind==="mechanic"?"mechanics":kind==="exit"?"exits":"";
+    return !!key&&ownership[key].has(targetId(target));
+  }
+
+  function levelFromMap(map){
+    return {
+      cleanMap:!!map.cleanMap,solidOutside:map.solidOutside||null,obstacles:map.obstacles||[],
+      mechs:(map.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),
+      waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
+    };
+  }
+
+  function enemyAt(spec){
+    const type=ENEMY_TYPES[spec.type];if(!type)return;
+    enemies.push({type:spec.type,x:spec.x,y:spec.y,flash:0,hitT:0,hp:type.hp,max:type.hp,r:type.r,vx:0,vy:0,wanderT:0,squash:rnd(6)});
+  }
+
+  function rememberCheckpoint(nodeId){
+    if(!director)return;
+    director.checkpoint={nodeId,state:director.runtime.state.snapshot()};
+    updateState(state=>{state.checkpoint={nodeId,mapId:lastMap};},"checkpoint");
+    director.checkpoint.state=director.runtime.state.snapshot();
+    saveCurrent();
+  }
+
+  function saveCurrent(){
+    if(!director||!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
+    const state=director.runtime.state.snapshot();
+    return saveStore.save(director.slot,state,{currentNode:state.currentNode,currentMap:lastMap,completed:state.flags&&state.flags.storyCompleted});
+  }
+
+  function loadMap(args){
+    const id=args.mapId,map=MS[id];if(!map)throw new Error("Unknown story map: "+id);
+    lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
+    updateState(state=>{state.currentMap=id;},"map_selected");
+    playMode="story";storyStage=id===TM?0:5;reset(true);buildFromLevel(levelFromMap(map));
+    groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
+    enemies.length=0;npcs.length=0;
+    const spawn=(args.entry&&map.entryPoints&&map.entryPoints[args.entry])||map.spawn;
+    snake.fx=spawn.x;snake.fy=spawn.y;dir=spawn.dir;
+    if(typeof root.restoreStomachInventory==="function")root.restoreStomachInventory(snapshot().inventory);
+    snake.len=Math.max(CFG.initLen,Number(snapshot().player.bodyLength)||CFG.initLen,CFG.minLen+(typeof stomach!=="undefined"?stomach.getLengthContribution():0));
+    coilPath();computeSegs();computeEnclosure();
+    const rules=map.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;
+    for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();
+    if(id===WM){
+      const spec=map.npcs&&map.npcs[0],status=snapshot().actors.keti.status;
+      if(spec&&status!=="dead"&&status!=="eaten"){
+        const type=NPC_TYPES.keti;
+        director.keti={storyId:"keti",kind:"keti",x:spec.x,y:spec.y,r:type.r,hp:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false};
+        npcs.push(director.keti);
+        updateState(state=>{state.actors.keti.status="alive";},"keti_spawn");
+      }
+    }
+    observedEnemies=enemies.length;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
+    heldKeys.clear();dirQueue.length=0;moveLock=false;
+    document.getElementById("overlay").classList.remove("show");
+    document.getElementById("tut").classList.remove("show");
+    document.getElementById("ovBtns").style.display="";
+    document.getElementById("pickList").innerHTML="";
+    ensurePrimarySpawnSafe();
+    emit("MAP_LOADED",{mapId:id,spawnId:args.entry||null,clearForwardSeconds:3});
+    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":"地图 2 · 荒野：寻找哭声");
+    rememberCheckpoint(id===TM?"prologue_start":"wilderness_start");
+  }
+
+  function dialogue(args){
+    const data=Dialogue.normalize(args),pages=data.pages.map(withHints);
+    let pageIndex=0;
+    panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;panelNpc=null;npcNode=null;
+    if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
+    const panel=ensurePanel(),say=document.getElementById("npcSay"),options=document.getElementById("npcOpts");
+    panel.style.display="flex";
+    document.getElementById("npcName").textContent=data.speaker||"我";
+    document.getElementById("npcSub").textContent=data.sub||"序章";
+    drawPortraitInto(document.getElementById("npcPortrait"),data.portrait||"snake_self",!!data.crying);
+
+    const render=()=>{
+      if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
+      say.textContent=pages[pageIndex];options.innerHTML="";say.onclick=null;
+      if(pageIndex<pages.length-1){
+        const next=document.createElement("button");next.className="npc-opt";next.textContent="继续 "+hint("interact");
+        const advance=()=>{pageIndex++;render();};
+        next.onclick=advance;say.onclick=advance;options.appendChild(next);
+      }else{
+        (data.choices||[{id:"continue",label:"继续"}]).forEach(choice=>{
+          const button=document.createElement("button");
+          button.className="npc-opt"+(choice.danger?" red":"");button.textContent=withHints(choice.label)+" "+hint("interact");
+          button.onclick=()=>{closeDialogue();director.runtime.choose(choice.id);};
+          options.appendChild(button);
+        });
+      }
+      trackPanelOpts(options);
+    };
+    render();requestAnimationFrame(()=>panel.classList.add("open"));
+  }
+
+  function nameInput(args){
+    panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;
+    if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
+    const panel=ensurePanel();panel.style.display="flex";
+    document.getElementById("npcName").textContent="我";
+    document.getElementById("npcSub").textContent="序章 · 输入名字";
+    drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
+    document.getElementById("npcSay").innerHTML="这段旅程，应该怎么称呼你？<br><input id='storyNameInput' maxlength='16' style='margin-top:12px;width:220px;padding:8px;background:#10111e;color:#ffe9b3;border:1px solid #ffd76e;border-radius:6px;font:14px Consolas'><button id='storyNameConfirm' class='npc-opt'>确定</button>";
+    const input=document.getElementById("storyNameInput"),button=document.getElementById("storyNameConfirm");
+    const done=()=>{
+      const name=(input.value||"").trim()||"未命名";
+      updateState(state=>{state.player.name=name;},"name_input");
+      closeDialogue();banner("名字已记住："+name);director.runtime.follow(args.next);
+    };
+    button.onclick=done;input.onkeydown=event=>{if(event.key==="Enter")done();};
+    panelOpts=[button];panelSel=0;requestAnimationFrame(()=>{panel.classList.add("open");input.focus();});
+  }
+
+  function eatKeti(){const npc=director&&director.keti;if(npc&&npcs.includes(npc))root.eatNPC(npc);}
+  function eatCorpse(){
+    const added=typeof root.addStomachItem==="function"?root.addStomachItem("ketiCorpse",1,"keti_corpse_eaten"):null;
+    updateState(state=>{state.actors.keti.status="eaten";state.actors.keti.corpsePresent=false;state.player.bodyLength=snake.len;},"keti_corpse_eaten");
+    saveCurrent();emit("ACTOR_EATEN",{actorId:"keti",corpse:true,itemAdded:!!(added&&added.added)});
+  }
+  function spawnSlimes(){director.spawned=true;enemies.length=0;enemyAt({type:"slime",x:54.5,y:21.5});enemyAt({type:"slime",x:54.5,y:27.5});observedEnemies=enemies.length;}
+  function freeExplore(){closeDialogue();banner("自由探索：30 秒后会出现记忆模糊");director.runtime.startTimer("free_explore_memory",30);}
+  function memoryBlur(){
+    snake.len=typeof minBodyLength==="function"?minBodyLength():CFG.minLen;
+    updateState(state=>{state.flags.memoryBlurSeen=true;state.player.bodyLength=snake.len;},"memory_blur");computeSegs();
+  }
+  function storyEnd(args){
+    updateState(state=>{state.flags.storyCompleted=true;},"story_complete");saveCurrent();
+    closeDialogue();gameState="victory";victoryRetry="story";
+    document.getElementById("ovTitle").textContent=args.title||"剧情完成";
+    document.getElementById("ovText").textContent=args.text||"";
+    document.getElementById("ovBtn").textContent="重新开始序章";
+    document.getElementById("ovBtn2").textContent="回到首页";document.getElementById("ovBtn2").style.display="";
+    document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
+    document.getElementById("ovBtn5").style.display="none";document.getElementById("ovBtn7").style.display="none";
+    document.getElementById("overlay").classList.add("show");
+  }
+
+  function wallWait(){
+    closeDialogue();
+    if(count("tutorialBeansEaten")>=5&&gateSent){director.runtime.follow("dialogue_3");return;}
+    director.runtime.waitFor({events:[eventType("PLAYER_BEAN_EATEN"),eventType("FRAGILE_GATE_BROKEN")],predicate:()=>count("tutorialBeansEaten")>=5&&gateSent,target:"dialogue_3"});
+  }
+  function exitWait(){
+    closeDialogue();
+    if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);
+    exitTimeoutPending=false;
+    exitTimeoutHandle=setTimeout(()=>{exitTimeoutHandle=null;exitTimeoutPending=true;},30000);
+    director.runtime.waitFor({events:[eventType("MAP_EXIT_ENTERED")],target:"wilderness_start"});
+  }
+
+  const conditions={
+    tutorialBeans3:()=>count("tutorialBeansEaten")>=3,
+    tutorialSpit3:()=>count("tutorialBeansSpit")>=3,
+    ketiEvent:event=>event.payload&&event.payload.actorId==="keti",
+    enemiesCleared:()=>director.spawned&&enemies.length===0,
+    freeExploreTimer:event=>event.payload&&event.payload.id==="free_explore_memory"
+  };
+  const targetResolvers={
+    ketiFirstContact:event=>event.type===eventType("ACTOR_INTERACTED")?"keti_question":event.type===eventType("ACTOR_EATEN")?"eaten_slimes":"keti_dead",
+    ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead"
+  };
+  const choiceActions={waitForWall:wallWait,waitForExit:exitWait};
+
+  function compileChoice(choice){const compiled=Object.assign({},choice);if(choice.action){compiled.run=choiceActions[choice.action];delete compiled.action;}return compiled;}
+  function compileNode(node){
+    const compiled={id:node.id,goal:node.goal,progress:node.progress};
+    if(node.dialogue){const args=Object.assign({},node.dialogue,{choices:(node.dialogue.choices||[]).map(compileChoice)});compiled.onEnter={name:"dialog",args};}
+    else if(node.enter)compiled.onEnter={name:node.enter.action,args:node.enter};
+    if(node.next)compiled.auto=node.next;
+    if(node.wait){compiled.wait={events:node.wait.events.map(eventType),target:node.wait.target};if(node.wait.condition)compiled.wait.predicate=conditions[node.wait.condition];if(node.wait.targetResolver)compiled.wait.target=targetResolvers[node.wait.targetResolver];}
+    return compiled;
+  }
+  function compileGraph(nodes){const graph={};Object.keys(nodes).forEach(id=>{graph[id]=compileNode(nodes[id]);});return graph;}
+
+  function routeInteraction(kind,target,payload){
+    if(!director||!storyActive||playMode!=="story"||!owns(kind,target))return false;
+    if(kind==="actor"){
+      target.inside=true;
+      if(currentNode()==="wilderness_keti_wait"){
+        director.keti=target;updateState(state=>{state.actors.keti.met=true;},"keti_met");emit("ACTOR_INTERACTED",{actorId:targetId(target)});
+      }
+      return true;
+    }
+    if(payload&&typeof payload.apply==="function")payload.apply();
+    return true;
+  }
+
+  function engineEvent(name,payload){
+    if(!director||!storyActive||playMode!=="story")return;
+    if(name==="beanEaten"){
+      updateState(state=>{state.counters.tutorialBeansEaten++;state.player.bodyLength=snake.len;},"bean_eaten");emit("PLAYER_BEAN_EATEN",{count:count("tutorialBeansEaten")});
+    }else if(name==="beanSpit"){
+      updateState(state=>{state.counters.tutorialBeansSpit++;state.player.bodyLength=snake.len;},"bean_spit");emit("PLAYER_BEAN_SPIT",{count:count("tutorialBeansSpit")});
+    }else if(name==="actorDied"||name==="actorEaten"){
+      const actor=payload&&payload.actor;if(!actor||!owns("actor",actor))return;
+      const eaten=name==="actorEaten";
+      updateState(state=>{state.actors.keti.status=eaten?"eaten":"dead";state.actors.keti.corpsePresent=!eaten;},eaten?"keti_eaten":"keti_dead");emit(eaten?"ACTOR_EATEN":"ACTOR_DIED",{actorId:targetId(actor)});
+    }else if(name==="inventoryChanged"){
+      updateState(state=>{state.inventory=payload.inventory;state.player.bodyLength=payload.bodyLength||snake.len;},payload.reason||"inventory_changed");saveCurrent();
+    }
+  }
+
+  function update(){
+    if(!director||!storyActive||playMode!=="story")return;
+    const node=director.runtime.node,progress=node&&node.progress;storyStage=progress?Math.max(0,progress.step-1):storyStage;
+    if(lastMap===TM&&MECHS.some(mechanic=>mechanic.kind==="gate"&&mechanic.done)&&!gateSent){gateSent=true;updateState(state=>{state.flags.tutorialGateBroken=true;state.flags.tutorialExitUnlocked=true;state.counters.tutorialGateSpit=3;},"gate_broken");emit("FRAGILE_GATE_BROKEN",{gateId:"tutorial_fragile_gate"});}
+    const exit=MS[TM]&&MS[TM].exits&&MS[TM].exits[0];
+    if(lastMap===TM&&!exitSent&&gateSent&&exit&&snake.fx>=exit.rect[0]&&snake.fx<=exit.rect[0]+exit.rect[2]&&snake.fy>=exit.rect[1]&&snake.fy<=exit.rect[1]+exit.rect[3])routeInteraction("exit",exit,{type:"enter",apply:()=>{exitSent=true;if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;emit("MAP_EXIT_ENTERED",{id:exit.id,mapId:TM,targetMap:exit.targetMap});}});
+    if(exitTimeoutPending&&currentNode()==="dialogue_3"){
+      exitTimeoutPending=false;
+      updateState(state=>{state.flags.tutorialTimeoutSeen=true;},"tutorial_timeout");
+      director.runtime.follow("dialogue_4");
+    }
+    if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
+    observedEnemies=enemies.length;
+  }
+
+  function goalText(){const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";const suffix=goal.inputHint?" "+(goal.inputHint==="move"?"["+movementHint()+"]":hint(goal.inputHint)):"";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target+suffix;return (goal.text||"按剧情继续")+suffix;}
+  function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
+
+  function createDirector(state,slot){
+    return {slot,spawned:false,keti:null,checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,freeExplore,memoryBlur,nameInput,storyEnd}})};
+  }
+
+  function start(slot){
+    stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";
+    const state=new StateApi.StoryStateStore();state.reset("new_story");
+    director=createDirector(state,Number(slot)||1);
+    director.runtime.start(Story.start);
+    return {ok:true,slot:director.slot};
+  }
+  function resume(slot){
+    if(!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
+    const loaded=saveStore.load(slot);if(!loaded.ok)return loaded;if(loaded.empty)return start(slot);
+    stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";
+    const state=new StateApi.StoryStateStore(loaded.data),checkpoint=loaded.data.checkpoint;
+    director=createDirector(state,Number(slot)||1);
+    const nodeId=checkpoint&&checkpoint.nodeId||(loaded.data.currentMap===WM?"wilderness_start":Story.start);
+    director.runtime.start(nodeId);
+    return {ok:true,slot:director.slot,resumed:true,legacy:!!loaded.legacy};
+  }
+  function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
+  function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
+
+  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
+  root.storyControllerInteraction=routeInteraction;
+  root.storyControllerOwns=owns;
+  root.storyControllerInteract=target=>routeInteraction("actor",target);
+  root.storyControllerTick=update;
+  root.storyDirector=()=>director;
+})(typeof window!=="undefined"?window:globalThis);
+
 </script>
 <script>
 "use strict";
@@ -3536,9 +4704,9 @@ if(typeof window!=="undefined")window.__IMS={
     addEventListener("orientationchange",()=>setTimeout(()=>{fitCanvas();layout();},300));
     statusChip();
     if(hasTouch&&mode!=="kb")gear();
-    if(mode==="touch"){buildTouch();if(globalThis.GameSettings)GameSettings.onInputChosen("touch");}
-    else if(mode==="kb"){touchMode=false;if(globalThis.GameSettings)GameSettings.onInputChosen("kb");}
-    else buildChooser();
+    // 启动时始终让玩家确认操作方式；否则上次保存在本地的选择会让
+    // 键盘/触屏和单双人入口看起来像是“消失”了。
+    buildChooser();
     addEventListener("resize",portraitHint);
     portraitHint();
   }
@@ -3585,7 +4753,7 @@ if(typeof window!=="undefined")window.__IMS={
     statusChip();
     if(m==="touch")buildTouch();
     else touchMode=false;
-    if(globalThis.GameSettings)GameSettings.onInputChosen(m);
+    if(globalThis.GameSettings)GameSettings.onInputChosen(m,m==="kb");
     fitCanvas();layout();portraitHint();
   }
 
@@ -3730,52 +4898,6 @@ if(typeof window!=="undefined")window.__IMS={
     try{heldKeys.clear();}catch(e){}
   });
 })();
-
-</script>
-<script>
-"use strict";
-/* ============================================================
- * 我蛇了 IM SNAKE — 开场演出数据（window.INTRO_SCENE）
- * ------------------------------------------------------------
- * 播放器在 index.html 内（startIntro / updateIntro / drawIntroOverlay /
- * introLines），本文件只提供数据，禁止任何 DOM / 定时器逻辑。
- * 赋值目标做浏览器/无头测试双兼容：有 window 挂 window，否则挂 globalThis
- * （引擎侧 introScene() 对 window 缺失已有 try/catch 兜底）。
- *
- * 时间轴：黑屏 fadeIn 秒内渐亮 → 蛇以 75% 速向右爬到 walkEndX 停下
- *         → 玩家点击 / 空格逐句推进 lines → 台词放完自动进第一关。
- *
- * 走廊设计（网格矩形 [x,y,w,h]，世界 72x48，出生点 6.5,24.5）：
- *   - 内部通道 = 行 y22~y24，共 3 格宽，从 x=1 延伸到 x=29；
- *   - 蛇尾初始盘绕在 x1.5~5.5，因此通道左端做成一个出生小室
- *     （延伸到 x=1），避免尾巴穿墙；
- *   - 两处“微折”只侵占第 22 行，永不遮挡 y23/y24 直行道：
- *     ① x15 顶部岩垂收窄成 2 格 ② x24 单块坠石二次挤压；
- *   - 下壁在 x19~22 留缺口并用底板封死，形成向下 4 格深的
- *     死胡同凹龛，加上右端 x30 尽头墙，营造狭长探秘感。
- * ============================================================ */
-(typeof window!=="undefined"?window:globalThis).INTRO_SCENE={
-  fadeIn:1.4,
-  walkEndX:26,
-  corridorRects:[
-    [ 0,17,32, 5],  // 上壁 y17~21，横贯全场
-    [ 0,25,19, 5],  // 下壁左段 y25~29，到 x18 为止
-    [23,25, 9, 5],  // 下壁右段，与左段之间留出 x19~22 凹龛口
-    [19,29, 4, 1],  // 凹龛底封板：向下死胡同的底
-    [ 0,22, 1, 3],  // 左端帽：封住出生小室左侧（行 y22~24）
-    [30,22, 2, 3],  // 右端帽：走廊尽头墙（行 y22~24）
-    [15,22, 2, 1],  // 微折①：顶部岩垂，通道在此收窄成 2 格
-    [24,22, 1, 1],  // 微折②：临近尽头的单块坠石
-  ],
-  /* 规则：≤4 句、每句 ≤16 个汉字；前两句为固定文本。
-   * 演出节奏与音画配合设想见 STORY_INTRO.md §1。 */
-  lines:[
-    "这里是哪里？我怎么睡着了",
-    "……不管了，先往前走吧",
-    "等等，我的手呢？！",
-    "不会吧……我真的蛇了？！",
-  ],
-};
 
 </script>
 </body>

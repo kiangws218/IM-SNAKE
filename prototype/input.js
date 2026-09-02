@@ -2,14 +2,15 @@
 /* 可持久化的“物理按键 -> 玩家动作”映射。 */
 (function(root){
   const STORAGE_KEY="imsnake_controls_v1";
-  const ACTIONS=["up","down","left","right","fire","cut","node"];
-  const LABELS={up:"上移",down:"下移",left:"左移",right:"右移",fire:"吐豆",cut:"断尾",node:"放节点"};
+  const ACTIONS=["up","down","left","right","fire","interact","prevItem","nextItem","cut","node"];
+  const LABELS={up:"上移",down:"下移",left:"左移",right:"右移",fire:"吐豆",interact:"确认/交互",prevItem:"胃袋上一格",nextItem:"胃袋下一格",cut:"断尾",node:"放节点"};
   const DEFAULTS={
-    1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",cut:"KeyK",node:"KeyF"},
-    2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",cut:"Numpad1",node:"Numpad2"}
+    1:{up:"KeyW",down:"KeyS",left:"KeyA",right:"KeyD",fire:"KeyJ",interact:"Enter",prevItem:"KeyQ",nextItem:"KeyE",cut:"KeyK",node:"KeyF"},
+    2:{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",fire:"Numpad0",interact:"NumpadEnter",prevItem:"Numpad4",nextItem:"Numpad6",cut:"Numpad1",node:"Numpad2"}
   };
-  const SOLO_ALIASES={up:["ArrowUp"],down:["ArrowDown"],left:["ArrowLeft"],right:["ArrowRight"],fire:["Space"],cut:["ShiftLeft","ShiftRight"]};
-  const KEY_TO_CODE={" ":"Space",space:"Space",shift:"ShiftLeft",enter:"Enter",
+  // 空格不再作为吐豆兼容键，确认动作单独使用 Enter。
+  const SOLO_ALIASES={up:["ArrowUp"],down:["ArrowDown"],left:["ArrowLeft"],right:["ArrowRight"],cut:["ShiftLeft","ShiftRight"]};
+  const KEY_TO_CODE={" ":"Space",space:"Space",shift:"ShiftLeft",enter:"Enter",numpadenter:"NumpadEnter",
     arrowup:"ArrowUp",arrowdown:"ArrowDown",arrowleft:"ArrowLeft",arrowright:"ArrowRight"};
   function copyDefaults(){return{1:Object.assign({},DEFAULTS[1]),2:Object.assign({},DEFAULTS[2])};}
   function load(){
@@ -51,10 +52,14 @@
   function resetBindings(){config.bindings=copyDefaults();save();}
   function keyLabel(code){
     const pretty={Space:"空格",ShiftLeft:"左 Shift",ShiftRight:"右 Shift",ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",
-      Numpad0:"小键盘 0",Numpad1:"小键盘 1",Numpad2:"小键盘 2"};
+      Enter:"回车",NumpadEnter:"小键盘回车",Numpad0:"小键盘 0",Numpad1:"小键盘 1",Numpad2:"小键盘 2",Numpad4:"小键盘 4",Numpad6:"小键盘 6"};
     return pretty[code]||String(code).replace(/^Key/,"").replace(/^Digit/,"");
   }
+  function bindingFor(playerId,action){
+    const id=Number(playerId)||1;return config.bindings[id]&&config.bindings[id][action]||null;
+  }
+  function bindingLabel(playerId,action){return keyLabel(bindingFor(playerId,action));}
   function snapshot(){return JSON.parse(JSON.stringify(config));}
   root.InputMap={STORAGE_KEY,ACTIONS,LABELS,DEFAULTS,SOLO_ALIASES,eventCode,actionFor,conflict,setBinding,
-    setPlayerCount,getPlayerCount,needsPlayerChoice,resetBindings,keyLabel,snapshot,save};
+    setPlayerCount,getPlayerCount,needsPlayerChoice,resetBindings,keyLabel,bindingFor,bindingLabel,snapshot,save};
 })(typeof window!=="undefined"?window:globalThis);

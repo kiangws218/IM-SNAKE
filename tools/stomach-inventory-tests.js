@@ -1,0 +1,66 @@
+const assert = require("assert");
+const { StomachInventory } = require("../prototype/stomach-inventory.js");
+
+function test(name, fn) { fn(); console.log("ok - " + name); }
+
+test("bean slot is permanent and starts empty", () => {
+  const inv = new StomachInventory();
+  assert.deepStrictEqual(inv.getSelected().id, "bean");
+  assert.strictEqual(inv.getSelected().count, 0);
+  assert.strictEqual(inv.getLengthContribution(), 0);
+});
+
+test("duplicate pickups stack instead of creating duplicate slots", () => {
+  const inv = new StomachInventory();
+  assert.strictEqual(inv.add("ketiCorpse").added, 1);
+  assert.strictEqual(inv.add("ketiCorpse", 2).added, 0);
+  assert.strictEqual(inv.getSlots().filter(s => s.id === "ketiCorpse").length, 1);
+  assert.strictEqual(inv.getCount("ketiCorpse"), 1);
+  assert.strictEqual(inv.getLengthContribution(), 2);
+});
+
+test("cycle wraps through stable slots, including empty bean slot", () => {
+  const inv = new StomachInventory({ beans: 2 });
+  inv.add("ketiCorpse");
+  assert.strictEqual(inv.next().id, "ketiCorpse");
+  assert.strictEqual(inv.next().id, "bean");
+  assert.strictEqual(inv.previous().id, "ketiCorpse");
+});
+
+test("firing consumes one item and keeps the empty slot selected", () => {
+  const inv = new StomachInventory({ beans: 4 });
+  inv.add("ketiCorpse");
+  inv.next();
+  const fired = inv.consumeSelected();
+  assert.strictEqual(fired.fired, true);
+  assert.strictEqual(fired.id, "ketiCorpse");
+  assert.strictEqual(inv.getCount("ketiCorpse"), 0);
+  assert.strictEqual(inv.getSelected().id, "ketiCorpse");
+});
+
+test("adapter aliases expose selected status and weight deltas", () => {
+  const inv = new StomachInventory();
+  assert.strictEqual(inv.add("ketiCorpse").addedWeight, 2);
+  assert.strictEqual(inv.selected().id, "bean");
+  assert.strictEqual(inv.status().lengthContribution, 2);
+  inv.next();
+  assert.strictEqual(inv.consumeSelected().removedWeight, 2);
+});
+
+test("empty selected item cannot fire", () => {
+  const inv = new StomachInventory();
+  const result = inv.useSelected();
+  assert.strictEqual(result.fired, false);
+  assert.strictEqual(result.reason, "empty");
+});
+
+test("snapshot and restore preserve counts, selection, and length", () => {
+  const inv = new StomachInventory({ beans: 5 });
+  inv.add("ketiCorpse", 1);
+  inv.next();
+  const restored = new StomachInventory({ state: inv.snapshot() });
+  assert.deepStrictEqual(restored.snapshot(), inv.snapshot());
+  assert.strictEqual(restored.getLengthContribution(), 2);
+});
+
+console.log("stomach inventory tests: all green");

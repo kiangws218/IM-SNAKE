@@ -12,6 +12,9 @@
 
 - 运行：直接打开 `prototype/index.html`
 - 提交前必须跑：`node tools/smoke.js prototype/index.html` → 必须全绿
+- 修改剧情运行时或剧情数据后还必须跑：`node tools/story-runtime-tests.js`、`node tools/story-save-tests.js`
+- 修改 Arcweave 原稿或导入器后还必须跑：`node tools/arcweave-tests.js`
+- 修改胃袋或特殊投射物后还必须跑：`node tools/stomach-inventory-tests.js`
 - 改动玩法后：真人试玩验证手感
 
 ## 文件领地（严格分工，防冲突）
@@ -28,7 +31,12 @@
 | `prototype/enemies.js` | 怪物注册表轨道 | 怪物行为原型（chaser/thief/ranged/charger/bomber）与数值 |
 | `prototype/mobile.js` | 移动端轨道 | 触屏控件，只通过 VInput 全局与合成键盘事件对接引擎 |
 | `prototype/intro.js` | 开场演出轨道 | 只定义 window.INTRO_SCENE 数据，播放器在引擎内 |
-| `STORY.md` | 剧情轨道 | 未启用（基调未定） |
+| `prototype/story-data.js` | 剧情内容轨道 | 唯一运行剧情源；对白、选择、节点跳转写在这里 |
+| `prototype/story-controller.js` | 剧情适配层 | 只连接剧情运行时与游戏引擎，不在这里新增正文台词 |
+| `prototype/story-save.js` | 剧情存档层 | 三槽、迁移、损坏保护；不得依赖游戏画面对象 |
+| `prototype/stomach-inventory.js` | 胃袋数据层 | 槽位、选择、数量、身长贡献和序列化；投射物物理由引擎负责 |
+| `story/source/` / `story/generated/` | Arcweave 导入轨道 | 前者保留原始导出，后者是可审查中间数据，不直接覆盖运行时 |
+| `STORY.md` | 剧情轨道 | 剧情制作、分页和异常操作约定；运行数据以 `prototype/story-data.js` 为准 |
 | `CARD_REVIEW.md` | 卡池评审 | 给制作人看的卡牌清单，可自由更新 |
 | `GDD.md` | 设计宪法 | 所有拍板当天落在这里；数值以 §8 速查表为准 |
 
@@ -47,6 +55,8 @@
 8. 肉鸽双层形态已定：局内三选一（已实现骨架）→ 局外解锁层（M3 再做）
 9. 碰墙/自撞有 0.5 秒冻结容错窗：期间转向使"真实步长模拟"安全即免死并立即恢复移动
 10. v0.16 扩展系统：VInput 虚拟输入 / ZONES 地形区域（slope 坡度、wind 风）/ MECHS 机关（gate 吞豆门、pillar 充能桩+奖励）/ 开场播放器（读 window.INTRO_SCENE）；RUN 新增 speedMult、contactDmg
+11. 对话确认与吐豆必须是不同动作；默认回车确认、J 吐豆，提示始终读取玩家自定义键位
+12. 胃袋主位用 Q/E 循环选择；豆子槽永久存在，特殊物品占用身长且发射后可在地图回收
 
 ## 当前状态与下一步
 

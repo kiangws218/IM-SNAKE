@@ -108,6 +108,8 @@
   .npc-opt.red{ color:#ff5d5d;border-color:#7a2d35; }
   .npc-opt.red:hover{ border-color:#ff5d5d; }
   .npc-opt.sel{ border-color:#ffd76e;background:#2c2d44;box-shadow:0 0 0 1px #ffd76e; }
+  #stomachHud{display:inline-flex;align-items:center;gap:5px;max-width:520px;overflow:hidden;vertical-align:middle}
+  #stomachSlots{display:inline-flex;gap:4px;align-items:center}
   #pauseMenu{
     position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; background:rgba(8,8,16,.66); z-index:20;
@@ -131,6 +133,7 @@
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
   <span class="chip">断尾 <span class="bar"><i id="cdCut" style="background:#e86a8a"></i></span></span>
   <span class="chip">节点 <span id="nodes"></span></span>
+  <span class="chip" id="stomachHud">胃袋 <small id="stomachPrev"></small><span id="stomachSlots"></span><small id="stomachNext"></small></span>
   <span id="coopHud" style="display:none"><span class="chip" style="color:#7fd1e8"><b>P2</b> ❤ <span id="p2Hearts"></span></span> <span class="chip">身长 <b id="p2Len"></b></span> <span class="chip">豆伤 <b id="p2Dmg" style="color:#7fd1e8"></b></span> <span class="chip">火力 <span class="bar"><i id="p2Fire" style="background:#7fd1e8"></i></span></span> <span class="chip">断尾 <span class="bar"><i id="p2Cut" style="background:#4389a8"></i></span></span> <span class="chip">节点 <span id="p2Nodes"></span></span></span>
   <span id="stat"></span>
 </div>
@@ -138,7 +141,9 @@
 <canvas id="cv"></canvas>
 <div id="help">
   <b>移动</b> <kbd>WASD</kbd>/<kbd>方向键</kbd>（8方向<b>即时转向</b> · 点按转向 长按<b>2倍速冲刺</b> · 不能停）
-　<b>站桩吐豆</b> 长按<kbd>J</kbd>/<kbd>空格</kbd>
+　<b>站桩吐豆</b> 长按<kbd id="helpFire">J</kbd>
+　<b>对话确认</b> <kbd id="helpInteract">回车</kbd>
+　<b>胃袋切换</b> <kbd id="helpPrev">Q</kbd>/<kbd id="helpNext">E</kbd>
 　<b>断尾</b> 点按<kbd>K</kbd>/<kbd>Shift</kbd>
 　<b>放节点</b> <kbd>F</kbd>
 　<b>P2 默认</b> <kbd>方向键</kbd> / <kbd>小键盘 0·1·2</kbd>（所有键位均可在设置中修改）
@@ -150,7 +155,7 @@
   <summary>▶ 数值调参面板（改完立即生效，用于玩法验证）</summary>
   <div class="grid" id="tune"></div>
 </details>
-<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">开始闯关</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
+<div id="overlay"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns"><button id="ovBtn">剧情模式</button><button id="ovBtn5">⚔ Boss挑战</button><button id="ovBtn4">选关挑战</button><button id="ovBtn2">教学关卡</button><button id="ovBtn3">沙盒模式</button><button id="ovBtn7">设置</button></div><div id="pickList"></div></div>
 <div id="pauseMenu"><h2>已暂停</h2><button id="pauseResume">继 续</button><button id="pauseSettings">设 置</button><button id="pauseHome">返回首页</button></div>
 
 <script src="levels.js"></script>
@@ -159,8 +164,16 @@
 <script src="enemies.js"></script>
 <script src="player-core.js"></script>
 <script src="input.js"></script>
+<script src="stomach-inventory.js"></script>
 <script src="settings.js"></script>
 <script src="coop-mode.js"></script>
+<script src="story-events.js"></script>
+<script src="story-state.js"></script>
+<script src="story-maps.js"></script>
+<script src="story-runtime.js"></script>
+<script src="story-dialogue.js"></script>
+<script src="story-data.js"></script>
+<script src="story-save.js"></script>
 <script>
 "use strict";
 const CFG={
@@ -204,9 +217,12 @@ const api={
 const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
 let touchMode=false;
 let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
-let intro=null,introSeen=false,fireKey=false;
+let intro=null,introSeen=false,fireKey=false,fireNeedsRelease=false;
 let curses=[];
 let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false;
+let storyActive=false,storyStage=-1,storyTransitioning=false;
+let stomach=new IMS_STOMACH.StomachInventory(),stomachPickups=[];
+let panelInputGate=null;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
   catch(e){return{};}
@@ -256,7 +272,7 @@ let snake={fx:0,fy:0,len:4,path:[],pathLen:0};
 let dir={x:1,y:0}, dirQueue=[];
 let firing=false, fireT=0, fireStreak=0;
 let segPos=[], occSet=new Set();
-let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats;
+let mapNodes, charges, groundBeans, projs, seeds, enemies, pickups, particles, floats, voidCells=new Set();
 let flyingBeans=[];
 let danger=null, hurtFlash=0;
 let gameState="menu", playMode="sandbox", tutIdx=-1;
@@ -284,9 +300,20 @@ function nearestPlayer(x,y){
 }
 function bodyHas(key){return occSet.has(key)||CoopMode.bodyHas(key);}
 function hurtPlayerById(id,reason){if(id===2)CoopMode.hurt(reason);else hurtPlayer(reason);}
+function routeStoryInteraction(kind,target,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const handler=rootRef&&rootRef.storyControllerInteraction;
+  return typeof handler==="function"?!!handler(kind,target,payload):false;
+}
+function notifyStoryEvent(name,payload){
+  const rootRef=typeof window!=="undefined"?window:globalThis;
+  const api=rootRef&&rootRef.IMS_STORY_API;
+  if(api&&typeof api.engineEvent==="function")api.engineEvent(name,payload||{});
+}
 
 function buildObstacles(){
   obstacles=new Set();
+  voidCells=new Set();
   const rects=[
     [8,5,3,2],[18,5,3,2],[28,5,3,2],[38,6,3,2],[50,5,3,2],[60,6,3,2],
     [8,20,3,2],[20,22,2,2],[34,19,3,2],[48,21,3,2],[62,20,3,2],
@@ -376,6 +403,18 @@ function updateFlyingBeans(dt){
 }
 function puff(x,y,col){for(let i=0;i<6;i++)particles.push({x,y,vx:(Math.random()-.5)*3,vy:(Math.random()-.5)*3,t:.4,col});}
 function ftext(x,y,text,col){floats.push({x,y,text,col,t:1});}
+function recordGateHit(m){
+  if(!m||m.done)return false;
+  m.prog=Math.min(m.need,m.prog+1);
+  ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
+  if(m.prog>=m.need){
+    m.done=true;
+    for(const idx of m.cellIdx||[])obstacles.delete(idx);
+    grantReward(m.reward);computeEnclosure();
+    ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
+  }
+  return true;
+}
 function beanDamage(owner){
   if(owner===2)return CoopMode.damage();
   const base=4+RUN.dmgBonus;
@@ -390,12 +429,14 @@ function reset(forTutorial){
   for(let i=1;i<=CFG.initLen+3;i++)snake.path.push({x:6.5-i,y:sy+.5});
   hearts=RUN.maxHearts;invuln=0;cutCd=0;alive=true;primaryDown=false;paused=false;shake=0;biteAcc=0;
   danger=null;hurtFlash=0;
-  firing=false;fireT=0;
+  firing=false;fireT=0;fireNeedsRelease=false;
   segPos=[];occSet=new Set();
   mapNodes=[];charges=1;
   groundBeans=[];projs=[];seeds=[];enemies=[];pickups=[];particles=[];floats=[];
-  flyingBeans=[];curses=[];
-  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;npcPanelEl=null;panelOpen=false;freeze=false;
+  flyingBeans=[];curses=[];stomachPickups=[];stomach=new IMS_STOMACH.StomachInventory();
+  npcs=[];npcRespawns=[];panelNpc=null;npcNode=null;moveLock=false;npcSlots=null;
+  const oldPanel=document.getElementById("npcPanel");if(oldPanel&&oldPanel.remove)oldPanel.remove();
+  npcPanelEl=null;panelOpts=[];panelSel=0;panelOpen=false;freeze=false;
   curCaps=Object.assign({},CFG.caps);curBeanTarget=CFG.beanTarget;curGoal=null;
   kills=0;beansEaten=0;prisonFormed=0;gameTime=0;spawnT=0;beanT=0;
   distMoved=0;spitHits=0;projRecycled=0;cutUsed=0;nodesPlaced=0;prisonKills=0;flowersKilled=0;
@@ -518,10 +559,10 @@ function updateMovement(dt){
     const spd=CFG.snakeSpeed*(heldKeys.size>0&&!firing?CFG.speedBoost:1);
     const step=Math.max(spd*dt,.05);
     const nx=snake.fx+dir.x*step,ny=snake.fy+dir.y*step;
-    if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)){
+    if(!hitWall(nx,ny,.26)&&!selfBiteProbe(nx,ny,.5)&&!coopBodyHit(nx,ny)){
       danger=null;
     }else{
-      if(danger.timer<=0)defeatPrimary(danger.type==="wall"?"撞上了墙":"咬到了自己的尾巴");
+      if(danger.timer<=0)defeatPrimary(danger.type==="wall"?"撞上了墙":danger.type==="player"?"撞上了 P2 的身体":"咬到了自己的尾巴");
       return;
     }
   }
@@ -552,6 +593,10 @@ function enterDanger(type){
 function selfBiteProbe(px,py,r){
   return PlayerCore.selfBite({segPos},px,py,r||.62,Math.max(2,CFG.neckGuard),nearNode);
 }
+function coopBodyHit(px,py){
+  const p2=CoopMode.view();
+  return !!(p2&&p2.segPos.slice(1).some(s=>Math.hypot(px-s.x,py-s.y)<.62));
+}
 function path0(){return PlayerCore.pathHead({snake});}
 
 function nearNode(x,y){
@@ -560,28 +605,53 @@ function nearNode(x,y){
   return false;
 }
 
+function stomachSpecialWeight(){return stomach?stomach.getLengthContribution():0;}
+function minBodyLength(){return CFG.minLen+stomachSpecialWeight();}
+function beanAmmo(){return Math.max(0,snake.len-minBodyLength());}
+function syncStomachStory(reason){
+  if(playMode==="story")notifyStoryEvent("inventoryChanged",{inventory:stomach.snapshot(),bodyLength:snake.len,reason:reason||"inventory"});
+}
+function addStomachItem(id,amount,reason){
+  const result=stomach.add(id,amount||1);
+  if(result.addedWeight>0){snake.len+=result.addedWeight;computeSegs();syncStomachStory(reason||"pickup");}
+  return result;
+}
+function restoreStomachInventory(state){
+  stomach=new IMS_STOMACH.StomachInventory();
+  if(state)stomach.restore(state);
+  return stomach.snapshot();
+}
+function cycleStomach(direction){
+  if(!stomach||panelOpen||paused||freeze)return;
+  const selected=stomach.cycle(direction);
+  ftext(snake.fx,snake.fy-1,"主位："+selected.item.shortName+(selected.id==="bean"?"":" ×"+selected.count),"#ffd76e");
+  syncStomachStory("selection");
+}
+
 function pickUps(){
   for(let i=groundBeans.length-1;i>=0;i--){
     const b=groundBeans[i];
     if(Math.hypot(b.x+.5-snake.fx,b.y+.5-snake.fy)<RUN.pickupR){
       if(b.fromProj)projRecycled++;
       groundBeans.splice(i,1);
-      snake.len++;beansEaten++;
-      for(const m of MECHS){
-        if(m.done||m.kind!=="gate")continue;
-        if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
-          m.prog++;
-          ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
-          if(m.prog>=m.need){
-            m.done=true;
-            for(const idx of m.cellIdx)obstacles.delete(idx);
-            grantReward(m.reward);computeEnclosure();
-            ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
+      snake.len++;beansEaten++;notifyStoryEvent("beanEaten",{bean:b});
+        for(const m of MECHS){
+          if(m.done||m.kind!=="gate")continue;
+          if(b.x>=m.x&&b.x<m.x+m.w&&b.y>=m.y&&b.y<m.y+m.h){
+            const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"pickup",bean:b,apply:()=>recordGateHit(m)});
+            if(!handled)recordGateHit(m);
           }
         }
-      }
       if(Math.random()<RUN.greedy){snake.len++;ftext(b.x+.5,b.y,"贪食 +1","#ffd76e");}
       ftext(b.x+.5,b.y+.3,"+1","#8fe36b");puff(b.x+.5,b.y+.5,"#8fe36b");
+    }
+  }
+  for(let i=stomachPickups.length-1;i>=0;i--){
+    const p=stomachPickups[i];
+    if(Math.hypot(p.x-snake.fx,p.y-snake.fy)<RUN.pickupR){
+      const added=addStomachItem(p.id,1,"special_pickup");
+      if(added.added){stomachPickups.splice(i,1);ftext(p.x,p.y-.5,"吞入胃袋："+added.item.shortName,"#ffd76e");puff(p.x,p.y,added.item.color||"#f5f5fa");}
+      else if(gameTime-(p.lastNotice||-99)>1){p.lastNotice=gameTime;ftext(p.x,p.y-.5,"胃袋里已经有了","#8b88a3");}
     }
   }
   for(let i=curses.length-1;i>=0;i--){
@@ -605,12 +675,24 @@ function pickUps(){
 }
 
 function stanceShot(){
-  if(snake.len<=CFG.minLen){
-    firing=false;
-    ftext(snake.fx,snake.fy-1,"弹匣打空了！","#ff5d5d");
+  const selected=stomach.selected();
+  if(selected.id!=="bean"){
+    const used=stomach.consumeSelected();
+    if(!used.fired){firing=false;fireNeedsRelease=true;ftext(snake.fx,snake.fy-1,selected.item.shortName+" 已经空了！","#ff5d5d");return;}
+    snake.len=Math.max(minBodyLength(),snake.len-used.removedWeight);computeSegs();
+    const speed=CFG.spitSpeed*RUN.spitSpeedMult*.75;
+    const sx=snake.fx+dir.x*1.2,sy=snake.fy+dir.y*1.2;
+    projs.push({owner:1,payloadId:used.id,payload:used.item,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
+    firing=false;fireNeedsRelease=true;shake=Math.max(shake,.18);
+    ftext(snake.fx,snake.fy-1,"吐出："+used.item.shortName,"#ffd76e");syncStomachStory("special_fired");return;
+  }
+  if(beanAmmo()<=0){
+    firing=false;fireNeedsRelease=true;
+    ftext(snake.fx,snake.fy-1,"豆子打空了！","#ff5d5d");
     return;
   }
   snake.len--;
+  notifyStoryEvent("beanSpit",{});
   const spd=CFG.spitSpeed*RUN.spitSpeedMult;
   let sx=snake.fx+dir.x*.9,sy=snake.fy+dir.y*.9;
   for(const k of[.9,1.4,1.9,2.4,2.9]){
@@ -706,15 +788,9 @@ function updateProjs(dt){
       for(const m of MECHS){
         if(m.done||m.kind!=="gate"||!m.cellIdx)continue;
         if(m.cellIdx.includes(K(hit.cx,hit.cy))){
-          m.prog++;
           puff(p.x,p.y,"#7fd1e8");
-          ftext(m.x+m.w/2,m.y-.5,"吞豆 "+m.prog+"/"+m.need,"#7fd1e8");
-          if(m.prog>=m.need){
-            m.done=true;
-            for(const idx of m.cellIdx)obstacles.delete(idx);
-            grantReward(m.reward);computeEnclosure();
-            ftext(m.x+m.w/2,m.y-1.2,"石门开启！","#ffd76e");
-          }
+          const handled=routeStoryInteraction("mechanic",m,{type:"gate_hit",source:"projectile",projectile:p,apply:()=>recordGateHit(m)});
+          if(!handled)recordGateHit(m);
           fed=true;break;
         }
       }
@@ -771,8 +847,11 @@ function updateProjs(dt){
     dead=p.life<=0||Math.hypot(p.vx,p.vy)<CFG.beanStop;
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
-      if(spot)groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
-      puff(p.x,p.y,"#d95763");
+      if(spot){
+        if(p.payloadId)stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});
+        else groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
+      }
+      puff(p.x,p.y,p.payload&&p.payload.color||"#d95763");
       projs.splice(i,1);
     }
   }
@@ -867,7 +946,9 @@ function updateNPCs(dt){
     if(n.hp<=0){dieNPC(n);continue;}
     if(alive&&!panelOpen&&gameState==="play"){
       const near=nearestPlayer(n.x,n.y),d=near?Math.hypot(n.x-near.x,n.y-near.y):Infinity;
-      if(d<0.85&&!n.inside)openPanel(n);
+      if(d<0.85&&!n.inside){
+        if(!routeStoryInteraction("actor",n))openPanel(n);
+      }
       else if(d>1.25)n.inside=false;
     }
   }
@@ -896,6 +977,7 @@ function dieNPC(n){
   puff(n.x,n.y,"#c77dff");
   ftext(n.x,n.y-.8,T.name+"倒下了","#c77dff");
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorDied",{actor:n});
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
 }
 function eatNPC(n){
@@ -904,6 +986,7 @@ function eatNPC(n){
   puff(n.x,n.y,"#8fe36b");
   const wasOpen=(panelNpc===n);
   npcs.splice(npcs.indexOf(n),1);
+  notifyStoryEvent("actorEaten",{actor:n});
   if(wasOpen)closePanel();
   const T=NPC_TYPES[n.kind];
   if(T.respawn)npcRespawns.push({kind:n.kind,t:T.respawn});
@@ -1125,7 +1208,7 @@ function updateSpawner(dt){
     if(playMode==="sandbox"){
       const keys=Object.keys(SANDBOX_CAPS).filter(k=>cnt(k)<SANDBOX_CAPS[k]);
       if(keys.length)spawnEnemy(keys[rnd(keys.length)]);
-    }else{
+    }else if(playMode==="campaign"){
       if(cnt("slime")<curCaps.slime)spawnEnemy("slime");
       else if(cnt("rat")<curCaps.rat)spawnEnemy("rat");
       else if(cnt("flower")<curCaps.flower)spawnEnemy("flower");
@@ -1138,13 +1221,14 @@ function updateSpawner(dt){
 function cutTail(){
   if(gameState!=="play"||!alive||primaryDown||paused||freeze)return;
   if(cutCd>0)return;
-  if(snake.len<=CFG.cutKeep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
+  const keep=Math.max(CFG.cutKeep,minBodyLength());
+  if(snake.len<=keep){ftext(snake.fx,snake.fy-1,"没有可断的尾！","#ff5d5d");return;}
   cutCd=RUN.cutCd;
   cutUsed++;
-  const cutN=snake.len-CFG.cutKeep;
+  const cutN=snake.len-keep;
   const recover=Math.floor(cutN*CFG.cutRecover);
   const tailPt=segPos[snake.len-1]||{x:snake.fx,y:snake.fy};
-  snake.len=CFG.cutKeep;
+  snake.len=keep;
   if(recover>0)scatterBeans(Math.floor(tailPt.x),Math.floor(tailPt.y),recover,2);
   ftext(tailPt.x,tailPt.y-.6,"-"+(cutN-recover)+" 节","#e86a8a");
   shake=.25;puff(tailPt.x,tailPt.y,"#e86a8a");
@@ -1152,7 +1236,13 @@ function cutTail(){
 }
 
 function buildFromLevel(L){
-  buildObstacles();
+  if(L.cleanMap){obstacles=new Set();voidCells=new Set();}
+  else buildObstacles();
+  if(L.solidOutside){
+    const[ax,ay,aw,ah]=L.solidOutside;
+    for(let x=0;x<CFG.cols;x++)for(let y=0;y<CFG.rows;y++)
+      if(x<ax||x>=ax+aw||y<ay||y>=ay+ah){const i=K(x,y);obstacles.add(i);voidCells.add(i);}
+  }
   for(const r of(L.obstacles||[])){
     const[rx,ry,rw,rh]=r;
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
@@ -1172,7 +1262,7 @@ function buildFromLevel(L){
   curCaps=Object.assign({slime:0,rat:0,flower:0},L.caps);
   curBeanTarget=L.beans||8;
   curGoal=L.goal;levelStartT=gameTime;
-  if(playMode!=="intro")(L.npcs||["merchant"]).forEach(k=>spawnNPC(k));
+  if(playMode!=="intro")(Array.isArray(L.npcs)?L.npcs:["merchant"]).forEach(k=>spawnNPC(k));
 }
 function startCampaign(){
   if(!introSeen){
@@ -1221,6 +1311,7 @@ function advanceIntro(){
 function endIntro(){
   intro=null;
   const sk=document.getElementById("introSkip");if(sk)sk.remove();
+  if(storyActive){startStoryStage(0);return;}
   startCampaign();
 }
 function updateIntro(dt){
@@ -1241,6 +1332,13 @@ function updateIntro(dt){
     }else intro.arrived=true;
   }
 }
+function storyApi(){return typeof window!=="undefined"?window.IMS_STORY_API:null;}
+function startStoryMode(slot){const api=storyApi();if(api)api.start(slot||1);}
+function continueStoryMode(slot){const api=storyApi();return api?api.resume(slot||1):{ok:false};}
+function startStoryStage(){const api=storyApi();if(api)api.retry();}
+function storyGoalText(){const api=storyApi();return api?api.goalText():"按剧情继续";}
+function storyProgressText(){const api=storyApi();return api?api.progressText():"剧情模式";}
+function storyCheckProgress(){}
 function drawBossUI(){
   const W=cv.width;
   const bw=Math.min(W*.52,430),bx=(W-bw)/2,by=10;
@@ -1390,7 +1488,7 @@ function buildTutArena(){
   for(const[rx,ry,rw,rh]of[[30,17,8,1],[30,23,8,1],[30,18,1,5]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   computeEnclosure();
-  enemies.push({type:"flower",x:34,y:20,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.5,vx:0,vy:0,shootT:2,warned:false});
+  enemies.push({type:"flower",x:34.5,y:21.5,flash:0,hitT:0,hp:ENEMY_TYPES.flower.hp,max:ENEMY_TYPES.flower.hp,r:.5,vx:0,vy:0,shootT:2,warned:false});
 }
 function startTutorial(){
   playMode="tutorial";
@@ -1427,6 +1525,15 @@ function advanceTut(){
   openTutPanel(tutIdx);
 }
 let panelOpts=[],panelSel=0;
+const heldInputCodes=new Set();
+function armPanelInputGate(triggerCode){
+  if(!IMS_STORY_DIALOGUE||typeof IMS_STORY_DIALOGUE.createInputGate!=="function"){panelInputGate=null;return;}
+  panelInputGate=IMS_STORY_DIALOGUE.createInputGate(140);
+  const guarded=[InputMap.bindingFor(1,"fire"),InputMap.bindingFor(1,"interact")];
+  const held=triggerCode||guarded.find(code=>heldInputCodes.has(code))||null;
+  panelInputGate.open(held,performance.now());
+}
+function clearPanelInputGate(){panelInputGate=null;}
 function trackPanelOpts(container){
   panelOpts=Array.prototype.slice.call(container.querySelectorAll(".npc-opt"));
   panelSel=0;
@@ -1446,7 +1553,7 @@ function confirmPanel(){
 function openTutPanel(i){
   try{
     const s=TUT2[i];
-    panelOpen=true;freeze=true;panelNpc=null;npcNode=null;
+    panelOpen=true;freeze=true;panelNpc=null;npcNode=null;armPanelInputGate();
     const p=ensurePanel();p.style.display="flex";
     document.getElementById("npcName").textContent="我";
     document.getElementById("npcSub").textContent="自言自语 · 教学 "+(i+1)+"/"+TUT2.length;
@@ -1463,7 +1570,7 @@ function openTutPanel(i){
   }catch(e){uiFatal("教学面板:"+(e&&e.message));}
 }
 function finishTutorial(){
-  panelOpen=true;freeze=true;
+  panelOpen=true;freeze=true;armPanelInputGate();
   const p=ensurePanel();p.style.display="flex";
   document.getElementById("npcName").textContent="恭喜完成教学！";
   document.getElementById("npcSub").textContent=TUT2.length+"/"+TUT2.length;
@@ -1540,7 +1647,7 @@ function uiFatal(msg){
 function openPanel(n,nodeId){
   try{
     if(!n||!npcs.includes(n)){closePanel();return;}
-    panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;
+    panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;armPanelInputGate();
     const T=NPC_TYPES[n.kind];
     const p=ensurePanel();
     p.style.display="flex";
@@ -1557,8 +1664,8 @@ function openPanel(n,nodeId){
       list=(node.options||[]).map(o=>({label:o.t,
         fn:()=>{
           if(!npcs.includes(n))return closePanel();
-          if(o.action==="eat")return eatNPC(n);
-          if(o.action==="end")return closePanel();
+          if(o.action==="eat"){eatNPC(n);return;}
+          if(o.action==="end"){closePanel();return;}
           return openPanel(n,o.next);
         }}));
     }else{
@@ -1583,8 +1690,8 @@ function handleOption(n,o){
   if(!npcs.includes(n))return closePanel();
   if(o.action==="trade")return panelTrade(n);
   if(o.action==="dialog")return openPanel(n,o.arg||"start");
-  if(o.action==="eat")return eatNPC(n);
-  if(o.action==="leave")return closePanel();
+  if(o.action==="eat"){eatNPC(n);return;}
+  if(o.action==="leave"){closePanel();return;}
 }
 function merchantMarkup(n){
   const T=NPC_TYPES[n.kind];
@@ -1607,7 +1714,7 @@ function panelTrade(n){
       (cost>g.cost?" <span style='color:#ff5d5d'>(原价 "+g.cost+")</span>":"")+"<br>"+
       "<span style='opacity:.65;font-size:11px'>"+g.desc+"</span>";
     b.onclick=()=>{
-      if(snake.len<CFG.minLen+cost){
+      if(snake.len<minBodyLength()+cost){
         b.lastElementChild.textContent="身长不够，做不了这买卖！";
         return;
       }
@@ -1637,6 +1744,7 @@ function closePanel(){
   p.classList.remove("open");
   setTimeout(()=>{if(!panelOpen)p.style.display="none";},400);
   panelOpen=false;panelNpc=null;npcNode=null;
+  panelInputGate=null;
   freeze=false;moveLock=false;
   if(!(dir.x===-1&&dir.y===0))dir={x:1,y:0};
 }
@@ -1661,6 +1769,28 @@ function resumeFromUI(){
   paused=false;panelOpen=false;freeze=false;moveLock=true;
 }
 
+function spawnLaneClear(x,y,seconds){
+  const speed=CFG.snakeSpeed*RUN.speedMult,step=.05;
+  for(let t=0;t<=seconds;t+=step)if(hitWall(x+speed*t,y,.34))return false;
+  return true;
+}
+function ensurePrimarySpawnSafe(){
+  const old={x:snake.fx,y:snake.fy,dir:{x:dir.x,y:dir.y},path:snake.path.map(p=>({x:p.x,y:p.y}))};
+  const px=Math.floor(old.x),py=Math.floor(old.y),candidates=[];
+  for(let y=0;y<CFG.rows;y++)for(let x=0;x<CFG.cols;x++)
+    candidates.push({x,y,d:Math.abs(x-px)+Math.abs(y-py)});
+  candidates.sort((a,b)=>a.d-b.d);
+  for(const c of candidates){
+    snake.fx=c.x+.5;snake.fy=c.y+.5;dir={x:1,y:0};coilPath();computeSegs();
+    const p2=CoopMode.view();
+    const wallHit=segPos.some(s=>hitWall(s.x,s.y,.34));
+    const playerHit=p2&&segPos.some(a=>p2.segPos.some(b=>Math.hypot(a.x-b.x,a.y-b.y)<.72));
+    const laneHit=!spawnLaneClear(snake.fx,snake.fy,3);
+    if(!wallHit&&!playerHit&&!laneHit)return true;
+  }
+  snake.fx=old.x;snake.fy=old.y;dir=old.dir;snake.path=old.path;computeSegs();
+  return false;
+}
 function startBossFight(){
   playMode="boss";
   resetRun();
@@ -1668,6 +1798,8 @@ function startBossFight(){
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
   for(const[rx,ry,rw,rh]of[[8,8,2,2],[30,6,2,2],[52,8,2,2],[54,22,2,3],[28,40,2,2],[52,38,2,2],[20,12,2,2],[12,34,2,2],[40,16,2,1],[44,34,2,2],[60,30,2,2],[16,30,2,2]])
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
+  ensurePrimarySpawnSafe();
+  CoopMode.ensureSafeSpawn();
   tutIdx=-1;panelOpen=false;freeze=false;moveLock=false;
   boss={name:"巨岩茧母 · 磐",x:48.5,y:24.5,r:3,hp:220,maxHp:220,shield:0,
     phase2:false,patT:2.2,patIdx:0,sumT:9,stun:0,spin:0,flash:0,vx:0,vy:0,
@@ -1742,7 +1874,7 @@ function updateBoss(dt){
       }
       if(hitIdx>0){
         const oldLen=snake.len;
-        snake.len=Math.max(CFG.minLen,hitIdx);
+        snake.len=Math.max(minBodyLength(),hitIdx);
         const lost=oldLen-snake.len;
         for(let i2=hitIdx;i2<oldLen;i2++){
           const sgm=segPos[i2];if(!sgm)break;
@@ -1817,8 +1949,8 @@ function updateBoss(dt){
   for(const s of bossStakes){
     if(s.dead)continue;
     const sr=prisonMask[K(Math.floor(s.x),Math.floor(s.y))];
-    if(sr>=0&&prisonRegionBody[sr]){s.cap+=dt;s.hot=true;}
-    else{s.cap=Math.max(0,s.cap-dt*.6);s.hot=false;}
+    if(sr>=0&&prisonRegionBody[sr]){s.cap=Math.min(s.need,s.cap+dt);s.hot=true;}
+    else{s.hot=false;}
     if(s.cap>=s.need){
       s.dead=true;
       boss.shield=Math.max(0,boss.shield-25);
@@ -1880,6 +2012,11 @@ function buildPanel(){
 
 const MOVE_KEYS={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
 const heldKeys=new Set();
+function callRuntime(name,fallback,...args){
+  const appRoot=typeof window!=="undefined"?window:globalThis;
+  const fn=appRoot&&appRoot[name];
+  return typeof fn==="function"?fn(...args):fallback(...args);
+}
 function comboVec(){
   let x=0,y=0;
   if(heldKeys.has("up"))y--;
@@ -1892,20 +2029,29 @@ function pushCombo(){PlayerCore.queueDirection({dir,dirQueue},comboVec(),3);}
 addEventListener("keydown",ev=>{
   const k=ev.key.toLowerCase();
   const action=InputMap.actionFor(1,ev);
+  const code=InputMap.eventCode(ev);heldInputCodes.add(code);
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))ev.preventDefault();
+  // 剧情对话期间只允许操作对话本身；移动、发射、重开和暂停键都不能
+  // 把面板关掉或改变蛇的位置，否则玩家可能永远回不到当前剧情节点。
+  if(panelOpen&&gameState==="play"){
+    if(action==="up"){ev.preventDefault();if(!ev.repeat)selPanel(-1);return;}
+    if(action==="down"){ev.preventDefault();if(!ev.repeat)selPanel(1);return;}
+    if(action==="interact"){
+      ev.preventDefault();
+      if(ev.repeat||panelInputGate&&!panelInputGate.canAdvance(performance.now()))return;
+      if(panelInputGate)panelInputGate.consume(performance.now());confirmPanel();if(panelOpen)armPanelInputGate(code);return;
+    }
+    return;
+  }
   if(k==="r"){
     if(playMode==="intro"){endIntro();return;}
     if(playMode==="tutorial"){if(gameState==="dead")restartCurrentTut();else startTutorial();}
     else if(playMode==="campaign"&&gameState!=="victory"&&levelIdx<LEVELS.length)startLevel();
+    else if(playMode==="story")callRuntime("startStoryStage",startStoryStage,Math.max(0,storyStage));
     else startGame();
     return;
   }
   if(gameState==="intro"){if(k===" "||k==="j"){advanceIntro();return;}}
-  if(panelOpen&&gameState==="play"){
-    if(k==="arrowup"||k==="w"){ev.preventDefault();selPanel(-1);return;}
-    if(k==="arrowdown"||k==="s"){ev.preventDefault();selPanel(1);return;}
-    if(k===" "||k==="j"||k==="enter"||k==="arrowright"||k==="d"){ev.preventDefault();confirmPanel();return;}
-  }
   if(gameState!=="play"&&gameState!=="intro")return;
   if(MOVE_KEYS[action]){
     heldKeys.add(action);
@@ -1915,6 +2061,8 @@ addEventListener("keydown",ev=>{
     if(gameState==="intro"){advanceIntro();return;}
     fireKey=true;
   }
+  else if(action==="prevItem"&&!ev.repeat)cycleStomach(-1);
+  else if(action==="nextItem"&&!ev.repeat)cycleStomach(1);
   else if(action==="cut")cutTail();
   else if(action==="node")placeNode();
   else if(k==="p"||k==="escape"){
@@ -1934,11 +2082,12 @@ document.getElementById("pauseHome").onclick=()=>{
 };
 addEventListener("keyup",ev=>{
   const action=InputMap.actionFor(1,ev);
+  const code=InputMap.eventCode(ev);heldInputCodes.delete(code);if(panelInputGate)panelInputGate.keyup(code);
   heldKeys.delete(action);
-  if(action==="fire")fireKey=false;
+  if(action==="fire"){fireKey=false;fireNeedsRelease=false;}
   if(MOVE_KEYS[action])pushCombo();
 });
-addEventListener("blur",()=>{heldKeys.clear();firing=false;fireKey=false;});
+addEventListener("blur",()=>{heldKeys.clear();heldInputCodes.clear();firing=false;fireKey=false;fireNeedsRelease=false;if(panelInputGate)panelInputGate.keyup();});
 addEventListener("pointerdown",()=>{
   if(gameState==="intro")advanceIntro();
 });
@@ -1946,6 +2095,7 @@ document.getElementById("ovBtn").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   if(gameState==="victory"){
     if(victoryRetry==="boss")startBossFight();
+    else if(victoryRetry==="story"){const api=storyApi();startStoryMode(api&&api.currentSlot()||1);}
     else showMenu();
     return;
   }
@@ -1953,10 +2103,11 @@ document.getElementById("ovBtn").onclick=()=>{
     if(playMode==="campaign")startLevel();
     else if(playMode==="boss")startBossFight();
     else if(playMode==="tutorial")restartCurrentTut();
+    else if(playMode==="story")callRuntime("startStoryStage",startStoryStage,Math.max(0,storyStage));
     else startGame();
     return;
   }
-  startCampaign();
+  showStorySaves();
 };
 document.getElementById("ovBtn2").onclick=()=>{
   if(gameState==="victory"){showMenu();return;}
@@ -1972,6 +2123,44 @@ document.getElementById("ovBtn4").onclick=()=>{
   if(gameState==="play"||gameState==="between")return;
   showLevelSelect();
 };
+function storySaveTime(value){
+  if(!value)return"尚无时间";
+  try{return new Date(value).toLocaleString("zh-CN",{hour12:false});}catch(error){return String(value);}
+}
+function storyPickContent(button,title,detail){
+  button.innerHTML="";
+  const heading=document.createElement("b"),line=document.createElement("span");
+  heading.textContent=title;line.textContent=detail||"";button.appendChild(heading);button.appendChild(line);
+}
+function showStorySaves(){
+  gameState="menu";
+  const api=storyApi(),saves=api&&api.listSaves?api.listSaves():[];
+  document.getElementById("ovTitle").textContent="剧情模式 · 单人";
+  document.getElementById("ovText").textContent="选择一个存档位。新游戏会从序章开始；继续游戏会从最近的地图入口恢复。";
+  document.getElementById("ovBtns").style.display="none";
+  const box=document.getElementById("pickList");box.innerHTML="";
+  for(let slot=1;slot<=3;slot++){
+    const item=saves.find(save=>save.slot===slot)||{slot,exists:false};
+    const primary=document.createElement("button");primary.className="pick-btn";
+    if(item.corrupted){
+      storyPickContent(primary,"存档 "+slot+" · 数据损坏",(item.error&&item.error.message||"无法读取")+" · 点击可覆盖并重新开始");
+      primary.onclick=()=>startStoryMode(slot);
+    }else if(item.exists){
+      const state=item.completed?"已完成":(item.currentMap||item.chapter||"序章");
+      storyPickContent(primary,"存档 "+slot+" · 继续游戏",(item.playerName||"未命名")+" ｜ "+state+" ｜ "+storySaveTime(item.updatedAt)+(item.legacy?" ｜ 旧版存档（继续后自动升级）":""));
+      primary.onclick=()=>continueStoryMode(slot);
+      const fresh=document.createElement("button");fresh.className="pick-btn";storyPickContent(fresh,"存档 "+slot+" · 覆盖并开始新游戏","原进度会在进入序章后被替换");fresh.onclick=()=>startStoryMode(slot);box.appendChild(primary);box.appendChild(fresh);
+      const remove=document.createElement("button");remove.className="pick-btn";storyPickContent(remove,"存档 "+slot+" · 删除","删除后无法恢复");remove.onclick=()=>{if(typeof confirm!=="function"||confirm("确定删除存档 "+slot+" 吗？")){api.deleteSave(slot);showStorySaves();}};box.appendChild(remove);
+      continue;
+    }else{
+      storyPickContent(primary,"存档 "+slot+" · 新游戏","空存档");
+      primary.onclick=()=>startStoryMode(slot);
+    }
+    box.appendChild(primary);
+  }
+  const back=document.createElement("button");back.className="pick-btn";storyPickContent(back,"← 返回主菜单","");back.onclick=showMenu;box.appendChild(back);
+  document.getElementById("overlay").classList.add("show");
+}
 function showLevelSelect(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="选择关卡";
@@ -2012,7 +2201,7 @@ function die(reason){
     reason+"<br>存活 "+gameTime.toFixed(1)+" 秒 ｜ 击杀 "+kills+
     " ｜ 吃豆 "+beansEaten+" ｜ 监狱达成 "+prisonFormed+" 次";
   document.getElementById("ovBtn").textContent=
-    playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":"再来一局";
+playMode==="tutorial"?"重试本小节":playMode==="boss"?"重试BOSS":playMode==="campaign"?"重试本关":playMode==="story"?"重试当前地图":"再来一局";
   document.getElementById("ovBtn2").textContent="回到首页";
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="none";document.getElementById("ovBtn4").style.display="none";
@@ -2021,16 +2210,19 @@ function die(reason){
   document.getElementById("overlay").classList.add("show");
 }
 function showMenu(){
+  const story=storyApi();if(story)story.stop();
+  storyActive=false;storyStage=-1;storyTransitioning=false;
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>"+
+    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
-    "长按 J / 空格 站桩吐豆（定身连射 · 身长即弹匣）<br>"+
+    "长按 "+InputMap.bindingLabel(1,"fire")+" 站桩吐豆 ｜ "+InputMap.bindingLabel(1,"interact")+" 确认对话<br>"+
+    InputMap.bindingLabel(1,"prevItem")+" / "+InputMap.bindingLabel(1,"nextItem")+" 切换胃袋主位（豆子或特殊物品）<br>"+
     "K / Shift 断尾 ｜ F 放置环形节点（固定地面 · 尾过自动回收）<br>"+
     (InputMap.getPlayerCount()===2?"P2：方向键移动 ｜ 小键盘 0 吐豆 · 1 断尾 · 2 节点<br>":"")+
     "P 暂停 ｜ R 重开 ｜ M 静音 ｜ 设置中可自定义全部键位";
-  document.getElementById("ovBtn").textContent="开始闯关";
+  document.getElementById("ovBtn").textContent="剧情模式";
   document.getElementById("ovBtn2").textContent="教学关卡";
   document.getElementById("ovBtn2").style.display="";
   document.getElementById("ovBtn3").style.display="";
@@ -2040,6 +2232,7 @@ function showMenu(){
   document.getElementById("ovBtn5").style.display="";
   document.getElementById("ovBtn7").textContent="设置";
   document.getElementById("ovBtn7").style.display="";
+  document.getElementById("ovBtns").style.display="";
   document.getElementById("pickList").innerHTML="";
   document.getElementById("tut").classList.remove("show");
   document.getElementById("overlay").classList.add("show");
@@ -2075,9 +2268,15 @@ function render(){
   for(let x=x0;x<x1;x++)for(let y=y0;y<y1;y++){
     if((x+y)%2===0){ctx.fillStyle="#151627";ctx.fillRect(x*T,y*T,T,T);}
   }
+  ctx.fillStyle="#080912";
+  for(const o of voidCells){
+    const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
+    if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
+  }
   ctx.fillStyle="#2c2d44";
   for(const o of obstacles){
     const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
+    if(voidCells.has(o))continue;
     if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
   }
   ctx.strokeStyle="#34355a";ctx.lineWidth=4;
@@ -2158,6 +2357,14 @@ function render(){
     ctx.strokeStyle="#ffd76e";ctx.lineWidth=3;
     ctx.beginPath();ctx.arc(px,py+bob,T*.36,0,7);ctx.stroke();
     ctx.fillStyle="rgba(255,215,110,.15)";ctx.beginPath();ctx.arc(px,py+bob,T*.5,0,7);ctx.fill();
+  }
+
+  for(const p of stomachPickups){
+    const px=p.x*T,py=p.y*T,bob=Math.sin(gameTime*4)*2;
+    ctx.fillStyle="rgba(245,245,250,.18)";ctx.beginPath();ctx.arc(px,py+bob,T*.52,0,7);ctx.fill();
+    ctx.fillStyle="#f5f5fa";ctx.fillRect(px-T*.28,py-T*.22+bob,T*.56,T*.48);
+    ctx.fillStyle="#3a2b23";ctx.fillRect(px-T*.19,py-T*.12+bob,T*.38,T*.1);
+    ctx.fillStyle="#7fd1e8";ctx.fillRect(px-T*.14,py+T*.03+bob,T*.08,T*.13);ctx.fillRect(px+T*.07,py+T*.03+bob,T*.08,T*.13);
   }
 
   for(const b of groundBeans){
@@ -2426,13 +2633,14 @@ function render(){
     ctx.beginPath();ctx.arc(s.x*T-2,s.y*T-2,T*.09,0,7);ctx.fill();
   }
   for(const p of projs){
+    const projectileColor=p.payload&&p.payload.color||"#ff6b7a",projectileRadius=p.payloadId?.42:.3;
     for(let i=0;i<p.trail.length;i++){
       const t=p.trail[i];
       ctx.fillStyle="rgba(217,87,99,"+(i/p.trail.length*.35)+")";
       ctx.beginPath();ctx.arc(t.x*T,t.y*T,T*.18*(i/p.trail.length+.4),0,7);ctx.fill();
     }
-    ctx.fillStyle="#ff6b7a";
-    ctx.beginPath();ctx.arc(p.x*T,p.y*T,T*.3,0,7);ctx.fill();
+    ctx.fillStyle=projectileColor;
+    ctx.beginPath();ctx.arc(p.x*T,p.y*T,T*projectileRadius,0,7);ctx.fill();
     ctx.fillStyle="#ffe0e3";
     ctx.beginPath();ctx.arc(p.x*T-2,p.y*T-2,T*.09,0,7);ctx.fill();
   }
@@ -2485,8 +2693,19 @@ function updateHud(){
   document.getElementById("cdCut").style.width=((1-cutCd/RUN.cutCd)*100)+"%";
   document.getElementById("nodes").textContent=
     "◆".repeat(charges)+"◇".repeat(Math.max(0,CFG.nodeMax-charges));
+  const stomachStatus=stomach.status();
+  document.getElementById("stomachPrev").textContent=InputMap.bindingLabel(1,"prevItem")+" ◀";
+  document.getElementById("stomachNext").textContent="▶ "+InputMap.bindingLabel(1,"nextItem");
+  document.getElementById("stomachSlots").textContent=stomachStatus.slots.map(slot=>{
+    const count=slot.id==="bean"?beanAmmo():slot.count,label=slot.item.shortName+" "+(count>0?"×"+count:"空");
+    return slot.selected?"【"+label+"】":label;
+  }).join("  ");
+  document.getElementById("helpFire").textContent=InputMap.bindingLabel(1,"fire");
+  document.getElementById("helpInteract").textContent=InputMap.bindingLabel(1,"interact");
+  document.getElementById("helpPrev").textContent=InputMap.bindingLabel(1,"prevItem");
+  document.getElementById("helpNext").textContent=InputMap.bindingLabel(1,"nextItem");
   document.getElementById("stat").textContent=
-    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":"")+
+    (playMode==="campaign"?"第"+(levelIdx+1)+"/"+LEVELS.length+"关 ｜ "+goalText()+" ｜ ":playMode==="story"?storyProgressText()+" ｜ "+storyGoalText()+" ｜ ":"")+
     (coop.enabled?"双人合作 ｜ ":"")+"击杀 "+kills+" ｜ 时间 "+gameTime.toFixed(0)+"s ｜ 监狱 "+activePrisons;
 }
 
@@ -2506,7 +2725,8 @@ function loop(now){
     cutCd=Math.max(0,cutCd-dt);
     shake=Math.max(0,shake-dt);
     if(!primaryDown)updateMovement(dt);
-    const wantFire=(fireKey||VInput.fire)&&alive&&!primaryDown&&!paused;
+    if(!fireKey&&!VInput.fire)fireNeedsRelease=false;
+    const wantFire=(fireKey||VInput.fire)&&!fireNeedsRelease&&alive&&!primaryDown&&!paused;
     if(wantFire&&!firing){firing=true;stanceShot();fireT=1/(CFG.spitRate*RUN.spitRateMult);}
     if(!wantFire){firing=false;fireStreak=0;}
     if(firing){
@@ -2525,9 +2745,11 @@ function loop(now){
     updateBoss(dt);
     if(TEMPBUFF.t>0)TEMPBUFF.t=Math.max(0,TEMPBUFF.t-dt);
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
-    if(playMode==="sandbox"||playMode==="campaign")updateSpawner(dt);
+    if(typeof window!=="undefined"&&typeof window.storyControllerTick==="function")window.storyControllerTick();
+    if(playMode==="sandbox"||playMode==="campaign"||playMode==="story")updateSpawner(dt);
     computeEnclosure();
     updateCamera(dt);
+    storyCheckProgress();
     if(playMode==="campaign"&&curGoal&&alive){
       const g=curGoal,t=gameTime-levelStartT;
       if((g.type==="kills"&&kills>=g.count)||
@@ -2544,15 +2766,18 @@ function loop(now){
 }
 
 buildPanel();GameSettings.init();reset(false);showMenu();requestAnimationFrame(loop);
-if(typeof window!=="undefined")window.__IMS={
+const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debugRoot.__IMS={
   get npcs(){return npcs;},get snake(){return snake;},get panelOpen(){return panelOpen;},
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},
   get alive(){return alive;},get moveLock(){return moveLock;},
+  get mechs(){return MECHS;},get boss(){return boss;},get bossStakes(){return bossStakes;},
+  get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
+  get stomach(){return stomach.status();},get stomachPickups(){return stomachPickups;},get projs(){return projs;},
   openPanel,closePanel,openCurseCard,CURSED_POOL
 };
 </script>
+<script src="story-controller.js"></script>
 <script src="mobile.js"></script>
-<script src="intro.js"></script>
 </body>
 </html>
