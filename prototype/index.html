@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.38</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.39</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -134,10 +134,11 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.38（第一章森林首段）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.39（重量与投掷碰撞）</span></h1>
 <div id="hud">
   <span class="chip"><b id="p1Tag"></b> ❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
+  <span class="chip">负重 <b id="weight"></b></span>
   <span class="chip">豆伤 <b id="dmg" style="color:#ffd76e"></b></span>
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
   <span class="chip">断尾 <span class="bar"><i id="cdCut" style="background:#e86a8a"></i></span></span>
@@ -187,7 +188,7 @@
 "use strict";
 const CFG={
   cols:72, rows:48, tile:24,
-  snakeSpeed:4, initLen:4, minLen:3, spitRate:2,
+  snakeSpeed:4, initLen:4, minLen:3, spitRate:2, carryCapacity:6,
   iframe:1.0,
   spitSpeed:10,   beanLife:6,
   nodeHp:2, nodeMax:3, speedBoost:2,
@@ -563,6 +564,7 @@ function applyDirQueue(){
 }
 
 function updateMovement(dt){
+  if(isOverweight())return;
   applyDirQueue();
   if(moveLock){
     if(dirQueue.length>0||VInput.active)moveLock=false;
@@ -620,6 +622,8 @@ function nearNode(x,y){
 }
 
 function stomachSpecialWeight(){return stomach?stomach.getLengthContribution():0;}
+function stomachWeight(){return stomach&&typeof stomach.getWeight==="function"?stomach.getWeight():0;}
+function isOverweight(){return stomachWeight()>CFG.carryCapacity;}
 function minBodyLength(){return CFG.minLen+stomachSpecialWeight();}
 function beanAmmo(){return Math.max(0,snake.len-minBodyLength());}
 function syncStomachStory(reason){
@@ -642,17 +646,22 @@ function swallowStoryNPC(n){
   if(!added.added)return false;
   npcs.splice(npcs.indexOf(n),1);notifyStoryEvent("actorEaten",{actor:n});puff(n.x,n.y,"#8fe36b");return true;
 }
-function spawnReleasedActor(actorId,x,y){
+function spawnReleasedActor(actorId,x,y,hp){
   const type=NPC_TYPES[actorId];let spot=findFreeNear(Math.floor(x),Math.floor(y),5);
   if(!spot)for(let rad=0;rad<=8&&!spot;rad++)for(let dy=-rad;dy<=rad&&!spot;dy++)for(let dx=-rad;dx<=rad;dx++){const px=Math.floor(x)+dx,py=Math.floor(y)+dy;if(inB(px,py)&&isFree(px,py)){spot={x:px,y:py};break;}}
   if(!type||!spot)return false;
-  npcs.push({kind:actorId,storyId:actorId,actorId,x:spot.x+.5,y:spot.y+.5,r:type.r,hp:type.hp,maxHp:type.hp,flash:0,inside:false,unconscious:true,interactable:false,damageable:false});
+  const remainingHp=Number.isFinite(Number(hp))?Math.max(0,Number(hp)):type.hp;
+  npcs.push({kind:actorId,storyId:actorId,actorId,x:spot.x+.5,y:spot.y+.5,r:type.r,hp:remainingHp,maxHp:type.hp,flash:0,inside:false,unconscious:true,interactable:false,damageable:false});
   notifyStoryEvent("actorReleased",{actorId,x:spot.x+.5,y:spot.y+.5});return true;
+}
+function launchStomachPayload(id,item){
+  const speed=CFG.spitSpeed*RUN.spitSpeedMult*.75,sx=snake.fx+dir.x*1.2,sy=snake.fy+dir.y*1.2;
+  projs.push({owner:1,payloadId:id,payload:item,actorId:item.releaseActor?item.actorId:null,actorHp:item.releaseActor&&NPC_TYPES[item.actorId]?NPC_TYPES[item.actorId].hp:null,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
+  shake=Math.max(shake,.18);ftext(snake.fx,snake.fy-1,"吐出："+item.shortName,"#ffd76e");
 }
 function releaseStoryActor(actorId,x,y){
   const removed=stomach.remove(actorId,1);if(!removed.removed)return false;
-  if(!spawnReleasedActor(actorId,x==null?snake.fx+dir.x*1.2:x,y==null?snake.fy+dir.y*1.2:y)){stomach.add(actorId,1);return false;}
-  snake.len=Math.max(minBodyLength(),snake.len-removed.removedWeight);computeSegs();syncStomachStory("actor_released");return true;
+  snake.len=Math.max(minBodyLength(),snake.len-removed.removedWeight);computeSegs();launchStomachPayload(actorId,removed.item);syncStomachStory("actor_released");return true;
 }
 function startMemoryVomit(actorId){
   memoryVomit={actorId,beans:beanAmmo(),elapsed:0};
@@ -668,7 +677,10 @@ function updateMemoryVomit(dt){
   if(memoryVomit.beans<=0){
     if(stomach.getCount(memoryVomit.actorId)>0){
       if(memoryVomit.actorId==="ketiCorpse")dropStoryItem(memoryVomit.actorId,snake.fx+dir.x*1.4,snake.fy+dir.y*1.4);
-      else releaseStoryActor(memoryVomit.actorId,snake.fx+dir.x*1.4,snake.fy+dir.y*1.4);
+      else{
+        releaseStoryActor(memoryVomit.actorId,snake.fx+dir.x*1.4,snake.fy+dir.y*1.4);
+        const expelled=projs[projs.length-1];if(expelled&&expelled.actorId===memoryVomit.actorId)expelled.cutscene=true;
+      }
     }
     memoryVomit=null;
   }
@@ -749,15 +761,8 @@ function stanceShot(){
     const used=stomach.consumeSelected();
     if(!used.fired){firing=false;fireNeedsRelease=true;ftext(snake.fx,snake.fy-1,selected.item.shortName+" 已经空了！","#ff5d5d");return;}
     snake.len=Math.max(minBodyLength(),snake.len-used.removedWeight);computeSegs();
-    const speed=CFG.spitSpeed*RUN.spitSpeedMult*.75;
-    const sx=snake.fx+dir.x*1.2,sy=snake.fy+dir.y*1.2;
-    if(used.item.releaseActor){
-      if(!spawnReleasedActor(used.item.actorId,sx,sy)){stomach.add(used.id,1);snake.len+=used.removedWeight;computeSegs();}
-      firing=false;fireNeedsRelease=true;syncStomachStory("actor_released");return;
-    }
-    projs.push({owner:1,payloadId:used.id,payload:used.item,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
-    firing=false;fireNeedsRelease=true;shake=Math.max(shake,.18);
-    ftext(snake.fx,snake.fy-1,"吐出："+used.item.shortName,"#ffd76e");syncStomachStory("special_fired");return;
+    launchStomachPayload(used.id,used.item);
+    firing=false;fireNeedsRelease=true;syncStomachStory(used.item.releaseActor?"actor_released":"special_fired");return;
   }
   if(beanAmmo()<=0){
     firing=false;fireNeedsRelease=true;
@@ -848,11 +853,11 @@ function setSpeed(p,keep,min){
 function updateProjs(dt){
   for(let i=projs.length-1;i>=0;i--){
     const p=projs[i];
-    p.life-=dt;p.grace-=dt;
+    p.life-=dt;p.grace-=dt;p.wallCd=Math.max(0,(p.wallCd||0)-dt);p.actorHitCd=Math.max(0,(p.actorHitCd||0)-dt);
     p.trail.push({x:p.x,y:p.y});if(p.trail.length>6)p.trail.shift();
     let sp=Math.hypot(p.vx,p.vy);
     const zn=zoneAt(p.x,p.y);
-    let drag=(p.bounced?CFG.beanDrag:CFG.beanDragInit)*(Number(p.payload&&p.payload.dragMult)||1);
+    let drag=(p.bounced?CFG.beanDrag:CFG.beanDragInit)*Math.max(1,Number(p.payload&&p.payload.weight)||1);
     if(p.scatter)drag*=.35;
     if(zn&&zn.kind==="slope"&&zn.dragMult)drag*=zn.dragMult;
     if(zn&&zn.kind==="wind"){p.vx+=(zn.fx||0)*dt*3;p.vy+=(zn.fy||0)*dt*3;}
@@ -865,7 +870,7 @@ function updateProjs(dt){
     let fed=false;
     if(hit&&hit.cx!=null){
       for(const m of MECHS){
-        if(m.done||m.kind!=="gate"||!m.cellIdx)continue;
+        if(p.actorId||m.done||m.kind!=="gate"||!m.cellIdx)continue;
         if(playMode==="story"&&typeof storyDirector==="function"&&storyDirector()&&storyDirector().runtime.node.id==="tutorial_2")continue;
         if(m.cellIdx.includes(K(hit.cx,hit.cy))){
           puff(p.x,p.y,"#7fd1e8");
@@ -877,6 +882,7 @@ function updateProjs(dt){
     }
     if(fed){projs.splice(i,1);continue;}
     if(hit&&sp>.05){
+      if(p.actorId&&p.wallCd<=0){const d=beanDamage(1);p.actorHp-=d;p.wallCd=.2;ftext(p.x,p.y-.5,"-"+d,"#ff8f5e");}
       let[vx,vy]=rotateVec(p.vx,p.vy,(Math.random()-.5)*1.1);
       if(hit.axis==="x")vx=-vx;else vy=-vy;
       p.vx=vx;p.vy=vy;setSpeed(p,CFG.beanBounceKeep,1.0);
@@ -890,6 +896,7 @@ function updateProjs(dt){
       if(Math.hypot(p.x-e.x,p.y-e.y)<e.r+.25){
         const d=projectileDamage(p);
         e.hp-=d;e.flash=.15;spitHits++;
+        if(p.actorId&&p.actorHitCd<=0){p.actorHp-=d;p.actorHitCd=.2;}
         const sp0=Math.hypot(p.vx,p.vy)||1;
         e.hitDir={x:p.vx/sp0,y:p.vy/sp0};
         ftext(e.x,e.y-.5,"-"+d,"#ffd76e");
@@ -926,6 +933,7 @@ function updateProjs(dt){
         spitHits++;
         if(boss.shield>0){const s2=Math.min(boss.shield,d);boss.shield-=s2;d-=s2;}
         boss.hp-=d;boss.flash=.1;
+        if(p.actorId&&p.actorHitCd<=0){p.actorHp-=d;p.actorHitCd=.2;}
         ftext(p.x,p.y-.5,"-"+Math.max(1,Math.round(d)),"#4fa3ff");
         const nl=bd2||1,ax=(p.x-boss.x)/nl,ay=(p.y-boss.y)/nl;
         ricochet(p,boss.x,boss.y,.95);
@@ -933,11 +941,12 @@ function updateProjs(dt){
         p.bossCd=.3;
       }
     }
-    dead=p.life<=0||Math.hypot(p.vx,p.vy)<CFG.beanStop;
+    dead=p.life<=0||Math.hypot(p.vx,p.vy)<CFG.beanStop||(p.actorId&&p.actorHp<=0);
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
       if(spot){
-        if(p.payloadId){stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});notifyStoryEvent("worldItemDropped",{id:p.payloadId,x:spot.x+.5,y:spot.y+.5,noticedBefore:!!p.swordNoticed});}
+        if(p.actorId)spawnReleasedActor(p.actorId,spot.x+.5,spot.y+.5,p.actorHp);
+        else if(p.payloadId){stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});notifyStoryEvent("worldItemDropped",{id:p.payloadId,x:spot.x+.5,y:spot.y+.5,noticedBefore:!!p.swordNoticed});}
         else groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
       }
       puff(p.x,p.y,p.payload&&p.payload.color||"#d95763");
@@ -1740,7 +1749,7 @@ function ensurePanel(){
 function settleBeanProjectiles(){
   for(let i=projs.length-1;i>=0;i--){
     const p=projs[i];if(p.payloadId)continue;
-    const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),20)||findFreeNear(Math.floor(snake.fx),Math.floor(snake.fy),20)||{x:Math.floor(snake.fx),y:Math.floor(snake.fy)};
+    const spot=findFreeNear(Math.floor(snake.fx),Math.floor(snake.fy),6)||findFreeNear(Math.floor(p.x),Math.floor(p.y),20)||{x:Math.floor(snake.fx),y:Math.floor(snake.fy)};
     groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
     projs.splice(i,1);
   }
@@ -2137,6 +2146,7 @@ function bossDefeated(){
 
 const TUNE_KEYS=[
   ["snakeSpeed","蛇速(格/s)",0.5,12,0.5],
+  ["carryCapacity","承重上限",1,30,1],
   ["prisonDps","监狱伤害/s",1,20,1],
   ["nodeHp","节点耐久",3,30,1],
   ["cutRecover","断尾回收率",0,1,0.1],
@@ -2369,7 +2379,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.35 · 本地双人合作 / 新平衡版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
+    "玩法原型 v0.39 · 本地双人合作 / 重量系统版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 "+InputMap.bindingLabel(1,"fire")+" 站桩吐豆 ｜ "+InputMap.bindingLabel(1,"interact")+" 确认对话<br>"+
     InputMap.bindingLabel(1,"prevItem")+" / "+InputMap.bindingLabel(1,"nextItem")+" 切换胃袋主位（豆子或特殊物品）<br>"+
@@ -2687,7 +2697,7 @@ function render(){
     }
   }
 
-  const hurtAll=hurtFlash>0;
+  const hurtAll=hurtFlash>0,overweightFlash=isOverweight()&&Math.sin(gameTime*12)>0;
   for(const c of curses){
     const px=c.x*T,py=c.y*T+Math.sin(gameTime*4)*2;
     ctx.fillStyle="rgba(199,125,255,.22)";
@@ -2771,7 +2781,7 @@ function render(){
     const x=s.x*T,y=s.y*T;
     if(i===0){
       let headCol="#8fe36b";
-      if(hurtAll)headCol="#ff5d5d";
+      if(hurtAll||overweightFlash)headCol="#ff5d5d";
       else if(danger&&Math.sin(gameTime*40)>0)headCol="#ff5d5d";
       else if(invuln>0&&Math.sin(gameTime*30)>0)headCol="#ffffff";
       ctx.fillStyle=headCol;
@@ -2781,12 +2791,15 @@ function render(){
         ctx.font="bold 16px Consolas";ctx.textAlign="center";
         ctx.fillText("!",x,y-T*.9);
       }
+      if(isOverweight()){
+        ctx.fillStyle="#ff5d5d";ctx.font="bold 13px Consolas";ctx.textAlign="center";ctx.fillText("超重！",x,y-T*1.05);
+      }
       ctx.fillStyle="#1a1023";
       const ex=dir.x*4,ey=dir.y*4;
       ctx.fillRect(x-6+ex,y-6+ey,4,5);ctx.fillRect(x+2+ex,y-6+ey,4,5);
     }else{
       const shade=0.75+0.25*(1-i/segPos.length);
-      ctx.fillStyle=hurtAll?"#ff6b7a":rgb(60,180-shade*40,90);
+      ctx.fillStyle=hurtAll||overweightFlash?"#ff6b7a":rgb(60,180-shade*40,90);
       roundRect(x-T/2+2.5,y-T/2+2.5,T-5,T-5,5);ctx.fill();
     }
   }
@@ -2806,6 +2819,7 @@ function render(){
       ctx.fillStyle="rgba(217,87,99,"+(i/p.trail.length*.35)+")";
       ctx.beginPath();ctx.arc(t.x*T,t.y*T,T*.18*(i/p.trail.length+.4),0,7);ctx.fill();
     }
+    if(p.actorId&&typeof IMS_STORY_ART!=="undefined"&&IMS_STORY_ART.sprite(ctx,p.actorId,p.x*T,p.y*T,T,{unconscious:true}))continue;
     ctx.fillStyle=projectileColor;
     ctx.beginPath();ctx.arc(p.x*T,p.y*T,T*projectileRadius,0,7);ctx.fill();
     ctx.fillStyle="#ffe0e3";
@@ -2867,6 +2881,7 @@ function updateHud(){
   document.getElementById("p1Tag").textContent=coop.enabled?"P1":"";
   document.getElementById("hearts").textContent=primaryDown?"倒下":"❤".repeat(Math.max(0,hearts));
   document.getElementById("len").textContent=snake.len;
+  const weightEl=document.getElementById("weight");weightEl.textContent=stomachWeight()+"/"+CFG.carryCapacity;weightEl.style.color=isOverweight()?"#ff5d5d":"";
   document.getElementById("dmg").textContent=beanDamage(1);
   document.getElementById("coopHud").style.display=coop.enabled?"inline":"none";
   if(coop.enabled){
@@ -2943,7 +2958,7 @@ function loop(now){
     if(playMode==="tutorial"&&tutIdx>=0&&tutIdx<TUT2.length&&!panelOpen&&TUT2[tutIdx].done())advanceTut();
    }catch(err){console.error("update error:",err);}
   }
-   if(gameState==="play"){if(!paused){updateMemoryVomit(dt);updateFlyingBeans(dt);}updateCamera(dt);}
+   if(gameState==="play"){if(!paused){updateMemoryVomit(dt);updateFlyingBeans(dt);if(freeze&&projs.some(p=>p.cutscene))updateProjs(dt);}updateCamera(dt);}
    render();updateHud();
   if(boss&&(gameState==="play"||gameState==="victory"))drawBossUI();
   if(gameState==="intro"&&intro)drawIntroOverlay();
@@ -2956,7 +2971,7 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},
   get alive(){return alive;},get moveLock(){return moveLock;},
-  get mechs(){return MECHS;},get boss(){return boss;},get bossStakes(){return bossStakes;},
+  get mechs(){return MECHS;},get enemies(){return enemies;},get boss(){return boss;},get bossStakes(){return bossStakes;},
   get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
   get stomach(){return stomach.status();},get stomachPickups(){return stomachPickups;},get projs(){return projs;},
   openPanel,closePanel,openCurseCard,CURSED_POOL

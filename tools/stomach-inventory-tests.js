@@ -44,6 +44,7 @@ test("adapter aliases expose selected status and weight deltas", () => {
   assert.strictEqual(inv.add("ketiCorpse").addedWeight, 2);
   assert.strictEqual(inv.selected().id, "bean");
   assert.strictEqual(inv.status().lengthContribution, 2);
+  assert.strictEqual(inv.status().weight, 3);
   inv.next();
   assert.strictEqual(inv.consumeSelected().removedWeight, 2);
 });
@@ -67,10 +68,14 @@ test("snapshot and restore preserve counts, selection, and length", () => {
 test("chapter one special items expose projectile and identity rules", () => {
   const inv = new StomachInventory();
   assert.strictEqual(inv.add("ironSword").item.damageMult, 2);
-  assert.strictEqual(inv.getLengthContribution(), 1);
+  assert.strictEqual(inv.add("ironSword").added, 1);
+  assert.strictEqual(inv.getCount("ironSword"), 2);
+  assert.strictEqual(inv.getWeight(), 4);
+  assert.strictEqual(inv.getLengthContribution(), 2);
   assert.strictEqual(inv.add("ajieBones").item.damage, 2);
   assert.strictEqual(inv.add("lisiBones").item.actorId, "lisi");
-  assert.strictEqual(inv.getLengthContribution(), 3);
+  assert.strictEqual(inv.getLengthContribution(), 4);
+  assert.strictEqual(inv.getWeight(), 6);
   const removed = inv.remove("ajieBones");
   assert.strictEqual(removed.removedWeight, 1);
   assert.strictEqual(inv.getCount("ajieBones"), 0);

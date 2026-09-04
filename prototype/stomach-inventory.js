@@ -9,14 +9,14 @@
   var DEFAULT_ITEMS = {
     // Bean ammunition is already represented by the snake's ordinary body
     // length. Only special stomach contents add reserved length here.
-    bean: { id: "bean", name: "豆子", shortName: "豆子", maxStack: Infinity, length: 0 },
-    keti: { id: "keti", name: "昏迷的可蒂", shortName: "可蒂", maxStack: 1, length: 1, actorId: "keti", releaseActor: true, color: "#f0c9d8" },
-    ketiCorpse: { id: "ketiCorpse", name: "可蒂的尸体", shortName: "可蒂尸体", maxStack: 1, length: 2, actorId: "keti", color: "#f5f5fa" },
-    ironSword: { id: "ironSword", name: "生锈的铁剑", shortName: "铁剑", maxStack: 1, length: 1, damageMult: 2, dragMult: 2, color: "#aeb3bd" },
-    ajie: { id: "ajie", name: "昏迷的阿杰", shortName: "阿杰", maxStack: 1, length: 1, actorId: "ajie", releaseActor: true, color: "#6d83b3" },
-    lisi: { id: "lisi", name: "昏迷的丽丝", shortName: "丽丝", maxStack: 1, length: 1, actorId: "lisi", releaseActor: true, color: "#d68aa8" },
-    ajieBones: { id: "ajieBones", name: "阿杰的骨头", shortName: "阿杰骨头", maxStack: 1, length: 1, damage: 2, actorId: "ajie", color: "#e8e2cf" },
-    lisiBones: { id: "lisiBones", name: "丽丝的骨头", shortName: "丽丝骨头", maxStack: 1, length: 1, damage: 2, actorId: "lisi", color: "#e8e2cf" }
+    bean: { id: "bean", name: "豆子", shortName: "豆子", maxStack: Infinity, length: 0, weight: 0 },
+    keti: { id: "keti", name: "昏迷的可蒂", shortName: "可蒂", maxStack: 1, length: 1, weight: 3, actorId: "keti", releaseActor: true, color: "#f0c9d8" },
+    ketiCorpse: { id: "ketiCorpse", name: "可蒂的尸体", shortName: "可蒂尸体", maxStack: 1, length: 2, weight: 3, actorId: "keti", color: "#f5f5fa" },
+    ironSword: { id: "ironSword", name: "生锈的铁剑", shortName: "铁剑", maxStack: 99, length: 1, weight: 2, damageMult: 2, color: "#aeb3bd" },
+    ajie: { id: "ajie", name: "昏迷的阿杰", shortName: "阿杰", maxStack: 1, length: 1, weight: 3, actorId: "ajie", releaseActor: true, color: "#6d83b3" },
+    lisi: { id: "lisi", name: "昏迷的丽丝", shortName: "丽丝", maxStack: 1, length: 1, weight: 3, actorId: "lisi", releaseActor: true, color: "#d68aa8" },
+    ajieBones: { id: "ajieBones", name: "阿杰的骨头", shortName: "阿杰骨头", maxStack: 1, length: 1, weight: 1, damage: 2, actorId: "ajie", color: "#e8e2cf" },
+    lisiBones: { id: "lisiBones", name: "丽丝的骨头", shortName: "丽丝骨头", maxStack: 1, length: 1, weight: 1, damage: 2, actorId: "lisi", color: "#e8e2cf" }
   };
 
   function copy(value) {
@@ -43,7 +43,7 @@
   }
 
   StomachInventory.prototype._item = function (id) {
-    return this.items[id] || { id: id, name: id, shortName: id, maxStack: 99, length: 1 };
+    return this.items[id] || { id: id, name: id, shortName: id, maxStack: 99, length: 1, weight: 1 };
   };
 
   StomachInventory.prototype._ensureSlot = function (id) {
@@ -138,13 +138,19 @@
   StomachInventory.prototype.consumeSelected = function () { return this.useSelected(); };
   StomachInventory.prototype.selected = function () { return this.getSelected(); };
   StomachInventory.prototype.status = function () {
-    return { selected: this.getSelected(), slots: this.getSlots(), lengthContribution: this.getLengthContribution() };
+    return { selected: this.getSelected(), slots: this.getSlots(), lengthContribution: this.getLengthContribution(), weight: this.getWeight() };
   };
 
   StomachInventory.prototype.getLengthContribution = function () {
     return this.slots.reduce(function (total, slot) {
       var item = this._item(slot.id);
       return total + slot.count * (Number(item.length) || 0);
+    }.bind(this), 0);
+  };
+
+  StomachInventory.prototype.getWeight = function () {
+    return this.slots.reduce(function (total, slot) {
+      return total + slot.count * (Number(this._item(slot.id).weight) || 0);
     }.bind(this), 0);
   };
 

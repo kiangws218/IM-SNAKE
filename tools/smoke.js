@@ -147,7 +147,9 @@ try{
   frames(190);
   fire({key:storyFire,code:"KeyJ",preventDefault(){}},"keyup");
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
-  if(sandbox.__IMS.projs.length||!sandbox.__IMS.groundBeans.some(bean=>bean.fromProj))throw new Error("Tutorial spit beans did not settle onto the map");
+  const tutorialDrops=sandbox.__IMS.groundBeans.filter(bean=>bean.fromProj);
+  if(sandbox.__IMS.projs.length||tutorialDrops.length<3||tutorialDrops.some(bean=>Math.hypot(bean.x+.5-sandbox.__IMS.snake.fx,bean.y+.5-sandbox.__IMS.snake.fy)>8))
+    throw new Error("Tutorial spit beans did not settle visibly near the snake");
   console.log("[story prologue stage 2] OK");
   const gate=sandbox.__IMS.mechs.find(m=>m.kind==="gate");
   if(sandbox.__IMS.voidCells.size===0)throw new Error("Tutorial map did not create a solid dark outside");
@@ -183,8 +185,9 @@ try{
   sandbox.storyControllerInteract(edibleKeti);frames(1);chooseKeti("吃掉");
   if(!sandbox.__IMS.stomach.slots.some(slot=>slot.id==="keti"&&slot.count===1))throw new Error("Swallowed Keti did not enter the stomach");
   const beforeVomit=sandbox.__IMS.snake.len;sandbox.storyDirector().runtime.enter("memory_blur");frames(260);
+  const ketiVomit=sandbox.__IMS.projs.find(p=>p.actorId==="keti");if(ketiVomit){ketiVomit.life=0;frames(1);}
   if(sandbox.__IMS.stomach.slots.some(slot=>slot.id==="keti")||!sandbox.__IMS.npcs.some(n=>n.kind==="keti"&&n.unconscious)||sandbox.__IMS.snake.len>=beforeVomit)
-    throw new Error("Memory blur did not expel Keti and shorten the snake");
+    throw new Error("Memory blur did not expel Keti and shorten the snake: before="+beforeVomit+", after="+sandbox.__IMS.snake.len+", projectiles="+sandbox.__IMS.projs.length+", npcs="+sandbox.__IMS.npcs.map(n=>n.kind+":"+n.hp).join(","));
   console.log("[story Keti memory vomit] OK");
   sandbox.startStoryStage();frames(2);
   sandbox.storyDirector().runtime.enter("wilderness_start");
@@ -214,7 +217,7 @@ try{
   if(sandbox.storyDirector().runtime.node.id!=="chapter1_explore")throw new Error("Chapter one did not enter free exploration");
   const sword=sandbox.__IMS.stomachPickups.find(item=>item.storyId==="forest_sword");
   const ajie=sandbox.__IMS.npcs.find(n=>n.storyId==="ajie"),lisi=sandbox.__IMS.npcs.find(n=>n.storyId==="lisi");
-  if(!sword||!ajie||!lisi||ajie.damageable!==false||lisi.damageable!==false)throw new Error("Chapter one forest actors or sword were not spawned safely");
+  if(!sword||!ajie||!lisi||ajie.damageable!==false||lisi.damageable!==false||ajie.speed!==2)throw new Error("Chapter one forest actors, speed, or sword were not spawned correctly");
   if(sandbox.projectileDamage({owner:1,payload:{damageMult:2}})!==sandbox.beanDamage(1)*2||sandbox.projectileDamage({owner:1,payload:{damage:2}})!==2)throw new Error("Chapter one projectile damage descriptors were not applied");
   for(let i=0;i<10;i++)sandbox.IMS_STORY_API.engineEvent("beanEaten",{});
   if(sandbox.storyDirector().runtime.node.id!=="chapter1_hunger")throw new Error("Chapter hunger OR counter did not trigger at ten eaten beans");
@@ -227,7 +230,10 @@ try{
   if(sandbox.storyDirector().runtime.node.id!=="chapter1_explore")throw new Error("Leaving the first encounter did not return to exploration");
   sandbox.storyControllerInteract(ajie);frames(1);chooseStory("吃掉丽丝");
   if(!sandbox.__IMS.stomach.slots.some(slot=>slot.id==="lisi"&&slot.count===1))throw new Error("Swallowed Lisi was not stored as an actor item");
-  chooseStory("吐出丽丝");chooseStory("离开");
+  chooseStory("吐出丽丝");
+  const lisiProjectile=sandbox.__IMS.projs.find(p=>p.actorId==="lisi");
+  if(!lisiProjectile)throw new Error("Released Lisi did not become a thrown actor projectile");
+  lisiProjectile.life=0;frames(1);chooseStory("离开");
   const releasedLisi=sandbox.__IMS.npcs.find(n=>n.storyId==="lisi");
   if(!releasedLisi||!releasedLisi.unconscious||releasedLisi.interactable!==false)throw new Error("Released Lisi was not left unconscious and non-interactive");
   sandbox.startStoryStage();frames(2);
@@ -245,6 +251,29 @@ try{
   sandbox.__IMS.projs.push({owner:1,payloadId:"ironSword",payload:{damageMult:2},x:questAjie.x,y:questAjie.y,vx:1,vy:0,life:3,grace:0,trail:[],streak:0});
   sandbox.storyDirector().runtime.state.update(state=>{state.flags.findAjianAccepted=false;},"test_sword_notice");sandbox.updateProjs(.01);frames(1);
   if(!sandbox.storyDirector().runtime.node.id.startsWith("chapter1_sword_recognized"))throw new Error("Sword projectile hit did not trigger the recognition dialogue");
+  sandbox.closePanel();sandbox.startStoryStage();frames(2);
+  const weightX=sandbox.__IMS.snake.fx;
+  sandbox.addStomachItem("ajie",1,"test");sandbox.addStomachItem("lisi",1,"test");sandbox.addStomachItem("ironSword",1,"test");
+  sandbox.updateHud();
+  if(sandbox.stomachWeight()!==8||!sandbox.isOverweight()||els["weight"].textContent!=="8/6")throw new Error("Carry weight or overweight HUD was not applied");
+  sandbox.updateMovement(.25);
+  if(sandbox.__IMS.snake.fx!==weightX)throw new Error("Overweight snake was still able to move");
+  sandbox.dropStoryItem("ironSword");sandbox.updateMovement(.25);
+  if(sandbox.__IMS.snake.fx===weightX)throw new Error("Snake did not resume movement after unloading to capacity");
+  sandbox.startStoryStage();frames(2);
+  const collisionTarget=sandbox.__IMS.enemies[0],collisionHp=collisionTarget.hp,impact=sandbox.beanDamage(1);
+  const actorProjectile={owner:1,payloadId:"ajie",payload:{weight:3},actorId:"ajie",actorHp:8,x:collisionTarget.x,y:collisionTarget.y,vx:1,vy:0,life:3,grace:0,trail:[],streak:0};
+  sandbox.__IMS.projs.push(actorProjectile);sandbox.updateProjs(.01);
+  if(collisionTarget.hp!==collisionHp-impact||actorProjectile.actorHp!==8-impact)throw new Error("Thrown actor collision did not deal equal damage to both sides");
+  const wallActor={owner:1,payloadId:"ajie",payload:{weight:3},actorId:"ajie",actorHp:8,x:.05,y:24.5,vx:-2,vy:0,life:3,grace:0,trail:[],streak:0};
+  sandbox.__IMS.projs.push(wallActor);sandbox.updateProjs(.02);
+  if(wallActor.actorHp!==8-impact)throw new Error("Thrown actor did not take one-bean damage from a wall collision");
+  sandbox.startStoryStage();frames(2);
+  const stackSword=sandbox.__IMS.stomachPickups.find(item=>item.storyId==="forest_sword"),swordAjie=sandbox.__IMS.npcs.find(n=>n.storyId==="ajie");
+  sandbox.storyControllerInteraction("item",stackSword);frames(1);chooseStory("吃掉铁剑");chooseStory("离开");
+  sandbox.storyControllerInteract(swordAjie);frames(1);chooseStory("吐出铁剑");
+  if(sandbox.__IMS.stomach.slots.some(slot=>slot.id==="ironSword")||sandbox.__IMS.stomachPickups.filter(item=>item.id==="ironSword").length!==1)
+    throw new Error("Sword dialogue duplicated the sword instead of consuming one inventory item");
   console.log("[chapter one forest + hunger + sword + encounter] OK");
   els["pauseHome"].onclick();
   frames(2);
