@@ -147,6 +147,7 @@ try{
   frames(190);
   fire({key:storyFire,code:"KeyJ",preventDefault(){}},"keyup");
   if(!sandbox.__IMS.panelOpen)throw new Error("Story stage 2 did not open its dialogue");
+  if(sandbox.__IMS.projs.length||!sandbox.__IMS.groundBeans.some(bean=>bean.fromProj))throw new Error("Tutorial spit beans did not settle onto the map");
   console.log("[story prologue stage 2] OK");
   const gate=sandbox.__IMS.mechs.find(m=>m.kind==="gate");
   if(sandbox.__IMS.voidCells.size===0)throw new Error("Tutorial map did not create a solid dark outside");
@@ -178,6 +179,15 @@ try{
     throw new Error("Saving Keti incorrectly ended the story");
   console.log("[story Keti continuation] OK");
   sandbox.storyDirector().runtime.enter("wilderness_start");
+  const edibleKeti=sandbox.__IMS.npcs.find(n=>n.kind==="keti");
+  sandbox.storyControllerInteract(edibleKeti);frames(1);chooseKeti("吃掉");
+  if(!sandbox.__IMS.stomach.slots.some(slot=>slot.id==="keti"&&slot.count===1))throw new Error("Swallowed Keti did not enter the stomach");
+  const beforeVomit=sandbox.__IMS.snake.len;sandbox.storyDirector().runtime.enter("memory_blur");frames(260);
+  if(sandbox.__IMS.stomach.slots.some(slot=>slot.id==="keti")||!sandbox.__IMS.npcs.some(n=>n.kind==="keti"&&n.unconscious)||sandbox.__IMS.snake.len>=beforeVomit)
+    throw new Error("Memory blur did not expel Keti and shorten the snake");
+  console.log("[story Keti memory vomit] OK");
+  sandbox.startStoryStage();frames(2);
+  sandbox.storyDirector().runtime.enter("wilderness_start");
   const doomedKeti=sandbox.__IMS.npcs.find(n=>n.kind==="keti");
   sandbox.dieNPC(doomedKeti);frames(1);
   if(sandbox.storyDirector().runtime.node.id!=="keti_dead")throw new Error("Keti death before dialogue left the story stuck");
@@ -188,12 +198,12 @@ try{
   fire({key:"e",code:"KeyE",preventDefault(){},repeat:false},"keydown");fire({key:"e",code:"KeyE",preventDefault(){}},"keyup");
   if(sandbox.__IMS.stomach.selected.id!=="ketiCorpse")throw new Error("Stomach next-slot input did not select Keti corpse");
   fire({key:"j",code:"KeyJ",preventDefault(){},repeat:false},"keydown");frames(2);fire({key:"j",code:"KeyJ",preventDefault(){}},"keyup");
-  if(sandbox.__IMS.stomach.selected.count!==0||sandbox.__IMS.snake.len!==corpseLen||!sandbox.__IMS.projs.some(p=>p.payloadId==="ketiCorpse"))
+  if(sandbox.__IMS.stomach.slots.some(slot=>slot.id==="ketiCorpse")||sandbox.__IMS.snake.len!==corpseLen||!sandbox.__IMS.projs.some(p=>p.payloadId==="ketiCorpse"))
     throw new Error("Selected Keti corpse was not launched and consumed");
   sandbox.__IMS.projs.find(p=>p.payloadId==="ketiCorpse").life=0;frames(1);
   const corpseDrop=sandbox.__IMS.stomachPickups[0];if(!corpseDrop)throw new Error("Launched corpse did not return as a world pickup");
   sandbox.__IMS.snake.fx=corpseDrop.x;sandbox.__IMS.snake.fy=corpseDrop.y;sandbox.pickUps();
-  if(sandbox.__IMS.stomach.selected.count!==1||sandbox.__IMS.snake.len!==corpseLen+2)throw new Error("Corpse world pickup could not be eaten back into the stomach");
+  if(!sandbox.__IMS.stomach.slots.some(slot=>slot.id==="ketiCorpse"&&slot.count===1)||sandbox.__IMS.snake.len!==corpseLen+2)throw new Error("Corpse world pickup could not be eaten back into the stomach");
   console.log("[story stomach corpse pickup + select + launch] OK");
   sandbox.startStoryStage();frames(2);
   if(sandbox.storyDirector().runtime.node.id!=="wilderness_keti_wait"||!sandbox.__IMS.npcs.some(n=>n.kind==="keti"))
@@ -227,6 +237,14 @@ try{
   combatAjie.hp=0;frames(2);
   if(sandbox.storyDirector().runtime.node.id!=="chapter1_ajie_downed_wait"||!combatAjie.downed)throw new Error("Ajie did not enter protected downed interaction state");
   sandbox.storyControllerInteract(combatAjie);frames(1);chooseStory("离开");
+  sandbox.startStoryStage();frames(2);
+  const questAjie=sandbox.__IMS.npcs.find(n=>n.storyId==="ajie");
+  sandbox.storyDirector().runtime.state.update(state=>{state.flags.findAjianAccepted=true;},"test_quest");
+  sandbox.storyControllerInteract(questAjie);frames(1);
+  if(sandbox.storyDirector().runtime.node.id!=="chapter1_explore"||!els["questHud"].textContent.includes("寻找阿见"))throw new Error("Accepted quest repeated dialogue or lacked its HUD objective");
+  sandbox.__IMS.projs.push({owner:1,payloadId:"ironSword",payload:{damageMult:2},x:questAjie.x,y:questAjie.y,vx:1,vy:0,life:3,grace:0,trail:[],streak:0});
+  sandbox.storyDirector().runtime.state.update(state=>{state.flags.findAjianAccepted=false;},"test_sword_notice");sandbox.updateProjs(.01);frames(1);
+  if(!sandbox.storyDirector().runtime.node.id.startsWith("chapter1_sword_recognized"))throw new Error("Sword projectile hit did not trigger the recognition dialogue");
   console.log("[chapter one forest + hunger + sword + encounter] OK");
   els["pauseHome"].onclick();
   frames(2);

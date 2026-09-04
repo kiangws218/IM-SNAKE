@@ -10,6 +10,7 @@
     // Bean ammunition is already represented by the snake's ordinary body
     // length. Only special stomach contents add reserved length here.
     bean: { id: "bean", name: "豆子", shortName: "豆子", maxStack: Infinity, length: 0 },
+    keti: { id: "keti", name: "昏迷的可蒂", shortName: "可蒂", maxStack: 1, length: 1, actorId: "keti", releaseActor: true, color: "#f0c9d8" },
     ketiCorpse: { id: "ketiCorpse", name: "可蒂的尸体", shortName: "可蒂尸体", maxStack: 1, length: 2, actorId: "keti", color: "#f5f5fa" },
     ironSword: { id: "ironSword", name: "生锈的铁剑", shortName: "铁剑", maxStack: 1, length: 1, damageMult: 2, dragMult: 2, color: "#aeb3bd" },
     ajie: { id: "ajie", name: "昏迷的阿杰", shortName: "阿杰", maxStack: 1, length: 1, actorId: "ajie", releaseActor: true, color: "#6d83b3" },
@@ -60,6 +61,14 @@
     if (this.selectedIndex < 0 || this.selectedIndex >= this.slots.length) this.selectedIndex = 0;
   };
 
+  StomachInventory.prototype._removeEmptySpecialSlot = function (index) {
+    if (index < 0 || index >= this.slots.length || this.slots[index].id === "bean" || this.slots[index].count > 0) return;
+    this.slots.splice(index, 1);
+    if (this.selectedIndex > index) this.selectedIndex -= 1;
+    else if (this.selectedIndex === index) this.selectedIndex = 0;
+    this._normalizeSelection();
+  };
+
   StomachInventory.prototype.add = function (id, amount) {
     amount = clampInt(amount, 1);
     if (!amount) return { added: 0, addedWeight: 0, count: this.getCount(id), item: copy(this._item(id)) };
@@ -79,7 +88,9 @@
       if (this.slots[i].id !== id) continue;
       var removed = Math.min(amount, this.slots[i].count), item = this._item(id);
       this.slots[i].count -= removed;
-      return { removed: removed, removedWeight: removed * (Number(item.length) || 0), item: copy(item), remaining: this.slots[i].count };
+      var remaining = this.slots[i].count;
+      this._removeEmptySpecialSlot(i);
+      return { removed: removed, removedWeight: removed * (Number(item.length) || 0), item: copy(item), remaining: remaining };
     }
     return { removed: 0, removedWeight: 0, item: copy(this._item(id)), remaining: 0 };
   };
@@ -118,8 +129,7 @@
     var slot = this.slots[selected.index];
     slot.count -= 1;
     var result = { fired: true, id: slot.id, item: copy(selected.item), remaining: slot.count, removedWeight: Number(selected.item.length) || 0 };
-    // Keep the empty slot selected. Equipment choice is explicit: the game
-    // never silently switches back to beans after the player fires an item.
+    this._removeEmptySpecialSlot(selected.index);
     result.selected = this.getSelected();
     return result;
   };
@@ -154,6 +164,7 @@
     this.slots = [];
     state.slots.forEach(function (raw) {
       if (!raw || typeof raw.id !== "string") return;
+      if (raw.id !== "bean" && clampInt(raw.count, 0) === 0) return;
       var slot = this._ensureSlot(raw.id);
       slot.count = clampInt(raw.count, 0);
       var max = this._item(raw.id).maxStack;

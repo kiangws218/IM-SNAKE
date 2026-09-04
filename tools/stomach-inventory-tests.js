@@ -27,7 +27,7 @@ test("cycle wraps through stable slots, including empty bean slot", () => {
   assert.strictEqual(inv.previous().id, "ketiCorpse");
 });
 
-test("firing consumes one item and keeps the empty slot selected", () => {
+test("firing removes an emptied special slot and returns to beans", () => {
   const inv = new StomachInventory({ beans: 4 });
   inv.add("ketiCorpse");
   inv.next();
@@ -35,7 +35,8 @@ test("firing consumes one item and keeps the empty slot selected", () => {
   assert.strictEqual(fired.fired, true);
   assert.strictEqual(fired.id, "ketiCorpse");
   assert.strictEqual(inv.getCount("ketiCorpse"), 0);
-  assert.strictEqual(inv.getSelected().id, "ketiCorpse");
+  assert.strictEqual(inv.getSelected().id, "bean");
+  assert.strictEqual(inv.getSlots().some(slot => slot.id === "ketiCorpse"), false);
 });
 
 test("adapter aliases expose selected status and weight deltas", () => {

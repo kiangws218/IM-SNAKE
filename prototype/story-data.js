@@ -95,7 +95,7 @@
       keti_eaten:{id:"keti_eaten",enter:{action:"eatKeti"},next:"eaten_slimes",progress:progress(7),goal:textGoal("击败史莱姆")},
       eaten_slimes:{
         id:"eaten_slimes",enter:{action:"spawnSlimes"},progress:progress(7),goal:textGoal("击败两只史莱姆"),
-        wait:{events:["ENEMIES_DEFEATED"],condition:"enemiesCleared",target:"free_explore"}
+        wait:{events:["ENEMIES_DEFEATED"],condition:"enemiesCleared",target:"keti_memory_wait"}
       },
       wilderness_slimes:{
         id:"wilderness_slimes",enter:{action:"spawnSlimes"},progress:progress(7),goal:textGoal("击败两只史莱姆"),
@@ -119,13 +119,17 @@
       },
       keti_eaten_after_death:{id:"keti_eaten_after_death",enter:{action:"eatCorpse"},next:"free_explore",progress:progress(8),goal:textGoal("自由探索")},
       free_explore:{
-        id:"free_explore",enter:{action:"freeExplore"},progress:progress(8),goal:textGoal("自由探索"),
+        id:"free_explore",enter:{action:"waitForMemoryBlur"},progress:progress(8),goal:textGoal("继续向前"),
+        wait:{events:["TIMER_EXPIRED"],condition:"freeExploreTimer",target:"memory_blur"}
+      },
+      keti_memory_wait:{
+        id:"keti_memory_wait",enter:{action:"waitForMemoryBlur"},progress:progress(8),goal:textGoal("继续向前"),
         wait:{events:["TIMER_EXPIRED"],condition:"freeExploreTimer",target:"memory_blur"}
       },
       memory_blur:{id:"memory_blur",enter:{action:"memoryBlur"},next:"memory_blur_dialogue",progress:progress(8),goal:textGoal("回忆自己的名字")},
       memory_blur_dialogue:{
         id:"memory_blur_dialogue",progress:progress(8),goal:textGoal("回忆自己的名字"),
-        dialogue:{speaker:"我",sub:"记忆模糊",pages:["我……刚才吃了什么？","脑子里只剩下一片空白。"],choices:[{id:"name",label:"回忆自己的名字",next:"input_player_name"}]}
+        dialogue:{speaker:"我",sub:"记忆模糊",pages:["你感到一阵反胃，刚刚吃过的东西从喉咙里倾泻而出。","我……刚才吃了什么？","脑子里只剩下一片空白。"],choices:[{id:"name",label:"回忆自己的名字",next:"input_player_name"}]}
       },
       input_player_name:{id:"input_player_name",enter:{action:"nameInput",next:"chapter1_start"},progress:progress(8),goal:textGoal("输入名字")},
       prologue_complete:{id:"prologue_complete",enter:{action:"storyEnd",title:"序章试玩完成",text:"名字和选择已经记录。后续章节会从这里继续。"},progress:progress(8),goal:textGoal("序章完成")}

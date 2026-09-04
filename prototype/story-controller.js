@@ -27,6 +27,7 @@
 
   function closeDialogue(){
     if(typeof root.closePanel==="function")root.closePanel();
+    if(typeof root.clearDialogueFocus==="function")root.clearDialogueFocus();
     panelOpen=false;freeze=false;moveLock=false;panelNpc=null;npcNode=null;
     const say=document.getElementById("npcSay");if(say)say.onclick=null;
     if(typeof root.clearPanelInputGate==="function")root.clearPanelInputGate();
@@ -115,19 +116,24 @@
 
   function dialogue(args){
     const data=Dialogue.normalize(args),pages=data.pages.map(withHints);
+    if(currentNode()==="dialogue_2"&&typeof root.settleBeanProjectiles==="function")root.settleBeanProjectiles();
     const continuing=panelOpen;let pageIndex=0;
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;panelNpc=null;npcNode=null;
     if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
     const panel=ensurePanel(),say=document.getElementById("npcSay"),options=document.getElementById("npcOpts");
-    panel.style.display="flex";
+    panel.style.display="grid";
     document.getElementById("npcName").textContent=data.speaker||"我";
     document.getElementById("npcSub").textContent=data.sub||"序章";
-    drawPortraitInto(document.getElementById("npcPortrait"),data.portrait||"snake_self",!!data.crying);
+    drawPortraitInto(document.getElementById("npcPortrait"),data.portrait||portraitId(data.speaker),!!data.crying);
     if(!continuing&&typeof root.resetPanelDialogue==="function")root.resetPanelDialogue();
 
     const render=()=>{
       if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
-      if(typeof root.appendPanelDialogue==="function")root.appendPanelDialogue(pages[pageIndex]);else say.textContent=pages[pageIndex];
+      const page=speakerPage(pages[pageIndex],data.speaker||"我");
+      document.getElementById("npcName").textContent=page.speaker;
+      drawPortraitInto(document.getElementById("npcPortrait"),portraitId(page.speaker,data.portrait),!!data.crying);
+      if(typeof root.focusDialogueActor==="function")root.focusDialogueActor(portraitId(page.speaker));
+      if(typeof root.appendPanelDialogue==="function")root.appendPanelDialogue(page.text);else say.textContent=page.text;
       options.innerHTML="";say.onclick=null;
       if(pageIndex<pages.length-1){
         const next=document.createElement("button");next.className="npc-opt";next.textContent="继续 "+hint("interact");
@@ -138,7 +144,7 @@
         (choices.length?choices:[{id:"continue",label:"继续"}]).forEach(choice=>{
           const button=document.createElement("button");
           button.className="npc-opt"+(choice.danger?" red":"");button.textContent=withHints(choice.label)+" "+hint("interact");
-          button.onclick=()=>{const next=director.runtime.graph[choice.next],keepsTranscript=!!(next&&next.onEnter&&next.onEnter.name==="dialog");if(!keepsTranscript)closeDialogue();director.runtime.choose(choice.id);};
+          button.onclick=()=>{const next=director.runtime.graph[choice.next],keepsTranscript=!!(next&&next.onEnter&&next.onEnter.name==="dialog");if(!keepsTranscript)closeDialogue();director.runtime.choose(choice.id);saveCurrent();};
           options.appendChild(button);
         });
       }
@@ -147,10 +153,13 @@
     render();requestAnimationFrame(()=>panel.classList.add("open"));
   }
 
+  function portraitId(speaker,fallback){return ({"我":"snake_self","可蒂":"keti","阿杰":"ajie","丽丝":"lisi"})[speaker]||fallback||"snake_self";}
+  function speakerPage(text,fallback){const value=String(text||""),match=value.match(/^(可蒂|阿杰|丽丝|我)[：:]\s*(.*)$/s);return match?{speaker:match[1],text:match[2]}:{speaker:fallback,text:value};}
+
   function nameInput(args){
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;
     if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
-    const panel=ensurePanel();panel.style.display="flex";
+    const panel=ensurePanel();panel.style.display="grid";
     document.getElementById("npcName").textContent="我";
     document.getElementById("npcSub").textContent="序章 · 输入名字";
     drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
@@ -159,22 +168,23 @@
     const done=()=>{
       const name=(input.value||"").trim()||"未命名";
       updateState(state=>{state.player.name=name;},"name_input");
-      closeDialogue();banner("名字已记住："+name);director.runtime.follow(args.next);
+      closeDialogue();banner("名字已记住："+name);director.runtime.follow(args.next);saveCurrent();
     };
     button.onclick=done;input.onkeydown=event=>{if(event.key==="Enter")done();};
     panelOpts=[button];panelSel=0;requestAnimationFrame(()=>{panel.classList.add("open");input.focus();});
   }
 
-  function eatKeti(){const npc=director&&director.keti;if(npc&&npcs.includes(npc))root.eatNPC(npc);}
+  function eatKeti(){const npc=director&&director.keti;if(npc&&npcs.includes(npc))root.swallowStoryNPC(npc);}
   function eatCorpse(){
     const added=typeof root.addStomachItem==="function"?root.addStomachItem("ketiCorpse",1,"keti_corpse_eaten"):null;
     updateState(state=>{state.actors.keti.status="eaten";state.actors.keti.corpsePresent=false;state.player.bodyLength=snake.len;},"keti_corpse_eaten");
     saveCurrent();emit("ACTOR_EATEN",{actorId:"keti",corpse:true,itemAdded:!!(added&&added.added)});
   }
   function spawnSlimes(){director.spawned=true;enemies.length=0;enemyAt({type:"slime",x:54.5,y:21.5});enemyAt({type:"slime",x:54.5,y:27.5});observedEnemies=enemies.length;}
-  function freeExplore(){closeDialogue();banner("自由探索：30 秒后会出现记忆模糊");director.runtime.startTimer("free_explore_memory",30);}
+  function waitForMemoryBlur(){closeDialogue();banner("继续向前……");director.runtime.startTimer("free_explore_memory",6);}
   function memoryBlur(){
-    snake.len=typeof minBodyLength==="function"?minBodyLength():CFG.minLen;
+    const state=snapshot(),item=hasItem(state,"keti")?"keti":hasItem(state,"ketiCorpse")?"ketiCorpse":null;
+    if(item&&typeof root.startMemoryVomit==="function")root.startMemoryVomit(item);
     updateState(state=>{state.flags.memoryBlurSeen=true;state.player.bodyLength=snake.len;},"memory_blur");computeSegs();
   }
   function storyEnd(args){
@@ -208,7 +218,10 @@
       if(event.type===eventType("CHAPTER1_HUNGER_READY"))return"chapter1_hunger";
       if(event.type===eventType("ITEM_INTERACTED"))return"chapter1_sword";
       const state=snapshot(),ajie=state.actors.ajie.status==="alive",lisi=state.actors.lisi.status==="alive";
+      if(state.flags.findAjianAccepted){banner("任务进行中：寻找阿见");return"chapter1_explore";}
       if(state.flags.chapter1SwordRecognizedPending){updateState(next=>{next.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_notice_consumed");return ajie&&lisi?"chapter1_sword_recognized":ajie?"chapter1_sword_recognized_ajie":lisi?"chapter1_sword_recognized_lisi":"chapter1_explore";}
+      if(state.flags.findAjianDeclined)return ajie?"chapter1_quest_request_ajie":lisi?"chapter1_quest_request":"chapter1_explore";
+      if(!state.flags.chapter1MeetingSeen)updateState(next=>{next.flags.chapter1MeetingSeen=true;},"chapter1_meeting_seen");
       return ajie&&lisi?"chapter1_meeting":lisi?"chapter1_lisi_only":ajie?"chapter1_ajie_only":"chapter1_explore";
     }});
   }
@@ -250,6 +263,7 @@
     if(!director||!storyActive||playMode!=="story"||!owns(kind,target))return false;
     if(kind==="actor"){
       target.inside=true;
+      if(typeof root.focusDialogueTarget==="function")root.focusDialogueTarget(target);
       if(currentNode()==="wilderness_keti_wait"){
         director.keti=target;updateState(state=>{state.actors.keti.met=true;},"keti_met");emit("ACTOR_INTERACTED",{actorId:targetId(target)});
       }
@@ -259,6 +273,7 @@
     }
     if(kind==="item"){
       target.inside=true;
+      if(typeof root.focusDialogueTarget==="function")root.focusDialogueTarget(target);
       if(currentNode()==="chapter1_explore")emit("ITEM_INTERACTED",{itemId:targetId(target)});
       return true;
     }
@@ -288,8 +303,14 @@
       updateState(state=>{StateApi.ensureActor(state,actorId,{status:"left",location:null});},actorId+"_left");emit("AJIE_LEFT",{actorId});
     }else if(name==="worldItemDropped"){
       if(payload&&payload.id==="ironSword"){
-        const noticed=Object.values(director.actors||{}).some(actor=>actor&&!actor.unconscious&&!actor.hostile&&Math.hypot(actor.x-payload.x,actor.y-payload.y)<=2);
+        const noticed=!payload.noticedBefore&&Object.values(director.actors||{}).some(actor=>actor&&!actor.unconscious&&!actor.hostile&&Math.hypot(actor.x-payload.x,actor.y-payload.y)<=2);
         updateState(state=>{state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:payload.x,y:payload.y};if(noticed)state.flags.chapter1SwordRecognizedPending=true;},"chapter1_sword_ground");
+      }
+    }else if(name==="swordNearActor"){
+      if(!snapshot().flags.findAjianAccepted){
+        updateState(state=>{state.flags.chapter1SwordRecognizedPending=true;},"chapter1_sword_hit_actor");
+        if(currentNode()==="chapter1_explore")
+        emit("ACTOR_INTERACTED",{actorId:payload&&payload.actorId});
       }
     }else if(name==="ajieBodyLearned"){
       if(currentNode()==="chapter1_combat_pending")director.runtime.follow("chapter1_ajie_body_learned");
@@ -317,11 +338,12 @@
     observedEnemies=enemies.length;
   }
 
-  function goalText(){const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";const suffix=goal.inputHint?" "+(goal.inputHint==="move"?"["+movementHint()+"]":hint(goal.inputHint)):"";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target+suffix;return (goal.text||"按剧情继续")+suffix;}
+  function goalText(){if(snapshot()&&snapshot().flags.findAjianAccepted&&currentNode()==="chapter1_explore")return"寻找阿见";const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";const suffix=goal.inputHint?" "+(goal.inputHint==="move"?"["+movementHint()+"]":hint(goal.inputHint)):"";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target+suffix;return (goal.text||"按剧情继续")+suffix;}
+  function questText(){const state=snapshot();return state&&state.flags.findAjianAccepted?"主线任务\n寻找阿见":"";}
   function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
 
   function createDirector(state,slot){
-    return {slot,spawned:false,keti:null,actors:{},items:{},checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,freeExplore,memoryBlur,nameInput,storyEnd,chapterExplore,waitAjieCombat,waitDownedInteraction}})};
+    return {slot,spawned:false,keti:null,actors:{},items:{},checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,waitForMemoryBlur,memoryBlur,nameInput,storyEnd,chapterExplore,waitAjieCombat,waitDownedInteraction}})};
   }
 
   function start(slot){
@@ -344,7 +366,7 @@
   function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
   function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
 
-  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
+  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,questText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
   root.storyControllerInteraction=routeInteraction;
   root.storyControllerOwns=owns;
   root.storyControllerInteract=target=>routeInteraction("actor",target);

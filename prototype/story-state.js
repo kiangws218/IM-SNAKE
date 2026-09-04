@@ -14,7 +14,7 @@
     return {
       schemaVersion:1,storyId:"prologue",chapter:"prologue",
       currentNode:"Start",currentMap:null,
-      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,findAjianAccepted:false,findAjianDeclined:false},
+      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,chapter1MeetingSeen:false,findAjianAccepted:false,findAjianDeclined:false},
       actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults()},
       worldItems:{},
       counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0,chapterBeansEaten:0,chapterBeansSpit:0},
