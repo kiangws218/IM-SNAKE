@@ -15,7 +15,7 @@
  * ============================================================ */
 const NPC_TYPES={
   merchant:{
-    name:"路边商人", sub:"神秘行商", hp:26, r:.55, foodValue:1,
+    actorId:"merchant", name:"路边商人", sub:"神秘行商", hp:26, r:.55, foodValue:1,
     greet:"「客官，用身长抵账——一节豆子一份货。」",
     hurtGreet:"「你个小混蛋，打我干嘛……行行行，货照卖，但每分伤都得算进价里！」",
     options:[{label:"交易",action:"trade"},{label:"吃掉",action:"eat"},{label:"离开",action:"leave"}],
@@ -23,11 +23,13 @@ const NPC_TYPES={
     respawn:30,
   },
   keti:{
-    name:"可蒂", sub:"白裙小女孩", hp:14, r:.42, foodValue:2,
+    actorId:"keti", name:"可蒂", sub:"白裙小女孩", hp:14, r:.42, foodValue:2,
     greet:"「？？」",
     options:[{label:"对话",action:"dialog",arg:"start"},{label:"离开",action:"leave"}],
     drops:[{type:"beans",n:3}],
   },
+  ajie:{actorId:"ajie",name:"阿杰",sub:"寻找弟弟的冒险者",hp:8,r:.46,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
+  lisi:{actorId:"lisi",name:"丽丝",sub:"阿杰的同伴",hp:8,r:.44,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
 };
 
 const DIALOG_TREES={

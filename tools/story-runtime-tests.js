@@ -20,7 +20,7 @@ require("../prototype/story-maps.js");
 require("../prototype/story-data.js");
 
 const { EventBus, TYPES } = global.IMS_STORY_EVENTS;
-const { StoryStateStore, mergeDefaults } = global.IMS_STORY_STATE;
+const { StoryStateStore, mergeDefaults, ensureActor } = global.IMS_STORY_STATE;
 const { StoryRuntime } = global.IMS_STORY_RUNTIME;
 const { splitPages, createInputGate } = global.IMS_STORY_DIALOGUE;
 
@@ -51,6 +51,10 @@ function testStateDefaultsAndPersistence() {
   assert.strictEqual(merged.player.name, "小明");
   assert.strictEqual(merged.player.bodyLength, 4, "缺失的玩家默认值应保留");
   assert.strictEqual(merged.inventory.slots[0].id, "bean", "旧剧情状态应补上默认胃袋");
+  assert.strictEqual(merged.actors.ajie.status, "unknown", "旧存档应补上第一章角色");
+  const custom = { actors: {} };
+  ensureActor(custom, "visitor", { status: "alive", location: "camp" });
+  assert.deepStrictEqual(custom.actors.visitor, { status: "alive", location: "camp", met: false, corpsePresent: false });
 
   const store = new StoryStateStore();
   store.update(state => { state.player.name = "测试玩家"; state.flags.memoryBlurSeen = true; }, "test");
@@ -123,6 +127,23 @@ async function testRuntimeFlow() {
   assert.throws(() => runtime.choose("missing"), /No choices available/);
 }
 
+function testChoiceConditionsAreCheckedTwice() {
+  const state = new StoryStateStore();
+  state.update(s => { s.testAllowed = false; }, "choice-test");
+  const runtime = new StoryRuntime({ state, graph: {
+    start: { id: "start", choices: [
+      { id: "always", next: "done" },
+      { id: "conditional", when: snapshot => snapshot.testAllowed, next: "done" }
+    ] },
+    done: { id: "done" }
+  } });
+  runtime.start("start");
+  assert.deepStrictEqual(runtime.getChoices().map(choice => choice.id), ["always"], "渲染时应隐藏不满足条件的选项");
+  assert.throws(() => runtime.choose("conditional"), /Choice unavailable/, "执行时还要再次检查条件");
+  state.update(s => { s.testAllowed = true; }, "choice-enabled");
+  assert.deepStrictEqual(runtime.getChoices().map(choice => choice.id), ["always", "conditional"]);
+}
+
 async function testPredicateAndTimerCleanup() {
   const bus = new EventBus();
   const state = new StoryStateStore();
@@ -173,6 +194,7 @@ async function testStopDetachesWait() {
   testDialoguePageSplitting();
   testDialogueInputGate();
   testStoryDataReferences();
+  testChoiceConditionsAreCheckedTwice();
   await testRuntimeFlow();
   await testPredicateAndTimerCleanup();
   await testStopDetachesWait();

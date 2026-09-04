@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.35</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.37</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -97,8 +97,10 @@
     border:2px solid #ffd76e;border-radius:8px;flex:none; }
   #npcName{ font-size:17px;color:#ffd76e;letter-spacing:2px;margin-bottom:4px; }
   #npcSub{ font-size:11px;color:var(--dim); }
-  #npcSay{ margin-top:12px;min-height:76px;color:#ffe9b3;line-height:1.7;font-size:13px;
-    background:rgba(10,10,20,.5);border-radius:8px;padding:10px; }
+  #npcSay{ margin-top:12px;min-height:76px;max-height:25vh;overflow-y:auto;color:#ffe9b3;line-height:1.7;font-size:13px;
+    background:rgba(10,10,20,.5);border-radius:8px;padding:10px;scroll-behavior:smooth; }
+  .npc-line{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.06);white-space:pre-line}
+  .npc-line:last-child{border-bottom:0}
   #npcOpts{ margin-top:auto;display:flex;flex-direction:column;gap:8px;max-height:38vh;overflow-y:auto; }
   .npc-opt{
     padding:9px 12px;background:#23243a;border:1px solid #3a3b5c;border-radius:8px;
@@ -108,8 +110,15 @@
   .npc-opt.red{ color:#ff5d5d;border-color:#7a2d35; }
   .npc-opt.red:hover{ border-color:#ff5d5d; }
   .npc-opt.sel{ border-color:#ffd76e;background:#2c2d44;box-shadow:0 0 0 1px #ffd76e; }
-  #stomachHud{display:inline-flex;align-items:center;gap:5px;max-width:520px;overflow:hidden;vertical-align:middle}
-  #stomachSlots{display:inline-flex;gap:4px;align-items:center}
+  #gameViewport{position:relative;width:768px;max-width:96vw}
+  #cv{display:block;width:100%;height:auto}
+  #stomachHud{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:7px;padding:7px 9px;
+    background:rgba(15,16,28,.9);border:1px solid #3a3b5c;border-radius:9px;box-shadow:0 3px 12px rgba(0,0,0,.4);font-size:11px}
+  #stomachSlots{display:grid;grid-template-columns:repeat(5,46px);gap:4px;align-items:center}
+  .stomach-slot{height:38px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--dim);
+    background:#202135;border:1px solid #343552;border-radius:6px;transform:scale(.86);opacity:.72;overflow:hidden}
+  .stomach-slot.selected{color:#ffe9b3;border-color:#ffd76e;transform:scale(1.08);opacity:1;background:#2c2d44}
+  .stomach-slot.empty{visibility:hidden}.stomach-icon{font-size:16px;line-height:16px}.stomach-label{font-size:9px;white-space:nowrap}
   #pauseMenu{
     position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     flex-direction:column; gap:14px; background:rgba(8,8,16,.66); z-index:20;
@@ -125,7 +134,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.35（本地双人合作 / 新平衡）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.37（第一章森林首段）</span></h1>
 <div id="hud">
   <span class="chip"><b id="p1Tag"></b> ❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -133,12 +142,11 @@
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
   <span class="chip">断尾 <span class="bar"><i id="cdCut" style="background:#e86a8a"></i></span></span>
   <span class="chip">节点 <span id="nodes"></span></span>
-  <span class="chip" id="stomachHud">胃袋 <small id="stomachPrev"></small><span id="stomachSlots"></span><small id="stomachNext"></small></span>
   <span id="coopHud" style="display:none"><span class="chip" style="color:#7fd1e8"><b>P2</b> ❤ <span id="p2Hearts"></span></span> <span class="chip">身长 <b id="p2Len"></b></span> <span class="chip">豆伤 <b id="p2Dmg" style="color:#7fd1e8"></b></span> <span class="chip">火力 <span class="bar"><i id="p2Fire" style="background:#7fd1e8"></i></span></span> <span class="chip">断尾 <span class="bar"><i id="p2Cut" style="background:#4389a8"></i></span></span> <span class="chip">节点 <span id="p2Nodes"></span></span></span>
   <span id="stat"></span>
 </div>
 <div id="tut"><b id="tutTitle"></b><span id="tutText"></span></div>
-<canvas id="cv"></canvas>
+<div id="gameViewport"><canvas id="cv"></canvas><div id="stomachHud"><small id="stomachPrev"></small><span id="stomachSlots"></span><small id="stomachNext"></small></div></div>
 <div id="help">
   <b>移动</b> <kbd>WASD</kbd>/<kbd>方向键</kbd>（8方向<b>即时转向</b> · 点按转向 长按<b>2倍速冲刺</b> · 不能停）
 　<b>站桩吐豆</b> 长按<kbd id="helpFire">J</kbd>
@@ -221,7 +229,7 @@ let intro=null,introSeen=false,fireKey=false,fireNeedsRelease=false;
 let curses=[];
 let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false;
 let storyActive=false,storyStage=-1,storyTransitioning=false;
-let stomach=new IMS_STOMACH.StomachInventory(),stomachPickups=[];
+let stomach=new IMS_STOMACH.StomachInventory(),stomachPickups=[],stomachHudKey="";
 let panelInputGate=null;
 function introScene(){
   try{return(typeof window!=="undefined"&&window.INTRO_SCENE)||{};}
@@ -420,6 +428,10 @@ function beanDamage(owner){
   const base=4+RUN.dmgBonus;
   return Math.max(1,Math.round(base*(TEMPBUFF.t>0?TEMPBUFF.mult:1)));
 }
+function projectileDamage(p){
+  if(p&&p.payload&&Number.isFinite(Number(p.payload.damage)))return Number(p.payload.damage);
+  return beanDamage(p&&p.owner)*(Number(p&&p.payload&&p.payload.damageMult)||1);
+}
 
 function reset(forTutorial){
   buildObstacles();
@@ -616,6 +628,36 @@ function addStomachItem(id,amount,reason){
   if(result.addedWeight>0){snake.len+=result.addedWeight;computeSegs();syncStomachStory(reason||"pickup");}
   return result;
 }
+function collectStoryItem(item){
+  if(!item||!stomachPickups.includes(item))return false;
+  const added=addStomachItem(item.id,1,"story_item_pickup");
+  if(!added.added)return false;
+  stomachPickups.splice(stomachPickups.indexOf(item),1);puff(item.x,item.y,added.item.color||"#f5f5fa");return true;
+}
+function swallowStoryNPC(n){
+  if(!n||!npcs.includes(n))return false;
+  const actorId=n.storyId||n.actorId||n.kind,added=addStomachItem(actorId,1,"actor_swallowed");
+  if(!added.added)return false;
+  npcs.splice(npcs.indexOf(n),1);notifyStoryEvent("actorEaten",{actor:n});puff(n.x,n.y,"#8fe36b");return true;
+}
+function spawnReleasedActor(actorId,x,y){
+  const type=NPC_TYPES[actorId];let spot=findFreeNear(Math.floor(x),Math.floor(y),5);
+  if(!spot)for(let rad=0;rad<=8&&!spot;rad++)for(let dy=-rad;dy<=rad&&!spot;dy++)for(let dx=-rad;dx<=rad;dx++){const px=Math.floor(x)+dx,py=Math.floor(y)+dy;if(inB(px,py)&&isFree(px,py)){spot={x:px,y:py};break;}}
+  if(!type||!spot)return false;
+  npcs.push({kind:actorId,storyId:actorId,actorId,x:spot.x+.5,y:spot.y+.5,r:type.r,hp:type.hp,maxHp:type.hp,flash:0,inside:false,unconscious:true,interactable:false,damageable:false});
+  notifyStoryEvent("actorReleased",{actorId,x:spot.x+.5,y:spot.y+.5});return true;
+}
+function releaseStoryActor(actorId,x,y){
+  const removed=stomach.remove(actorId,1);if(!removed.removed)return false;
+  if(!spawnReleasedActor(actorId,x==null?snake.fx+dir.x*1.2:x,y==null?snake.fy+dir.y*1.2:y)){stomach.add(actorId,1);return false;}
+  snake.len=Math.max(minBodyLength(),snake.len-removed.removedWeight);computeSegs();syncStomachStory("actor_released");return true;
+}
+function dropStoryItem(id,x,y){
+  const removed=stomach.remove(id,1);if(!removed.removed)return false;
+  snake.len=Math.max(minBodyLength(),snake.len-removed.removedWeight);computeSegs();
+  const item={id,x:x==null?snake.fx+dir.x*1.2:x,y:y==null?snake.fy+dir.y*1.2:y,interactive:false,inside:false};
+  stomachPickups.push(item);notifyStoryEvent("worldItemDropped",{id:item.id,x:item.x,y:item.y});syncStomachStory("story_item_dropped");return item;
+}
 function restoreStomachInventory(state){
   stomach=new IMS_STOMACH.StomachInventory();
   if(state)stomach.restore(state);
@@ -648,7 +690,13 @@ function pickUps(){
   }
   for(let i=stomachPickups.length-1;i>=0;i--){
     const p=stomachPickups[i];
-    if(Math.hypot(p.x-snake.fx,p.y-snake.fy)<RUN.pickupR){
+    const distance=Math.hypot(p.x-snake.fx,p.y-snake.fy);
+    if(p.interactive){
+      if(distance<.85&&!p.inside){p.inside=true;routeStoryInteraction("item",p);}
+      else if(distance>1.25)p.inside=false;
+      continue;
+    }
+    if(distance<RUN.pickupR){
       const added=addStomachItem(p.id,1,"special_pickup");
       if(added.added){stomachPickups.splice(i,1);ftext(p.x,p.y-.5,"吞入胃袋："+added.item.shortName,"#ffd76e");puff(p.x,p.y,added.item.color||"#f5f5fa");}
       else if(gameTime-(p.lastNotice||-99)>1){p.lastNotice=gameTime;ftext(p.x,p.y-.5,"胃袋里已经有了","#8b88a3");}
@@ -682,6 +730,10 @@ function stanceShot(){
     snake.len=Math.max(minBodyLength(),snake.len-used.removedWeight);computeSegs();
     const speed=CFG.spitSpeed*RUN.spitSpeedMult*.75;
     const sx=snake.fx+dir.x*1.2,sy=snake.fy+dir.y*1.2;
+    if(used.item.releaseActor){
+      if(!spawnReleasedActor(used.item.actorId,sx,sy)){stomach.add(used.id,1);snake.len+=used.removedWeight;computeSegs();}
+      firing=false;fireNeedsRelease=true;syncStomachStory("actor_released");return;
+    }
     projs.push({owner:1,payloadId:used.id,payload:used.item,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
     firing=false;fireNeedsRelease=true;shake=Math.max(shake,.18);
     ftext(snake.fx,snake.fy-1,"吐出："+used.item.shortName,"#ffd76e");syncStomachStory("special_fired");return;
@@ -773,7 +825,7 @@ function updateProjs(dt){
     p.trail.push({x:p.x,y:p.y});if(p.trail.length>6)p.trail.shift();
     let sp=Math.hypot(p.vx,p.vy);
     const zn=zoneAt(p.x,p.y);
-    let drag=p.bounced?CFG.beanDrag:CFG.beanDragInit;
+    let drag=(p.bounced?CFG.beanDrag:CFG.beanDragInit)*(Number(p.payload&&p.payload.dragMult)||1);
     if(p.scatter)drag*=.35;
     if(zn&&zn.kind==="slope"&&zn.dragMult)drag*=zn.dragMult;
     if(zn&&zn.kind==="wind"){p.vx+=(zn.fx||0)*dt*3;p.vy+=(zn.fy||0)*dt*3;}
@@ -808,7 +860,7 @@ function updateProjs(dt){
     for(let j=enemies.length-1;j>=0;j--){
       const e=enemies[j];
       if(Math.hypot(p.x-e.x,p.y-e.y)<e.r+.25){
-        const d=beanDamage(p.owner);
+        const d=projectileDamage(p);
         e.hp-=d;e.flash=.15;spitHits++;
         const sp0=Math.hypot(p.vx,p.vy)||1;
         e.hitDir={x:p.vx/sp0,y:p.vy/sp0};
@@ -818,22 +870,28 @@ function updateProjs(dt){
     }
     for(const n of npcs){
       if(Math.hypot(p.x-n.x,p.y-n.y)<n.r+.25){
-        const d=beanDamage(p.owner);
-        n.hp-=d;n.flash=.15;spitHits++;
-        ftext(n.x,n.y-.5,"-"+d,"#ffd76e");
-        if(n.kind==="merchant")ftextThrottled(n);
+        if(n.damageable!==false){
+          const d=projectileDamage(p);
+          n.hp-=d;n.flash=.15;spitHits++;
+          ftext(n.x,n.y-.5,"-"+d,"#ffd76e");
+          if(n.kind==="merchant")ftextThrottled(n);
+        }
         ricochet(p,n.x,n.y);
         break;
       }
     }
     for(let j=npcs.length-1;j>=0;j--){
-      if(npcs[j].hp<=0){if(panelNpc===npcs[j])closePanel();dieNPC(npcs[j]);}
+      const n=npcs[j];
+      if(n.hp<=0&&!n.downed){
+        if(n.storyId==="ajie"&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("actorDowned",{actorId:"ajie"});}
+        else{if(panelNpc===n)closePanel();dieNPC(n);}
+      }
     }
     if(boss){
       if((p.bossCd||0)>0)p.bossCd-=dt;
       const bd2=Math.hypot(p.x-boss.x,p.y-boss.y);
       if(bd2<boss.r+.25&&(p.bossCd||0)<=0){
-        let d=beanDamage(p.owner)*(boss.shield>0?.25:1);
+        let d=projectileDamage(p)*(boss.shield>0?.25:1);
         spitHits++;
         if(boss.shield>0){const s2=Math.min(boss.shield,d);boss.shield-=s2;d-=s2;}
         boss.hp-=d;boss.flash=.1;
@@ -848,7 +906,7 @@ function updateProjs(dt){
     if(dead){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
       if(spot){
-        if(p.payloadId)stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});
+        if(p.payloadId){stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});notifyStoryEvent("worldItemDropped",{id:p.payloadId,x:spot.x+.5,y:spot.y+.5});}
         else groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
       }
       puff(p.x,p.y,p.payload&&p.payload.color||"#d95763");
@@ -915,7 +973,7 @@ function spawnNPC(kind){
     const x=rnd(CFG.cols),y=rnd(CFG.rows);
     if(!reachMask[K(x,y)]||!isFree(x,y))continue;
     const near=nearestPlayer(x+.5,y+.5);if(near&&Math.hypot(x+.5-near.x,y+.5-near.y)<9)continue;
-    npcs.push({kind,x:x+.5,y:y+.5,r:T.r,hp:T.hp,maxHp:T.hp,flash:0,inside:false,crying:false});
+    npcs.push({kind,actorId:T.actorId||kind,x:x+.5,y:y+.5,r:T.r,hp:T.hp,maxHp:T.hp,flash:0,inside:false,crying:false});
     return;
   }
 }
@@ -927,8 +985,48 @@ function updateNPCs(dt){
   for(let i=npcs.length-1;i>=0;i--){
     const n=npcs[i];
     n.flash-=dt;
+    if(n.resting){
+      n.resting-=dt;
+      if(n.resting<=0){npcs.splice(i,1);notifyStoryEvent("actorLeft",{actorId:n.storyId||n.actorId||n.kind});}
+      continue;
+    }
+    if(n.speed&&n.patrol&&n.patrol.length&&!panelOpen&&!n.unconscious&&!n.hostile){
+      n.patrolIndex=n.patrolIndex||0;
+      const target=n.patrol[n.patrolIndex],dx=target[0]-n.x,dy=target[1]-n.y,d=Math.hypot(dx,dy);
+      if(d<.15)n.patrolIndex=(n.patrolIndex+1)%n.patrol.length;
+      else{
+        const step=Math.min(d,n.speed*dt),nx=n.x+dx/d*step,ny=n.y+dy/d*step;
+        if(circleVsSolids(nx,ny,n.r)===null){n.x=nx;n.y=ny;}
+      }
+    }
+    n.slashT=Math.max(0,(n.slashT||0)-dt);
+    if(n.hostile&&alive&&!panelOpen){
+      n.chaseElapsed=(n.chaseElapsed||0)+dt;
+      if(n.chaseElapsed>=30){n.hostile=false;n.damageable=false;n.interactable=false;n.resting=6;ftext(n.x,n.y-.7,"力竭……","#ffd76e");continue;}
+      let tx=snake.fx,ty=snake.fy;
+      if(n.attackTarget==="body"&&segPos.length>1){
+        let best=segPos[1],bestD=Infinity;
+        for(let s=1;s<segPos.length;s++){const d=Math.hypot(n.x-segPos[s].x,n.y-segPos[s].y);if(d<bestD){bestD=d;best=segPos[s];}}
+        tx=best.x;ty=best.y;
+      }
+      const dx=tx-n.x,dy=ty-n.y,d=Math.hypot(dx,dy)||1,step=Math.min(d,(n.speed||1)*dt),nx=n.x+dx/d*step,ny=n.y+dy/d*step;n.faceX=dx/d;n.faceY=dy/d;
+      if(n.attackPhase){
+        n.attackPhaseT-=dt;
+        if(n.attackPhaseT<=0&&n.attackPhase==="windup"){
+          n.attackPhase="active";n.attackPhaseT=.12;n.slashT=.12;
+          if(d<=1.1){
+            if(n.attackTarget==="body"){
+              n.bodyHits=(n.bodyHits||0)+1;
+              if(n.bodyHits>=2){n.attackTarget="head";notifyStoryEvent("ajieBodyLearned",{actorId:"ajie"});}
+            }else hurtPlayer("被阿杰的剑砍中头部");
+          }
+        }else if(n.attackPhaseT<=0&&n.attackPhase==="active"){n.attackPhase="recovery";n.attackPhaseT=.8;}
+        else if(n.attackPhaseT<=0&&n.attackPhase==="recovery")n.attackPhase=null;
+      }else if(d>1&&circleVsSolids(nx,ny,n.r)===null){n.x=nx;n.y=ny;}
+      else if(d<=1){n.attackPhase="windup";n.attackPhaseT=.45;}
+    }
     const rid=prisonMask[K(Math.floor(n.x),Math.floor(n.y))];
-    if(rid>=0&&activePrisons>0&&alive&&prisonRegionBody[rid]){
+    if(rid>=0&&activePrisons>0&&alive&&prisonRegionBody[rid]&&n.damageable!==false){
       n.pburst=Math.max(0,(n.pburst||0)-dt);
       const node=prisonRegionNode[rid];
       if(!n.wasPrison&&n.pburst<=0){
@@ -943,7 +1041,10 @@ function updateNPCs(dt){
       if(n.kind==="merchant")ftextThrottled(n);
       else if(Math.random()<dt*.8)ftextThrottledN(n);
     }else n.wasPrison=false;
-    if(n.hp<=0){dieNPC(n);continue;}
+    if(n.hp<=0&&!n.downed){
+      if(n.storyId==="ajie"&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("actorDowned",{actorId:"ajie"});}
+      else{dieNPC(n);continue;}
+    }
     if(alive&&!panelOpen&&gameState==="play"){
       const near=nearestPlayer(n.x,n.y),d=near?Math.hypot(n.x-near.x,n.y-near.y):Infinity;
       if(d<0.85&&!n.inside){
@@ -1558,7 +1659,7 @@ function openTutPanel(i){
     document.getElementById("npcName").textContent="我";
     document.getElementById("npcSub").textContent="自言自语 · 教学 "+(i+1)+"/"+TUT2.length;
     drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
-    document.getElementById("npcSay").textContent=s.say;
+    resetPanelDialogue();appendPanelDialogue(s.say);
     const opts=document.getElementById("npcOpts");opts.innerHTML="";
     const b=document.createElement("button");
     b.className="npc-opt";
@@ -1575,7 +1676,7 @@ function finishTutorial(){
   document.getElementById("npcName").textContent="恭喜完成教学！";
   document.getElementById("npcSub").textContent=TUT2.length+"/"+TUT2.length;
   drawPortraitInto(document.getElementById("npcPortrait"),"snake_self",false);
-  document.getElementById("npcSay").textContent="移动、进食、吐豆、无节点监狱、环形节点、节点监狱、断尾——全部掌握。前面的世界，随便你去吃。";
+  resetPanelDialogue();appendPanelDialogue("移动、进食、吐豆、无节点监狱、环形节点、节点监狱、断尾——全部掌握。前面的世界，随便你去吃。");
   const opts=document.getElementById("npcOpts");opts.innerHTML="";
   const again=document.createElement("button");
   again.className="npc-opt";again.textContent="再次体验";
@@ -1603,6 +1704,13 @@ function ensurePanel(){
     "<div id='npcSay'></div><div id='npcOpts'></div>";
   document.body.appendChild(p);
   npcPanelEl=p;return p;
+}
+function resetPanelDialogue(){const say=document.getElementById("npcSay");if(say)say.innerHTML="";}
+function appendPanelDialogue(text){
+  const say=document.getElementById("npcSay");if(!say)return;
+  const line=document.createElement("div");line.className="npc-line";line.textContent=String(text||"");say.appendChild(line);
+  while(say.children.length>20)say.firstElementChild.remove();
+  say.scrollTop=say.scrollHeight;
 }
 function drawPortraitInto(cvs,kind,crying){
   const c=cvs.getContext("2d");
@@ -1647,6 +1755,7 @@ function uiFatal(msg){
 function openPanel(n,nodeId){
   try{
     if(!n||!npcs.includes(n)){closePanel();return;}
+    const continuing=panelOpen&&panelNpc===n;
     panelOpen=true;freeze=true;panelNpc=n;npcNode=nodeId||null;n.inside=true;armPanelInputGate();
     const T=NPC_TYPES[n.kind];
     const p=ensurePanel();
@@ -1654,12 +1763,12 @@ function openPanel(n,nodeId){
     document.getElementById("npcName").textContent=T.name;
     document.getElementById("npcSub").textContent=T.sub||"";
     drawPortraitInto(document.getElementById("npcPortrait"),n.kind,n.crying);
-    const say=document.getElementById("npcSay");
+    if(!continuing)resetPanelDialogue();
     const opts=document.getElementById("npcOpts");opts.innerHTML="";
     let list=[];
     if(nodeId){
       const node=DIALOG_TREES[n.kind][nodeId];
-      say.textContent=node.say;
+      appendPanelDialogue(node.say);
       if(node.effect==="cry"&&!n.cried){n.cried=true;n.crying=true;}
       list=(node.options||[]).map(o=>({label:o.t,
         fn:()=>{
@@ -1669,7 +1778,7 @@ function openPanel(n,nodeId){
           return openPanel(n,o.next);
         }}));
     }else{
-      say.textContent=(n.hp<n.maxHp&&T.hurtGreet)?T.hurtGreet:(T.greet||"……");
+      appendPanelDialogue((n.hp<n.maxHp&&T.hurtGreet)?T.hurtGreet:(T.greet||"……"));
       list=T.options.map(o=>({label:o.label,fn:()=>handleOption(n,o)}));
     }
     for(const o of list){
@@ -2597,6 +2706,17 @@ function render(){
       ctx.fillStyle="#20212f";ctx.fillRect(nx-T*.5,ny+T*.62,T,4);
       ctx.fillStyle="#c77dff";ctx.fillRect(nx-T*.5,ny+T*.62,T*Math.max(0,n.hp/n.maxHp),4);
     }
+    if(n.slashT>0){
+      const angle=Math.atan2(n.faceY||0,n.faceX||1);ctx.strokeStyle="#e8e2cf";ctx.lineWidth=3;ctx.beginPath();ctx.arc(nx,ny,T,angle-Math.PI/2,angle+Math.PI/2);ctx.stroke();
+    }
+    if(n.interactable!==false&&!n.hostile){
+      const by=ny-T*(n.r+1.05),bw=T*.72,bh=T*.48;
+      ctx.fillStyle="rgba(23,24,39,.94)";ctx.strokeStyle="#ffd76e";ctx.lineWidth=1.5;
+      roundRect(nx-bw/2,by-bh/2,bw,bh,5);ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.moveTo(nx-T*.08,by+bh/2);ctx.lineTo(nx,by+bh/2+T*.14);ctx.lineTo(nx+T*.08,by+bh/2);ctx.fill();
+      ctx.fillStyle="#ffe9b3";
+      for(const ox of[-.16,0,.16]){ctx.beginPath();ctx.arc(nx+T*ox,by,T*.045,0,7);ctx.fill();}
+    }
   }
 
   for(let i=segPos.length-1;i>=0;i--){
@@ -2674,6 +2794,25 @@ function goalText(){
   if(g.type==="survive")return"目标 存活 "+Math.max(0,Math.ceil(g.time-t))+"s"+(g.kills?" · 击杀 "+kills+"/"+g.kills:"");
   return"";
 }
+function renderStomachCarousel(status){
+  const host=document.getElementById("stomachSlots"),slots=status.slots,selected=status.selected.index;
+  const key=selected+"|"+slots.map(slot=>slot.id+":"+(slot.id==="bean"?beanAmmo():slot.count)).join("|");if(key===stomachHudKey)return;stomachHudKey=key;
+  const cells=new Array(5).fill(null),used=new Set();
+  cells[2]=slots[selected];used.add(selected);
+  for(let step=1;step<=2;step++){
+    const prev=(selected-step+slots.length)%slots.length,next=(selected+step)%slots.length;
+    if(!used.has(prev)){cells[2-step]=slots[prev];used.add(prev);}
+    if(!used.has(next)){cells[2+step]=slots[next];used.add(next);}
+  }
+  host.innerHTML="";cells.map((slot,index)=>{
+    const cell=document.createElement("span");cell.className="stomach-slot"+(index===2?" selected":"")+(slot?"":" empty");
+    if(!slot)return cell;
+    const count=slot.id==="bean"?beanAmmo():slot.count;
+    const icon=document.createElement("b");icon.className="stomach-icon";icon.textContent=slot.id==="bean"?"●":slot.id==="ironSword"?"†":slot.id.includes("Bones")?"☠":"◆";
+    const label=document.createElement("small");label.className="stomach-label";label.textContent=slot.item.shortName+(count>0?" ×"+count:" 空");
+    cell.appendChild(icon);cell.appendChild(label);return cell;
+  }).forEach(cell=>host.appendChild(cell));
+}
 function updateHud(){
   document.getElementById("pauseMenu").style.display=
     (paused&&alive&&gameState==="play")?"flex":"none";
@@ -2696,10 +2835,7 @@ function updateHud(){
   const stomachStatus=stomach.status();
   document.getElementById("stomachPrev").textContent=InputMap.bindingLabel(1,"prevItem")+" ◀";
   document.getElementById("stomachNext").textContent="▶ "+InputMap.bindingLabel(1,"nextItem");
-  document.getElementById("stomachSlots").textContent=stomachStatus.slots.map(slot=>{
-    const count=slot.id==="bean"?beanAmmo():slot.count,label=slot.item.shortName+" "+(count>0?"×"+count:"空");
-    return slot.selected?"【"+label+"】":label;
-  }).join("  ");
+  renderStomachCarousel(stomachStatus);
   document.getElementById("helpFire").textContent=InputMap.bindingLabel(1,"fire");
   document.getElementById("helpInteract").textContent=InputMap.bindingLabel(1,"interact");
   document.getElementById("helpPrev").textContent=InputMap.bindingLabel(1,"prevItem");

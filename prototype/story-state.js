@@ -3,14 +3,21 @@
 (function(root){
   const busRef=()=>root.IMS_STORY_EVENTS&&root.IMS_STORY_EVENTS.bus;
   const clone=value=>JSON.parse(JSON.stringify(value));
+  const actorDefaults=()=>({status:"unknown",location:null,met:false,corpsePresent:false});
+  function ensureActor(state,id,patch){
+    state.actors=state.actors||{};
+    state.actors[id]=Object.assign(actorDefaults(),state.actors[id]||{},patch||{});
+    return state.actors[id];
+  }
 
   function defaultState(){
     return {
       schemaVersion:1,storyId:"prologue",chapter:"prologue",
       currentNode:"Start",currentMap:null,
-      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false},
-      actors:{keti:{status:"unknown",met:false,corpsePresent:false}},
-      counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0},
+      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,findAjianAccepted:false,findAjianDeclined:false},
+      actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults()},
+      worldItems:{},
+      counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0,chapterBeansEaten:0,chapterBeansSpit:0},
       player:{name:"",bodyLength:4},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
     };
   }
@@ -26,7 +33,7 @@
     out.flags=Object.assign({},base.flags,input.flags||{});
     out.actors={};
     const actorIds=new Set([...Object.keys(base.actors),...Object.keys(input.actors||{})]);
-    actorIds.forEach(id=>{out.actors[id]=Object.assign({},base.actors[id]||{},(input.actors&&input.actors[id])||{});});
+    actorIds.forEach(id=>{out.actors[id]=Object.assign(actorDefaults(),base.actors[id]||{},(input.actors&&input.actors[id])||{});});
     out.counters=Object.assign({},base.counters,input.counters||{});
     out.player=Object.assign({},base.player,input.player||{});
     out.inventory=clone(input.inventory||base.inventory);
@@ -60,5 +67,5 @@
     }
   }
 
-  root.IMS_STORY_STATE={defaultState,mergeDefaults,StoryStateStore};
+  root.IMS_STORY_STATE={defaultState,mergeDefaults,actorDefaults,ensureActor,StoryStateStore};
 })(typeof window!=="undefined"?window:globalThis);

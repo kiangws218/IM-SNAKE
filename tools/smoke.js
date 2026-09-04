@@ -134,7 +134,7 @@ try{
       const buttons=[...els["npcOpts"].children],wanted=buttons.find(button=>button.textContent.startsWith(label));
       if(wanted){wanted.onclick();frames(1);return;}
       const next=buttons.find(button=>button.textContent.startsWith("继续"));
-      if(!next)throw new Error("Story choice not found: "+label);
+      if(!next)throw new Error("Story choice not found: "+label+" (buttons: "+buttons.map(button=>button.textContent).join(" | ")+")");
       next.onclick();frames(1);
     }
     throw new Error("Story dialogue did not reach choice: "+label);
@@ -200,6 +200,34 @@ try{
     throw new Error("Story map checkpoint retry did not restore the wilderness entry state");
   if(sandbox.__IMS.stomach.slots.some(slot=>slot.id==="ketiCorpse"&&slot.count>0))throw new Error("Story checkpoint retry kept post-checkpoint stomach items");
   console.log("[story map checkpoint retry] OK");
+  sandbox.storyDirector().runtime.enter("chapter1_start");frames(2);
+  if(sandbox.storyDirector().runtime.node.id!=="chapter1_explore")throw new Error("Chapter one did not enter free exploration");
+  const sword=sandbox.__IMS.stomachPickups.find(item=>item.storyId==="forest_sword");
+  const ajie=sandbox.__IMS.npcs.find(n=>n.storyId==="ajie"),lisi=sandbox.__IMS.npcs.find(n=>n.storyId==="lisi");
+  if(!sword||!ajie||!lisi||ajie.damageable!==false||lisi.damageable!==false)throw new Error("Chapter one forest actors or sword were not spawned safely");
+  if(sandbox.projectileDamage({owner:1,payload:{damageMult:2}})!==sandbox.beanDamage(1)*2||sandbox.projectileDamage({owner:1,payload:{damage:2}})!==2)throw new Error("Chapter one projectile damage descriptors were not applied");
+  for(let i=0;i<10;i++)sandbox.IMS_STORY_API.engineEvent("beanEaten",{});
+  if(sandbox.storyDirector().runtime.node.id!=="chapter1_hunger")throw new Error("Chapter hunger OR counter did not trigger at ten eaten beans");
+  chooseStory("继续探索");
+  sandbox.storyControllerInteraction("item",sword);frames(1);
+  if(sandbox.storyDirector().runtime.node.id!=="chapter1_sword")throw new Error("Sword interaction did not open its story node");
+  chooseStory("吃掉铁剑");chooseStory("离开");
+  if(!sandbox.__IMS.stomach.slots.some(slot=>slot.id==="ironSword"&&slot.count===1))throw new Error("Sword was not stored in the stomach");
+  sandbox.storyControllerInteract(ajie);frames(1);chooseStory("离开");
+  if(sandbox.storyDirector().runtime.node.id!=="chapter1_explore")throw new Error("Leaving the first encounter did not return to exploration");
+  sandbox.storyControllerInteract(ajie);frames(1);chooseStory("吃掉丽丝");
+  if(!sandbox.__IMS.stomach.slots.some(slot=>slot.id==="lisi"&&slot.count===1))throw new Error("Swallowed Lisi was not stored as an actor item");
+  chooseStory("吐出丽丝");chooseStory("离开");
+  const releasedLisi=sandbox.__IMS.npcs.find(n=>n.storyId==="lisi");
+  if(!releasedLisi||!releasedLisi.unconscious||releasedLisi.interactable!==false)throw new Error("Released Lisi was not left unconscious and non-interactive");
+  sandbox.startStoryStage();frames(2);
+  const combatAjie=sandbox.__IMS.npcs.find(n=>n.storyId==="ajie");
+  sandbox.storyControllerInteract(combatAjie);frames(1);chooseStory("吃掉丽丝");chooseStory("迎战");frames(1);
+  if(!combatAjie.hostile||combatAjie.damageable!==true)throw new Error("Ajie combat did not enable hostile damage state");
+  combatAjie.hp=0;frames(2);
+  if(sandbox.storyDirector().runtime.node.id!=="chapter1_ajie_downed_wait"||!combatAjie.downed)throw new Error("Ajie did not enter protected downed interaction state");
+  sandbox.storyControllerInteract(combatAjie);frames(1);chooseStory("离开");
+  console.log("[chapter one forest + hunger + sword + encounter] OK");
   els["pauseHome"].onclick();
   frames(2);
   els["ovBtn3"].onclick();

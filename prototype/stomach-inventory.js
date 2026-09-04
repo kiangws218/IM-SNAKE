@@ -10,7 +10,12 @@
     // Bean ammunition is already represented by the snake's ordinary body
     // length. Only special stomach contents add reserved length here.
     bean: { id: "bean", name: "豆子", shortName: "豆子", maxStack: Infinity, length: 0 },
-    ketiCorpse: { id: "ketiCorpse", name: "可蒂的尸体", shortName: "可蒂尸体", maxStack: 1, length: 2, color: "#f5f5fa" }
+    ketiCorpse: { id: "ketiCorpse", name: "可蒂的尸体", shortName: "可蒂尸体", maxStack: 1, length: 2, actorId: "keti", color: "#f5f5fa" },
+    ironSword: { id: "ironSword", name: "生锈的铁剑", shortName: "铁剑", maxStack: 1, length: 1, damageMult: 2, dragMult: 2, color: "#aeb3bd" },
+    ajie: { id: "ajie", name: "昏迷的阿杰", shortName: "阿杰", maxStack: 1, length: 1, actorId: "ajie", releaseActor: true, color: "#6d83b3" },
+    lisi: { id: "lisi", name: "昏迷的丽丝", shortName: "丽丝", maxStack: 1, length: 1, actorId: "lisi", releaseActor: true, color: "#d68aa8" },
+    ajieBones: { id: "ajieBones", name: "阿杰的骨头", shortName: "阿杰骨头", maxStack: 1, length: 1, damage: 2, actorId: "ajie", color: "#e8e2cf" },
+    lisiBones: { id: "lisiBones", name: "丽丝的骨头", shortName: "丽丝骨头", maxStack: 1, length: 1, damage: 2, actorId: "lisi", color: "#e8e2cf" }
   };
 
   function copy(value) {
@@ -67,6 +72,17 @@
   };
 
   StomachInventory.prototype.addBeans = function (amount) { return this.add("bean", amount); };
+
+  StomachInventory.prototype.remove = function (id, amount) {
+    amount = clampInt(amount, 1);
+    for (var i = 0; i < this.slots.length; i += 1) {
+      if (this.slots[i].id !== id) continue;
+      var removed = Math.min(amount, this.slots[i].count), item = this._item(id);
+      this.slots[i].count -= removed;
+      return { removed: removed, removedWeight: removed * (Number(item.length) || 0), item: copy(item), remaining: this.slots[i].count };
+    }
+    return { removed: 0, removedWeight: 0, item: copy(this._item(id)), remaining: 0 };
+  };
 
   StomachInventory.prototype.getCount = function (id) {
     for (var i = 0; i < this.slots.length; i += 1) if (this.slots[i].id === id) return this.slots[i].count;

@@ -12,7 +12,7 @@
 
   let director=null,lastMap=null,gateSent=false,exitSent=false,observedEnemies=0;
   let exitTimeoutHandle=null,exitTimeoutPending=false;
-  let ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};
+  let ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};
   const saveStore=SaveApi?new SaveApi.StorySaveStore():null;
 
   const eventType=name=>T[name]||name;
@@ -37,13 +37,14 @@
     ownership={
       actors:new Set(interactions.actors||[]),
       mechanics:new Set(interactions.mechanics||interactions.mechs||[]),
-      exits:new Set(interactions.exits||[])
+      exits:new Set(interactions.exits||[]),
+      items:new Set(interactions.items||[])
     };
   }
 
   function targetId(target){return typeof target==="string"?target:target&&(target.storyId||target.id||target.kind)||"";}
   function owns(kind,target){
-    const key=kind==="actor"?"actors":kind==="mechanic"?"mechanics":kind==="exit"?"exits":"";
+    const key=kind==="actor"?"actors":kind==="mechanic"?"mechanics":kind==="exit"?"exits":kind==="item"?"items":"";
     return !!key&&ownership[key].has(targetId(target));
   }
 
@@ -71,16 +72,18 @@
   function saveCurrent(){
     if(!director||!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
     const state=director.runtime.state.snapshot();
+    Object.entries(director.actors||{}).forEach(([actorId,actor])=>{if(actor){const saved=state.actors[actorId]||(state.actors[actorId]={});saved.x=actor.x;saved.y=actor.y;if(actor.downed)saved.status="downed";else if(actor.unconscious)saved.status="unconscious";}});
+    const sword=stomachPickups.find(item=>item.id==="ironSword");if(sword)state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:sword.x,y:sword.y};
     return saveStore.save(director.slot,state,{currentNode:state.currentNode,currentMap:lastMap,completed:state.flags&&state.flags.storyCompleted});
   }
 
   function loadMap(args){
     const id=args.mapId,map=MS[id];if(!map)throw new Error("Unknown story map: "+id);
-    lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
-    updateState(state=>{state.currentMap=id;},"map_selected");
-    playMode="story";storyStage=id===TM?0:5;reset(true);buildFromLevel(levelFromMap(map));
+    const previousMap=lastMap;lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
+    updateState(state=>{if(previousMap&&previousMap!==id)Object.keys(state.actors||{}).forEach(actorId=>{const actor=state.actors[actorId];if(actor.status==="unconscious"&&actor.location===previousMap&&!String(previousMap).includes("camp")){actor.status="dead";actor.location=null;}});if(map.chapter&&state.chapter!==map.chapter){state.chapter=map.chapter;state.counters.chapterBeansEaten=0;state.counters.chapterBeansSpit=0;state.flags.chapter1HungerSeen=false;state.flags.chapter1HungerPending=false;}state.currentMap=id;},"map_selected");
+    playMode="story";storyStage=id===TM?0:id===WM?5:8;reset(true);buildFromLevel(levelFromMap(map));
     groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
-    enemies.length=0;npcs.length=0;
+    enemies.length=0;npcs.length=0;director.actors={};director.items={};
     const spawn=(args.entry&&map.entryPoints&&map.entryPoints[args.entry])||map.spawn;
     snake.fx=spawn.x;snake.fy=spawn.y;dir=spawn.dir;
     if(typeof root.restoreStomachInventory==="function")root.restoreStomachInventory(snapshot().inventory);
@@ -88,15 +91,16 @@
     coilPath();computeSegs();computeEnclosure();
     const rules=map.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;
     for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();
-    if(id===WM){
-      const spec=map.npcs&&map.npcs[0],status=snapshot().actors.keti.status;
-      if(spec&&status!=="dead"&&status!=="eaten"){
-        const type=NPC_TYPES.keti;
-        director.keti={storyId:"keti",kind:"keti",x:spec.x,y:spec.y,r:type.r,hp:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false};
-        npcs.push(director.keti);
-        updateState(state=>{state.actors.keti.status="alive";},"keti_spawn");
-      }
-    }
+    (map.enemySpawns||[]).forEach(enemyAt);
+    (map.items||[]).forEach(spec=>{const storyId=spec.storyId||spec.id,saved=snapshot().worldItems&&snapshot().worldItems[storyId];if(saved&&saved.status==="stomach")return;const item={storyId,id:spec.id,x:saved&&saved.status==="ground"?saved.x:spec.x,y:saved&&saved.status==="ground"?saved.y:spec.y,interactive:saved&&saved.status==="ground"?false:!!spec.interactive,inside:false};stomachPickups.push(item);director.items[item.storyId]=item;});
+    (map.npcs||[]).forEach(spec=>{
+      const actorId=spec.id||spec.kind,type=NPC_TYPES[spec.kind],actor=snapshot().actors[actorId];
+      if(!type||actor&&["dead","eaten","swallowed","bones","left"].includes(actor.status))return;
+      const status=actor&&actor.status||"unknown",inactive=status==="unconscious",downed=status==="downed";
+      const npc={storyId:actorId,actorId,kind:spec.kind,x:Number.isFinite(actor&&actor.x)?actor.x:spec.x,y:Number.isFinite(actor&&actor.y)?actor.y:spec.y,r:type.r,hp:downed?0:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false,unconscious:inactive,downed,damageable:inactive||downed?false:spec.damageable!==false,interactable:inactive?false:spec.interactable!==false,speed:Number(spec.speed)||0,patrol:inactive||downed?null:spec.patrol||null,patrolIndex:0};
+      npcs.push(npc);director.actors[actorId]=npc;if(actorId==="keti")director.keti=npc;
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:status==="unknown"?"alive":status,location:id,x:npc.x,y:npc.y});},actorId+"_spawn");
+    });
     observedEnemies=enemies.length;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
     heldKeys.clear();dirQueue.length=0;moveLock=false;
     document.getElementById("overlay").classList.remove("show");
@@ -105,13 +109,13 @@
     document.getElementById("pickList").innerHTML="";
     ensurePrimarySpawnSafe();
     emit("MAP_LOADED",{mapId:id,spawnId:args.entry||null,clearForwardSeconds:3});
-    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":"地图 2 · 荒野：寻找哭声");
-    rememberCheckpoint(id===TM?"prologue_start":"wilderness_start");
+    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":id===WM?"地图 2 · 荒野：寻找哭声":"第一章 · 森林：自由探索");
+    rememberCheckpoint(args.checkpoint||(id===TM?"prologue_start":id===WM?"wilderness_start":"chapter1_start"));
   }
 
   function dialogue(args){
     const data=Dialogue.normalize(args),pages=data.pages.map(withHints);
-    let pageIndex=0;
+    const continuing=panelOpen;let pageIndex=0;
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;panelNpc=null;npcNode=null;
     if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
     const panel=ensurePanel(),say=document.getElementById("npcSay"),options=document.getElementById("npcOpts");
@@ -119,19 +123,22 @@
     document.getElementById("npcName").textContent=data.speaker||"我";
     document.getElementById("npcSub").textContent=data.sub||"序章";
     drawPortraitInto(document.getElementById("npcPortrait"),data.portrait||"snake_self",!!data.crying);
+    if(!continuing&&typeof root.resetPanelDialogue==="function")root.resetPanelDialogue();
 
     const render=()=>{
       if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
-      say.textContent=pages[pageIndex];options.innerHTML="";say.onclick=null;
+      if(typeof root.appendPanelDialogue==="function")root.appendPanelDialogue(pages[pageIndex]);else say.textContent=pages[pageIndex];
+      options.innerHTML="";say.onclick=null;
       if(pageIndex<pages.length-1){
         const next=document.createElement("button");next.className="npc-opt";next.textContent="继续 "+hint("interact");
         const advance=()=>{pageIndex++;render();};
         next.onclick=advance;say.onclick=advance;options.appendChild(next);
       }else{
-        (data.choices||[{id:"continue",label:"继续"}]).forEach(choice=>{
+        const choices=director.runtime.getChoices();
+        (choices.length?choices:[{id:"continue",label:"继续"}]).forEach(choice=>{
           const button=document.createElement("button");
           button.className="npc-opt"+(choice.danger?" red":"");button.textContent=withHints(choice.label)+" "+hint("interact");
-          button.onclick=()=>{closeDialogue();director.runtime.choose(choice.id);};
+          button.onclick=()=>{const next=director.runtime.graph[choice.next],keepsTranscript=!!(next&&next.onEnter&&next.onEnter.name==="dialog");if(!keepsTranscript)closeDialogue();director.runtime.choose(choice.id);};
           options.appendChild(button);
         });
       }
@@ -194,6 +201,24 @@
     exitTimeoutHandle=setTimeout(()=>{exitTimeoutHandle=null;exitTimeoutPending=true;},30000);
     director.runtime.waitFor({events:[eventType("MAP_EXIT_ENTERED")],target:"wilderness_start"});
   }
+  function chapterExplore(){
+    closeDialogue();
+    if(snapshot().flags.chapter1HungerPending&&!snapshot().flags.chapter1HungerSeen){director.runtime.follow("chapter1_hunger");return;}
+    director.runtime.waitFor({events:[eventType("CHAPTER1_HUNGER_READY"),eventType("ITEM_INTERACTED"),eventType("ACTOR_INTERACTED")],target:event=>{
+      if(event.type===eventType("CHAPTER1_HUNGER_READY"))return"chapter1_hunger";
+      if(event.type===eventType("ITEM_INTERACTED"))return"chapter1_sword";
+      const state=snapshot(),ajie=state.actors.ajie.status==="alive",lisi=state.actors.lisi.status==="alive";
+      if(state.flags.chapter1SwordRecognizedPending){updateState(next=>{next.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_notice_consumed");return ajie&&lisi?"chapter1_sword_recognized":ajie?"chapter1_sword_recognized_ajie":lisi?"chapter1_sword_recognized_lisi":"chapter1_explore";}
+      return ajie&&lisi?"chapter1_meeting":lisi?"chapter1_lisi_only":ajie?"chapter1_ajie_only":"chapter1_explore";
+    }});
+  }
+  function takeSword(){const item=director.items.forest_sword;if(item&&root.collectStoryItem(item)){updateState(state=>{state.flags.chapter1SwordTaken=true;state.worldItems.forest_sword={status:"stomach",mapId:lastMap};},"chapter1_sword_taken");}}
+  function swallowActor(actorId){const actor=director.actors[actorId];if(actor&&root.swallowStoryNPC(actor))director.actors[actorId]=null;}
+  function releaseActor(actorId){const actor=snapshot().actors[actorId]||{};if(root.releaseStoryActor(actorId,actor.x,actor.y))director.actors[actorId]=npcs.find(n=>targetId(n)===actorId)||null;}
+  function dropSword(){const item=root.dropStoryItem("ironSword");if(item)updateState(state=>{state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:item.x,y:item.y};state.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_dropped");}
+  function startAjieCombat(){const actor=director.actors.ajie;if(actor){actor.hostile=true;actor.damageable=true;actor.interactable=false;actor.attackTarget="body";actor.bodyHits=0;actor.attackPhase=null;actor.chaseElapsed=0;}}
+  function waitAjieCombat(){closeDialogue();director.runtime.waitFor({events:[eventType("AJIE_DOWNED"),eventType("AJIE_LEFT")],target:event=>event.type===eventType("AJIE_DOWNED")?"chapter1_ajie_downed_wait":"chapter1_explore"});}
+  function waitDownedInteraction(){closeDialogue();director.runtime.waitFor({events:[eventType("ACTOR_INTERACTED")],predicate:event=>event.payload&&event.payload.actorId==="ajie",target:"chapter1_ajie_downed"});}
 
   const conditions={
     tutorialBeans3:()=>count("tutorialBeansEaten")>=3,
@@ -206,9 +231,11 @@
     ketiFirstContact:event=>event.type===eventType("ACTOR_INTERACTED")?"keti_question":event.type===eventType("ACTOR_EATEN")?"eaten_slimes":"keti_dead",
     ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead"
   };
-  const choiceActions={waitForWall:wallWait,waitForExit:exitWait};
+  const choiceActions={waitForWall:wallWait,waitForExit:exitWait,takeSword,swallowAjie:()=>swallowActor("ajie"),swallowLisi:()=>swallowActor("lisi"),releaseAjie:()=>releaseActor("ajie"),releaseLisi:()=>releaseActor("lisi"),dropSword,startAjieCombat};
 
-  function compileChoice(choice){const compiled=Object.assign({},choice);if(choice.action){compiled.run=choiceActions[choice.action];delete compiled.action;}return compiled;}
+  const hasItem=(state,id)=>!!(state.inventory&&state.inventory.slots||[]).find(slot=>slot.id===id&&slot.count>0);
+  const choiceConditions={hasSword:state=>hasItem(state,"ironSword"),hasAjie:state=>hasItem(state,"ajie"),hasLisi:state=>hasItem(state,"lisi"),ajieAlive:state=>state.actors.ajie.status==="alive",lisiAlive:state=>state.actors.lisi.status==="alive"};
+  function compileChoice(choice){const compiled=Object.assign({},choice);if(typeof choice.when==="string"){compiled.when=choiceConditions[choice.when];if(typeof compiled.when!=="function")throw new Error("Unknown story choice condition: "+choice.when);}if(choice.action){compiled.run=choiceActions[choice.action];if(typeof compiled.run!=="function")throw new Error("Unknown story choice action: "+choice.action);delete compiled.action;}return compiled;}
   function compileNode(node){
     const compiled={id:node.id,goal:node.goal,progress:node.progress};
     if(node.dialogue){const args=Object.assign({},node.dialogue,{choices:(node.dialogue.choices||[]).map(compileChoice)});compiled.onEnter={name:"dialog",args};}
@@ -226,6 +253,13 @@
       if(currentNode()==="wilderness_keti_wait"){
         director.keti=target;updateState(state=>{state.actors.keti.met=true;},"keti_met");emit("ACTOR_INTERACTED",{actorId:targetId(target)});
       }
+      else if(currentNode()==="chapter1_explore")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
+      else if(currentNode()==="chapter1_ajie_downed_wait")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
+      return true;
+    }
+    if(kind==="item"){
+      target.inside=true;
+      if(currentNode()==="chapter1_explore")emit("ITEM_INTERACTED",{itemId:targetId(target)});
       return true;
     }
     if(payload&&typeof payload.apply==="function")payload.apply();
@@ -235,15 +269,36 @@
   function engineEvent(name,payload){
     if(!director||!storyActive||playMode!=="story")return;
     if(name==="beanEaten"){
-      updateState(state=>{state.counters.tutorialBeansEaten++;state.player.bodyLength=snake.len;},"bean_eaten");emit("PLAYER_BEAN_EATEN",{count:count("tutorialBeansEaten")});
+      updateState(state=>{state.counters.tutorialBeansEaten++;if(state.chapter==="chapter1")state.counters.chapterBeansEaten++;state.player.bodyLength=snake.len;},"bean_eaten");emit("PLAYER_BEAN_EATEN",{count:count("tutorialBeansEaten")});
     }else if(name==="beanSpit"){
-      updateState(state=>{state.counters.tutorialBeansSpit++;state.player.bodyLength=snake.len;},"bean_spit");emit("PLAYER_BEAN_SPIT",{count:count("tutorialBeansSpit")});
+      updateState(state=>{state.counters.tutorialBeansSpit++;if(state.chapter==="chapter1")state.counters.chapterBeansSpit++;state.player.bodyLength=snake.len;},"bean_spit");emit("PLAYER_BEAN_SPIT",{count:count("tutorialBeansSpit")});
     }else if(name==="actorDied"||name==="actorEaten"){
       const actor=payload&&payload.actor;if(!actor||!owns("actor",actor))return;
-      const eaten=name==="actorEaten";
-      updateState(state=>{state.actors.keti.status=eaten?"eaten":"dead";state.actors.keti.corpsePresent=!eaten;},eaten?"keti_eaten":"keti_dead");emit(eaten?"ACTOR_EATEN":"ACTOR_DIED",{actorId:targetId(actor)});
+      const eaten=name==="actorEaten",actorId=targetId(actor);
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:eaten?(actorId==="keti"?"eaten":"swallowed"):"dead",location:eaten?"stomach":lastMap,corpsePresent:!eaten});},eaten?actorId+"_eaten":actorId+"_dead");emit(eaten?"ACTOR_EATEN":"ACTOR_DIED",{actorId});
+    }else if(name==="actorReleased"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:"unconscious",location:lastMap,x:payload.x,y:payload.y});},actorId+"_released");
+      if(actorId==="lisi"&&director.actors.ajie&&director.actors.ajie.hostile){director.actors.ajie.hostile=false;director.actors.ajie.damageable=false;director.actors.ajie.interactable=false;director.actors.ajie.resting=6;director.runtime.follow("chapter1_lisi_released");}
+    }else if(name==="actorDowned"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:"downed",location:lastMap});},actorId+"_downed");emit("AJIE_DOWNED",{actorId});
+    }else if(name==="actorLeft"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:"left",location:null});},actorId+"_left");emit("AJIE_LEFT",{actorId});
+    }else if(name==="worldItemDropped"){
+      if(payload&&payload.id==="ironSword"){
+        const noticed=Object.values(director.actors||{}).some(actor=>actor&&!actor.unconscious&&!actor.hostile&&Math.hypot(actor.x-payload.x,actor.y-payload.y)<=2);
+        updateState(state=>{state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:payload.x,y:payload.y};if(noticed)state.flags.chapter1SwordRecognizedPending=true;},"chapter1_sword_ground");
+      }
+    }else if(name==="ajieBodyLearned"){
+      if(currentNode()==="chapter1_combat_pending")director.runtime.follow("chapter1_ajie_body_learned");
     }else if(name==="inventoryChanged"){
-      updateState(state=>{state.inventory=payload.inventory;state.player.bodyLength=payload.bodyLength||snake.len;},payload.reason||"inventory_changed");saveCurrent();
+      updateState(state=>{state.inventory=payload.inventory;state.player.bodyLength=payload.bodyLength||snake.len;if((payload.inventory.slots||[]).some(slot=>slot.id==="ironSword"&&slot.count>0))state.worldItems.forest_sword={status:"stomach",mapId:lastMap};},payload.reason||"inventory_changed");saveCurrent();
+    }
+    const state=snapshot();
+    if(state&&state.chapter==="chapter1"&&!state.flags.chapter1HungerSeen&&!state.flags.chapter1HungerPending&&(state.counters.chapterBeansEaten>=10||state.counters.chapterBeansSpit>=10)){
+      updateState(next=>{next.flags.chapter1HungerPending=true;},"chapter1_hunger_pending");emit("CHAPTER1_HUNGER_READY",{});
     }
   }
 
@@ -266,7 +321,7 @@
   function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
 
   function createDirector(state,slot){
-    return {slot,spawned:false,keti:null,checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,freeExplore,memoryBlur,nameInput,storyEnd}})};
+    return {slot,spawned:false,keti:null,actors:{},items:{},checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,freeExplore,memoryBlur,nameInput,storyEnd,chapterExplore,waitAjieCombat,waitDownedInteraction}})};
   }
 
   function start(slot){
@@ -287,7 +342,7 @@
     return {ok:true,slot:director.slot,resumed:true,legacy:!!loaded.legacy};
   }
   function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
-  function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
+  function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
 
   root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
   root.storyControllerInteraction=routeInteraction;

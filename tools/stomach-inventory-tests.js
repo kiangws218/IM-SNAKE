@@ -63,4 +63,16 @@ test("snapshot and restore preserve counts, selection, and length", () => {
   assert.strictEqual(restored.getLengthContribution(), 2);
 });
 
+test("chapter one special items expose projectile and identity rules", () => {
+  const inv = new StomachInventory();
+  assert.strictEqual(inv.add("ironSword").item.damageMult, 2);
+  assert.strictEqual(inv.getLengthContribution(), 1);
+  assert.strictEqual(inv.add("ajieBones").item.damage, 2);
+  assert.strictEqual(inv.add("lisiBones").item.actorId, "lisi");
+  assert.strictEqual(inv.getLengthContribution(), 3);
+  const removed = inv.remove("ajieBones");
+  assert.strictEqual(removed.removedWeight, 1);
+  assert.strictEqual(inv.getCount("ajieBones"), 0);
+});
+
 console.log("stomach inventory tests: all green");
