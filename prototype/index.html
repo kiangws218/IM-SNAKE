@@ -672,7 +672,7 @@ function spawnReleasedActor(actorId,x,y,hp){
   if(!type||!spot)return false;
   const remainingHp=Number.isFinite(Number(hp))?Math.max(0,Number(hp)):type.hp;
   const special=actorId==="ajian";
-  npcs.push({kind:actorId,storyId:actorId,actorId,x:spot.x+.5,y:spot.y+.5,r:type.r,hp:remainingHp,maxHp:type.hp,flash:0,inside:false,unconscious:true,interactable:special,damageable:false,storyProtected:special});
+  npcs.push({kind:actorId,storyId:actorId,actorId,x:spot.x+.5,y:spot.y+.5,r:type.r,hp:remainingHp,maxHp:type.hp,flash:0,inside:false,unconscious:true,interactable:true,damageable:false,storyProtected:special});
   notifyStoryEvent("actorReleased",{actorId,x:spot.x+.5,y:spot.y+.5,hp:remainingHp});return true;
 }
 function launchStomachPayload(id,item,actorHp){
@@ -725,6 +725,13 @@ function cycleStomach(direction){
 }
 
 function pickUps(){
+  for(let i=projs.length-1;i>=0;i--){
+    const p=projs[i];
+    if(p.payloadId||p.owner!==1||p.grace>0||Math.hypot(p.x-snake.fx,p.y-snake.fy)>=RUN.pickupR)continue;
+    projs.splice(i,1);snake.len++;beansEaten++;projRecycled++;
+    notifyStoryEvent("beanEaten",{bean:{x:p.x,y:p.y,fromProj:true,flying:true}});
+    ftext(p.x,p.y,"飞行回收 +1","#8fe36b");puff(p.x,p.y,"#8fe36b");
+  }
   for(let i=groundBeans.length-1;i>=0;i--){
     const b=groundBeans[i];
     if(Math.hypot(b.x+.5-snake.fx,b.y+.5-snake.fy)<RUN.pickupR){
@@ -1180,7 +1187,7 @@ function spawnEnemy(type,ax,ay){
       const a=Math.random()*Math.PI*2,d=5+rnd(4);
       x=Math.round(ax+Math.cos(a)*d);y=Math.round(ay+Math.sin(a)*d);
     }else{x=rnd(CFG.cols);y=rnd(CFG.rows);}
-    if(!inB(x,y)||!reachMask[K(x,y)]||!isFree(x,y))continue;
+    if(!inB(x,y)||!reachMask[K(x,y)]||!isFree(x,y)||enemies.some(other=>Math.hypot(x+.5-other.x,y+.5-other.y)<T.r+other.r+.1))continue;
     const near=nearestPlayer(x+.5,y+.5);if(near&&Math.hypot(x+.5-near.x,y+.5-near.y)<4)continue;
     const e={type,x:x+.5,y:y+.5,flash:0,hitT:0,hp:T.hp,max:T.hp,r:T.r,
       vx:0,vy:0,wanderT:0,squash:rnd(6)};
@@ -1189,6 +1196,19 @@ function spawnEnemy(type,ax,ay){
     if(T.kind==="charger")Object.assign(e,{state:"idle",stT:0});
     if(T.kind==="bomber")Object.assign(e,{state:"seek",stT:0});
     enemies.push(e);return;
+  }
+}
+
+function separateEnemies(){
+  for(let i=0;i<enemies.length;i++)for(let j=i+1;j<enemies.length;j++){
+    const a=enemies[i],b=enemies[j],minimum=a.r+b.r+.04;
+    const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+    if(d>=minimum)continue;
+    const angle=(i*2.399+j)*2.1,ux=d<.001?Math.cos(angle):dx/d,uy=d<.001?Math.sin(angle):dy/d,push=(minimum-d)/2;
+    const ax=a.x-ux*push,ay=a.y-uy*push,bx=b.x+ux*push,by=b.y+uy*push;
+    const movedA=circleVsSolids(ax,ay,a.r)===null;if(movedA){a.x=ax;a.y=ay;}
+    if(circleVsSolids(bx,by,b.r)===null){b.x=bx;b.y=by;}
+    else if(!movedA&&circleVsSolids(b.x+ux*push*2,b.y+uy*push*2,b.r)===null){b.x+=ux*push*2;b.y+=uy*push*2;}
   }
 }
 
@@ -1345,7 +1365,7 @@ function updateEnemies(dt){
       if(e.type==="flower")flowersKilled++;
       const drop=T.drops+(e.type==="rat"?e.carried:0);
       if(drop>0)burstBeans(Math.floor(e.x),Math.floor(e.y),drop,e.hitDir?e.hitDir.x:undefined,e.hitDir?e.hitDir.y:undefined,.5);
-      if(Math.random()<CFG.nodeDropChance&&(charges<CFG.nodeMax||CoopMode.needsCharge())){
+      if(!e.type.includes("slime")&&Math.random()<CFG.nodeDropChance&&(charges<CFG.nodeMax||CoopMode.needsCharge())){
         const np=findFreeNear(Math.floor(e.x),Math.floor(e.y),1);
         if(np){pickups.push({x:np.x,y:np.y});ftext(np.x+.5,np.y,"节点掉落！","#ffd76e");}
       }
@@ -1357,6 +1377,7 @@ function updateEnemies(dt){
       puff(e.x,e.y,"#fff");if(e.storyId)notifyStoryEvent("storyEnemyDied",{enemyId:e.storyId});enemies.splice(i,1);
     }
   }
+  separateEnemies();
   biteAcc+=dt;
   if(biteAcc>=1){
     biteAcc-=1;
@@ -1790,14 +1811,6 @@ function ensurePanel(){
   document.body.appendChild(p);
   npcPanelEl=p;return p;
 }
-function settleBeanProjectiles(){
-  for(let i=projs.length-1;i>=0;i--){
-    const p=projs[i];if(p.payloadId)continue;
-    const spot=findFreeNear(Math.floor(snake.fx),Math.floor(snake.fy),6)||findFreeNear(Math.floor(p.x),Math.floor(p.y),20)||{x:Math.floor(snake.fx),y:Math.floor(snake.fy)};
-    groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
-    projs.splice(i,1);
-  }
-}
 function resetPanelDialogue(){const say=document.getElementById("npcSay");if(say)say.innerHTML="";}
 function appendPanelDialogue(text){
   const say=document.getElementById("npcSay");if(!say)return;
@@ -1949,7 +1962,6 @@ function closePanel(){
   panelOpen=false;panelNpc=null;npcNode=null;
   panelInputGate=null;
   freeze=false;moveLock=false;
-  if(!(dir.x===-1&&dir.y===0))dir={x:1,y:0};
 }
 function openCurseCard(card){
   panelOpen=true;freeze=true;
@@ -2479,7 +2491,7 @@ function render(){
   for(let x=x0;x<x1;x++)for(let y=y0;y<y1;y++){
     if((x+y)%2===0){ctx.fillStyle="#151627";ctx.fillRect(x*T,y*T,T,T);}
   }
-  const terrainColors={water:"#155f7d",mountain:"#313746",cliff:"#51433e",camp:"#67482f",altar:"#44365d",caveFloor:"#292735"};
+  const terrainColors={water:"#155f7d",mountain:"#313746",cliff:"#51433e",camp:"#67482f",altar:"#44365d",caveFloor:"#292735",caveEntrance:"#05060a",caveExit:"#05060a",caveVoid:"#080912"};
   for(const t of TERRAINS){
     const r=t.rect||[t.x,t.y,t.w,t.h],rx=r[0],ry=r[1],rw=r[2],rh=r[3];
     ctx.fillStyle=t.color||terrainColors[t.kind]||"#242638";
@@ -2501,6 +2513,12 @@ function render(){
     const r=t.rect||[t.x,t.y,t.w,t.h];
     ctx.fillStyle=t.color||terrainColors[t.kind]||"#242638";
     ctx.fillRect(r[0]*T,r[1]*T,r[2]*T,r[3]*T);
+  }
+  for(const t of TERRAINS){
+    if(t.kind!=="caveEntrance"&&t.kind!=="caveExit")continue;
+    const r=t.rect,cx=(r[0]+r[2]/2)*T,bottom=(r[1]+r[3])*T,w=r[2]*T,h=r[3]*T;
+    ctx.fillStyle="#020309";ctx.beginPath();ctx.ellipse(cx,bottom-h*.48,w*.48,h*.5,0,Math.PI,0);ctx.lineTo(cx+w*.48,bottom);ctx.lineTo(cx-w*.48,bottom);ctx.closePath();ctx.fill();
+    ctx.strokeStyle="#55586b";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(cx,bottom-h*.48,w*.48,h*.5,0,Math.PI,0);ctx.stroke();
   }
   ctx.strokeStyle="#34355a";ctx.lineWidth=4;
   ctx.strokeRect(2,2,CFG.cols*T-4,CFG.rows*T-4);
@@ -2747,6 +2765,13 @@ function render(){
       }
       ctx.fillStyle=warn?"#ff5d5d":"#ffe762";
       ctx.beginPath();ctx.arc(px,py,T*.18,0,7);ctx.fill();
+    }
+    if(e.type==="goblin_archer"){
+      const warn=e.warned&&Math.sin(gameTime*18)>0;
+      ctx.fillStyle=warn?"#c7dc7a":ET.body;ctx.beginPath();ctx.arc(px,py-T*.08,T*.38,0,7);ctx.fill();
+      ctx.fillStyle="#26351e";ctx.beginPath();ctx.moveTo(px-T*.38,py-T*.18);ctx.lineTo(px-T*.62,py-T*.08);ctx.lineTo(px-T*.36,py);ctx.fill();ctx.beginPath();ctx.moveTo(px+T*.38,py-T*.18);ctx.lineTo(px+T*.62,py-T*.08);ctx.lineTo(px+T*.36,py);ctx.fill();
+      ctx.fillStyle="#1a2014";ctx.fillRect(px-T*.2,py-T*.18,T*.1,T*.1);ctx.fillRect(px+T*.1,py-T*.18,T*.1,T*.1);
+      ctx.strokeStyle="#b98a55";ctx.lineWidth=2;ctx.beginPath();ctx.arc(px+T*.4,py,T*.34,-Math.PI/2,Math.PI/2);ctx.stroke();ctx.beginPath();ctx.moveTo(px+T*.4,py-T*.34);ctx.lineTo(px+T*.4,py+T*.34);ctx.stroke();
     }
     if(e.flash>0)ctx.restore();
     if(e.hp<e.max){
@@ -3036,13 +3061,13 @@ function loop(now){
 
 buildPanel();GameSettings.init();reset(false);showMenu();requestAnimationFrame(loop);
 const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debugRoot.__IMS={
-  get world(){return{cols:CFG.cols,rows:CFG.rows};},
+  get world(){return{cols:CFG.cols,rows:CFG.rows};},get config(){return CFG;},
   get npcs(){return npcs;},get snake(){return snake;},get panelOpen(){return panelOpen;},
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},
   get alive(){return alive;},get moveLock(){return moveLock;},
   get mechs(){return MECHS;},get terrain(){return TERRAINS;},get charges(){return charges;},get enemies(){return enemies;},get boss(){return boss;},get bossStakes(){return bossStakes;},
-  get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
+  get groundBeans(){return groundBeans;},get pickups(){return pickups;},get voidCells(){return voidCells;},
   get stomach(){return stomach.status();},get stomachPickups(){return stomachPickups;},get projs(){return projs;},
   openPanel,closePanel,openCurseCard,CURSED_POOL,setWorldSize,openMechanicGate,collectStoryRing,consumeStoryItem,mountStoryActor,restoreStoryRider
 };
