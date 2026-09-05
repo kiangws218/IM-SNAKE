@@ -4,7 +4,8 @@
   const palettes={
     keti:{hair:"#704b3b",skin:"#ffd3b5",cloth:"#f0d7e2",accent:"#82c8df"},
     ajie:{hair:"#253653",skin:"#f1bd98",cloth:"#536b9d",accent:"#d8e5ff"},
-    lisi:{hair:"#8a435d",skin:"#ffd0ae",cloth:"#b85f83",accent:"#ffd2e1"}
+    lisi:{hair:"#8a435d",skin:"#ffd0ae",cloth:"#b85f83",accent:"#ffd2e1"},
+    ajian:{hair:"#5d344f",skin:"#ffd0ae",cloth:"#73558f",accent:"#ffe08a"}
   };
   function palette(id){return palettes[id]||null;}
   function portrait(ctx,id,crying){
@@ -36,6 +37,8 @@
       ctx.beginPath();ctx.arc(0,0,t*.34,0,Math.PI*2);ctx.stroke();ctx.fillStyle="rgba(255,215,110,.2)";
       ctx.beginPath();ctx.arc(0,0,t*.5,0,Math.PI*2);ctx.fill();ctx.restore();return true;
     }
+    if(id==="hotSoup"){ctx.save();ctx.translate(x,y);ctx.fillStyle="#6f4932";ctx.fillRect(-t*.35,-t*.05,t*.7,t*.32);ctx.fillStyle="#e7a95b";ctx.fillRect(-t*.27,-t*.08,t*.54,t*.12);ctx.strokeStyle="#eee1ca";ctx.lineWidth=2;for(const ox of[-.14,.12]){ctx.beginPath();ctx.moveTo(t*ox,-t*.17);ctx.quadraticCurveTo(t*(ox+.08),-t*.32,t*ox,-t*.42);ctx.stroke();}ctx.restore();return true;}
+    if(id==="healingPotion"){ctx.save();ctx.translate(x,y);ctx.fillStyle="#c7b18b";ctx.fillRect(-t*.12,-t*.4,t*.24,t*.14);ctx.fillStyle="#62d98b";ctx.fillRect(-t*.25,-t*.22,t*.5,t*.55);ctx.fillStyle="#c8ffe0";ctx.fillRect(-t*.15,-t*.14,t*.1,t*.25);ctx.restore();return true;}
     if(id!=="ironSword")return false;
     ctx.save();ctx.translate(x,y);ctx.rotate(-.65);
     ctx.fillStyle="#c8ccd5";ctx.fillRect(-t*.08,-t*.48,t*.16,t*.72);

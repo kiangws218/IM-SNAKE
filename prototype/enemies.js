@@ -57,10 +57,14 @@ const ENEMY_TYPES={
     kind:"ranged", name:"针刺花", hp:16, r:.62,
     body:"#b55088", cadence:4, telegraph:.7, bulletSpeed:2, drops:2,
   },
+  goblin_archer:{
+    kind:"ranged", name:"哥布林弓箭手", hp:8, speed:1.4, r:.48,
+    body:"#799447", cadence:2.2, telegraph:.55, bulletSpeed:3, drops:1,
+  },
 };
 
 /* 沙盒模式各类型的同屏上限（选关/战役模式以关卡 caps 为准） */
 const SANDBOX_CAPS={
   slime:3, mini_slime:0, split_slime:2, turtle:2,
-  giant_slime:1, boar:2, bomber:2, rat:2, flower:2,
+  giant_slime:1, boar:2, bomber:2, rat:2, flower:2, goblin_archer:0,
 };

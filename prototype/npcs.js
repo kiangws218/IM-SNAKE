@@ -30,6 +30,7 @@ const NPC_TYPES={
   },
   ajie:{actorId:"ajie",name:"阿杰",sub:"寻找弟弟的冒险者",hp:8,r:.46,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
   lisi:{actorId:"lisi",name:"丽丝",sub:"阿杰的同伴",hp:8,r:.44,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
+  ajian:{actorId:"ajian",name:"阿见",sub:"被哥布林诅咒的冒险者",hp:8,r:.44,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
 };
 
 const DIALOG_TREES={

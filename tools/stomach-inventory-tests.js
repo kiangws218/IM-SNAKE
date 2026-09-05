@@ -79,6 +79,11 @@ test("chapter one special items expose projectile and identity rules", () => {
   const removed = inv.remove("ajieBones");
   assert.strictEqual(removed.removedWeight, 1);
   assert.strictEqual(inv.getCount("ajieBones"), 0);
+  assert.strictEqual(inv.add("ajian").item.releaseActor, true);
+  const potion = inv.add("healingPotion").item;
+  assert.strictEqual(potion.weight, 1);
+  assert.strictEqual(potion.healing, 1);
+  assert.strictEqual(potion.consumableOnImpact, true);
 });
 
 console.log("stomach inventory tests: all green");

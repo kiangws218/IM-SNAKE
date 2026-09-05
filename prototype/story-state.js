@@ -14,12 +14,13 @@
     return {
       schemaVersion:1,storyId:"prologue",chapter:"prologue",
       currentNode:"Start",currentMap:null,
-      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,chapter1MeetingSeen:false,findAjianAccepted:false,findAjianDeclined:false,chapter1RingTaken:false,caveShortcutOpen:false,bridgeSeen:false,bridgeLowered:false},
+      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,chapter1MeetingSeen:false,findAjianAccepted:false,findAjianDeclined:false,chapter1RingTaken:false,caveShortcutOpen:false,bridgeSeen:false,bridgeLowered:false,caveEntered:false,caveSoupDrunk:false,cavePotionTaken:false,ajianFound:false,ajianAwake:false,ajianUntied:false,ajianIdentityKnown:false,ajianFaceLicked:false,ajianFootLicked:false,ajianFirstWakeMethod:null,ajianRewakeReaction:null,ajianRescueFootLicked:false,ajianSwallowedOnce:false,goblinFightStarted:false,goblinsDefeated:false,ajianCritical:false},
       quests:{},
-      actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults()},
+      actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults(),ajian:actorDefaults()},
+      encounters:{},
       worldItems:{},
       counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0,chapterBeansEaten:0,chapterBeansSpit:0},
-      player:{name:"",bodyLength:4,nodeCharges:0},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
+      player:{name:"",bodyLength:4,nodeCharges:0,rider:null},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
     };
   }
 
@@ -38,6 +39,7 @@
     const actorIds=new Set([...Object.keys(base.actors),...Object.keys(input.actors||{})]);
     actorIds.forEach(id=>{out.actors[id]=Object.assign(actorDefaults(),base.actors[id]||{},(input.actors&&input.actors[id])||{});});
     out.counters=Object.assign({},base.counters,input.counters||{});
+    out.encounters=clone(input.encounters||base.encounters);
     out.player=Object.assign({},base.player,input.player||{});
     if(out.flags.chapter1RingTaken&&(!input.player||!Object.prototype.hasOwnProperty.call(input.player,"nodeCharges")))out.player.nodeCharges=1;
     out.inventory=clone(input.inventory||base.inventory);

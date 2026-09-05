@@ -60,7 +60,9 @@
 
   function enemyAt(spec){
     const type=ENEMY_TYPES[spec.type];if(!type)return;
-    enemies.push({type:spec.type,x:spec.x,y:spec.y,flash:0,hitT:0,hp:type.hp,max:type.hp,r:type.r,vx:0,vy:0,wanderT:0,squash:rnd(6)});
+    const enemy={type:spec.type,storyId:spec.storyId||null,x:spec.x,y:spec.y,flash:0,hitT:0,hp:Number.isFinite(spec.hp)?spec.hp:type.hp,max:type.hp,r:type.r,vx:0,vy:0,wanderT:0,squash:rnd(6),approachTarget:spec.approachTarget||null,approachDone:!!spec.approachDone};
+    if(type.kind==="ranged"){enemy.shootT=type.cadence;enemy.warned=false;}
+    enemies.push(enemy);return enemy;
   }
 
   function rememberCheckpoint(nodeId){
@@ -74,15 +76,17 @@
   function saveCurrent(){
     if(!director||!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
     const state=director.runtime.state.snapshot();state.player.nodeCharges=charges;
-    Object.entries(director.actors||{}).forEach(([actorId,actor])=>{if(actor){const saved=state.actors[actorId]||(state.actors[actorId]={});saved.x=actor.x;saved.y=actor.y;if(actor.downed)saved.status="downed";else if(actor.unconscious)saved.status="unconscious";}});
+    Object.entries(director.actors||{}).forEach(([actorId,actor])=>{if(actor){const saved=state.actors[actorId]||(state.actors[actorId]={});saved.x=actor.x;saved.y=actor.y;saved.hp=actor.hp;if(actor.critical)saved.status="critical";else if(actor.downed)saved.status="downed";else if(actor.unconscious&&!String(saved.status).startsWith("bound_"))saved.status="unconscious";}});
+    if(lastMap===Maps.TYPES.CHAPTER1_CAVE&&state.flags.goblinFightStarted&&!state.flags.goblinsDefeated){state.encounters.caveGoblins=enemies.filter(enemy=>enemy.storyId&&enemy.storyId.startsWith("cave_goblin_")).map(enemy=>({storyId:enemy.storyId,type:enemy.type,x:enemy.x,y:enemy.y,hp:enemy.hp,approachTarget:enemy.approachTarget,approachDone:enemy.approachDone}));}
     const sword=stomachPickups.find(item=>item.id==="ironSword");if(sword)state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:sword.x,y:sword.y};
+    director.runtime.state.replace(state,"world_snapshot");
     return saveStore.save(director.slot,state,{currentNode:state.currentNode,currentMap:lastMap,completed:state.flags&&state.flags.storyCompleted});
   }
 
   function loadMap(args){
     const id=args.mapId,map=MS[id];if(!map)throw new Error("Unknown story map: "+id);
     const previousMap=lastMap;lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
-    updateState(state=>{if(previousMap&&previousMap!==id)Object.keys(state.actors||{}).forEach(actorId=>{const actor=state.actors[actorId];if(actor.status==="unconscious"&&actor.location===previousMap&&!String(previousMap).includes("camp")){actor.status="dead";actor.location=null;}});if(map.chapter&&state.chapter!==map.chapter){state.chapter=map.chapter;state.counters.chapterBeansEaten=0;state.counters.chapterBeansSpit=0;state.flags.chapter1HungerSeen=false;state.flags.chapter1HungerPending=false;}state.currentMap=id;},"map_selected");
+    updateState(state=>{if(previousMap&&previousMap!==id)Object.keys(state.actors||{}).forEach(actorId=>{const actor=state.actors[actorId];if(actorId!=="ajian"&&actor.status==="unconscious"&&actor.location===previousMap&&!String(previousMap).includes("camp")){actor.status="dead";actor.location=null;}if(actor.status==="riding")actor.location=id;});if(map.chapter&&state.chapter!==map.chapter){state.chapter=map.chapter;state.counters.chapterBeansEaten=0;state.counters.chapterBeansSpit=0;state.flags.chapter1HungerSeen=false;state.flags.chapter1HungerPending=false;}state.currentMap=id;},"map_selected");
     playMode="story";storyStage=id===TM?0:id===WM?5:8;if(typeof root.setWorldSize==="function")root.setWorldSize(map.cols,map.rows);reset(true);buildFromLevel(levelFromMap(map));
     charges=snapshot().flags.chapter1RingTaken?Math.max(0,Math.min(CFG.nodeMax,Number(snapshot().player.nodeCharges)||0)):0;
     groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
@@ -90,20 +94,23 @@
     const spawn=(args.entry&&map.entryPoints&&map.entryPoints[args.entry])||map.spawn;
     snake.fx=spawn.x;snake.fy=spawn.y;dir=spawn.dir;
     if(typeof root.restoreStomachInventory==="function")root.restoreStomachInventory(snapshot().inventory);
+    if(snapshot().player.rider&&typeof root.restoreStoryRider==="function")root.restoreStoryRider(snapshot().player.rider);
     snake.len=Math.max(CFG.initLen,Number(snapshot().player.bodyLength)||CFG.initLen,CFG.minLen+(typeof stomach!=="undefined"?stomach.getLengthContribution():0));
     coilPath();computeSegs();computeEnclosure();
     const rules=map.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;
     for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();
     (map.enemySpawns||[]).forEach(enemyAt);
+    if(id===Maps.TYPES.CHAPTER1_CAVE&&snapshot().flags.goblinFightStarted&&!snapshot().flags.goblinsDefeated)spawnGoblinEncounter(true);
     (map.items||[]).forEach(spec=>{const storyId=spec.storyId||spec.id,saved=snapshot().worldItems&&snapshot().worldItems[storyId];if(saved&&["stomach","consumed"].includes(saved.status))return;const item={storyId,id:spec.id,x:saved&&saved.status==="ground"?saved.x:spec.x,y:saved&&saved.status==="ground"?saved.y:spec.y,interactive:saved&&saved.status==="ground"?false:!!spec.interactive,inside:false};stomachPickups.push(item);director.items[item.storyId]=item;});
     (map.npcs||[]).forEach(spec=>{
       const actorId=spec.id||spec.kind,type=NPC_TYPES[spec.kind],actor=snapshot().actors[actorId];
-      if(!type||actor&&["dead","eaten","swallowed","bones","left"].includes(actor.status))return;
-      const status=actor&&actor.status||"unknown",inactive=status==="unconscious",downed=status==="downed";
-      const npc={storyId:actorId,actorId,kind:spec.kind,x:Number.isFinite(actor&&actor.x)?actor.x:spec.x,y:Number.isFinite(actor&&actor.y)?actor.y:spec.y,r:type.r,hp:downed?0:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false,unconscious:inactive,downed,damageable:inactive||downed?false:spec.damageable!==false,interactable:inactive?false:spec.interactable!==false,speed:Number(spec.speed)||0,patrol:inactive||downed?null:spec.patrol||null,patrolIndex:0};
+      if(!type||actor&&["dead","eaten","swallowed","riding","bones","left"].includes(actor.status))return;
+      const status=actor&&actor.status!=="unknown"?actor.status:(spec.initialStatus||"alive"),inactive=["unconscious","bound_unconscious","critical"].includes(status),downed=status==="downed";
+      const npc={storyId:actorId,actorId,kind:spec.kind,x:Number.isFinite(actor&&actor.x)?actor.x:spec.x,y:Number.isFinite(actor&&actor.y)?actor.y:spec.y,r:type.r,hp:Number.isFinite(actor&&actor.hp)?actor.hp:(downed?0:type.hp),maxHp:type.hp,flash:0,inside:false,crying:false,unconscious:inactive,critical:status==="critical",bound:String(status).startsWith("bound_"),storyProtected:!!spec.storyProtected,damageable:inactive||downed?false:spec.damageable!==false,interactable:inactive&&!spec.interactiveWhenUnconscious?false:spec.interactable!==false,speed:Number(spec.speed)||0,patrol:inactive||downed?null:spec.patrol||null,patrolIndex:0};
       npcs.push(npc);director.actors[actorId]=npc;if(actorId==="keti")director.keti=npc;
-      updateState(state=>{StateApi.ensureActor(state,actorId,{status:status==="unknown"?"alive":status,location:id,x:npc.x,y:npc.y});},actorId+"_spawn");
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status,location:id,x:npc.x,y:npc.y,hp:npc.hp});},actorId+"_spawn");
     });
+    if(id===Maps.TYPES.CHAPTER1_CAVE&&snapshot().flags.goblinFightStarted&&!snapshot().flags.goblinsDefeated&&director.actors.ajian){director.actors.ajian.damageable=true;director.actors.ajian.interactable=false;}
     observedEnemies=enemies.length;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
     heldKeys.clear();dirQueue.length=0;moveLock=false;
     document.getElementById("overlay").classList.remove("show");
@@ -155,8 +162,8 @@
     render();requestAnimationFrame(()=>panel.classList.add("open"));
   }
 
-  function portraitId(speaker,fallback){return ({"我":"snake_self","可蒂":"keti","阿杰":"ajie","丽丝":"lisi"})[speaker]||fallback||"snake_self";}
-  function speakerPage(text,fallback){const value=String(text||""),match=value.match(/^(可蒂|阿杰|丽丝|我)[：:]\s*(.*)$/s);return match?{speaker:match[1],text:match[2]}:{speaker:fallback,text:value};}
+  function portraitId(speaker,fallback){return ({"我":"snake_self","旁白":"snake_self","教学":"snake_self","可蒂":"keti","阿杰":"ajie","丽丝":"lisi","阿见":"ajian","少女":"ajian"})[speaker]||fallback||"snake_self";}
+  function speakerPage(text,fallback){const value=String(text||""),match=value.match(/^(可蒂|阿杰|丽丝|阿见|少女|旁白|教学|我)[：:]\s*(.*)$/s);return match?{speaker:match[1],text:match[2]}:{speaker:fallback,text:value};}
 
   function nameInput(args){
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;
@@ -227,10 +234,51 @@
       return ajie&&lisi?"chapter1_meeting":lisi?"chapter1_lisi_only":ajie?"chapter1_ajie_only":"chapter1_explore";
     }});
   }
+  function caveExplore(){
+    closeDialogue();
+    director.runtime.waitFor({events:[eventType("ITEM_INTERACTED"),eventType("ACTOR_INTERACTED")],target:event=>{
+      if(event.type===eventType("ITEM_INTERACTED")){
+        const id=event.payload&&event.payload.itemId;
+        if(id==="cave_soup")return snapshot().flags.caveSoupDrunk?"cave_soup_empty":"cave_soup";
+        if(id==="cave_potion")return"cave_potion";
+        if(id==="cave_ring")return"chapter1_ring";
+      }
+      const actor=snapshot().actors.ajian||{},status=actor.status;
+      if(status==="bound_unconscious")return"cave_ajian_found";
+      if(status==="bound_awake")return"cave_ajian_untie_return";
+      if(status==="critical")return"cave_ajian_critical";
+      if(status==="unconscious")return"cave_ajian_rewake";
+      if(snapshot().flags.goblinsDefeated)return snapshot().flags.ajianIdentityKnown?"cave_ajian_destination":"cave_ajian_rescued";
+      return"cave_explore";
+    }});
+  }
+  function ajianNpc(){return director&&director.actors&&director.actors.ajian;}
+  function drinkSoup(){api.heal(1);updateState(state=>{state.flags.caveSoupDrunk=true;state.worldItems.cave_soup={status:"used",mapId:lastMap};},"cave_soup_drunk");}
+  function takePotion(){const item=director.items.cave_potion;if(item&&root.collectStoryItem(item))updateState(state=>{state.flags.cavePotionTaken=true;state.worldItems.cave_potion={status:"stomach",mapId:lastMap};},"cave_potion_taken");}
+  function wakeAjian(method){const actor=ajianNpc();if(actor){actor.unconscious=false;actor.bound=true;actor.interactable=true;}updateState(state=>{state.flags.ajianFound=true;state.flags.ajianAwake=true;state.flags.ajianFirstWakeMethod=method;if(method==="face")state.flags.ajianFaceLicked=true;else state.flags.ajianFootLicked=true;StateApi.ensureActor(state,"ajian",{status:"bound_awake",location:lastMap,hp:actor?actor.hp:8,met:true});},"ajian_wake_"+method);}
+  function cutAjianRope(){const actor=ajianNpc();if(actor){actor.bound=false;actor.unconscious=false;actor.damageable=false;}updateState(state=>{state.flags.ajianUntied=true;StateApi.ensureActor(state,"ajian",{status:"alive",location:lastMap});},"ajian_untied");}
+  function spawnGoblinEncounter(restore){
+    if(enemies.some(enemy=>enemy.storyId&&enemy.storyId.startsWith("cave_goblin_")))return;
+    const saved=restore&&snapshot().encounters&&snapshot().encounters.caveGoblins;
+    if(saved&&saved.length)saved.forEach(enemyAt);
+    else{const encounter=(MS[Maps.TYPES.CHAPTER1_CAVE].encounters||[])[0];(encounter.origin||[]).forEach((point,index)=>enemyAt({type:"goblin_archer",storyId:"cave_goblin_"+(index+1),x:point[0],y:point[1],approachTarget:encounter.approach[index]}));}
+    const actor=ajianNpc();if(actor){actor.damageable=true;actor.storyProtected=true;actor.interactable=false;}
+    observedEnemies=enemies.length;
+    director.spawned=true;if(!restore)updateState(state=>{state.flags.goblinFightStarted=true;state.encounters.caveGoblins=[];},"cave_goblins_started");
+  }
+  function waitCaveCombat(){closeDialogue();director.runtime.waitFor({events:[eventType("ENEMIES_DEFEATED")],predicate:()=>director.spawned&&enemies.length===0,target:caveCombatOutcome});}
+  function caveCombatOutcome(){const actor=ajianNpc(),critical=!!(actor&&actor.critical)||snapshot().flags.ajianCritical;updateState(state=>{state.flags.goblinsDefeated=true;state.flags.ajianCritical=critical;state.encounters.caveGoblins=[];StateApi.ensureActor(state,"ajian",{status:critical?"critical":"alive",location:lastMap,hp:actor?actor.hp:1});},"cave_goblins_defeated");if(actor){actor.damageable=false;actor.interactable=true;}return critical?"cave_ajian_critical":"cave_ajian_rescued";}
+  function swallowAjian(){const actor=ajianNpc();if(!actor)return;updateState(state=>{StateApi.ensureActor(state,"ajian",{hp:actor.hp});state.flags.ajianSwallowedOnce=true;},"ajian_swallowing");swallowActor("ajian");}
+  function healAjian(){if(!root.consumeStoryItem("healingPotion"))return;const actor=ajianNpc();if(actor){actor.hp=Math.max(1,actor.hp);actor.critical=false;actor.unconscious=false;actor.damageable=false;}updateState(state=>{state.flags.ajianCritical=false;StateApi.ensureActor(state,"ajian",{status:"alive",hp:1,location:lastMap});},"ajian_healed");}
+  function rewakeAjian(method){const actor=ajianNpc(),before=snapshot(),critical=before.flags.ajianCritical||before.actors.ajian.status==="critical",first=before.flags.ajianFirstWakeMethod||method,reaction=(first===method?"same_":"switch_")+method;if(actor&&!critical){actor.unconscious=false;actor.critical=false;actor.interactable=true;}updateState(state=>{state.flags.ajianRewakeReaction=reaction;if(method==="face")state.flags.ajianFaceLicked=true;else state.flags.ajianFootLicked=true;StateApi.ensureActor(state,"ajian",{status:critical?"critical":"alive",location:lastMap});},"ajian_rewake_"+method);}
+  function resolveAjianRewake(){const state=snapshot();director.runtime.follow(state.flags.ajianCritical?"cave_ajian_critical_brief":"cave_ajian_rewake_"+(state.flags.ajianRewakeReaction||"same_face"));}
+  function lickRescuedAjian(){updateState(state=>{state.flags.ajianRescueFootLicked=true;},"ajian_rescue_foot_licked");}
+  function revealAjian(){updateState(state=>{state.flags.ajianIdentityKnown=true;state.quests.findAjian={status:"active",title:"带阿见回河边营地",priority:10};},"ajian_identity_revealed");const state=snapshot();if(state.flags.chapter1MeetingSeen||state.flags.findAjianAccepted)director.runtime.follow("cave_ajian_reveal_known");else director.runtime.follow("cave_ajian_reveal_unknown");}
+  function mountAjian(){const actor=ajianNpc();if(!actor||!root.mountStoryActor(actor)){banner("负重过高，阿见现在无法骑上来。");return;}director.actors.ajian=null;updateState(state=>{state.player.rider="ajian";StateApi.ensureActor(state,"ajian",{status:"riding",location:lastMap});state.quests.findAjian={status:"active",title:"把阿见带到河边营地",priority:10};},"ajian_mounted");}
   function takeSword(){const item=director.items.forest_sword;if(item&&root.collectStoryItem(item)){updateState(state=>{state.flags.chapter1SwordTaken=true;state.worldItems.forest_sword={status:"stomach",mapId:lastMap};},"chapter1_sword_taken");}}
   function takeRing(){const item=director.items.cave_ring;if(item&&root.collectStoryRing(item)){if(typeof root.openMechanicGate==="function")root.openMechanicGate("cave_shortcut_wall");updateState(state=>{state.flags.chapter1RingTaken=true;state.flags.caveShortcutOpen=true;state.player.nodeCharges=charges;state.worldItems.cave_ring={status:"consumed",mapId:lastMap};},"chapter1_ring_taken");}}
   function swallowActor(actorId){const actor=director.actors[actorId];if(actor&&root.swallowStoryNPC(actor))director.actors[actorId]=null;}
-  function releaseActor(actorId){const actor=snapshot().actors[actorId]||{};if(root.releaseStoryActor(actorId,actor.x,actor.y))director.actors[actorId]=npcs.find(n=>targetId(n)===actorId)||null;}
+  function releaseActor(actorId){const actor=snapshot().actors[actorId]||{};if(root.releaseStoryActor(actorId,actor.x,actor.y,actor.hp))director.actors[actorId]=npcs.find(n=>targetId(n)===actorId)||null;}
   function dropSword(){const item=root.dropStoryItem("ironSword");if(item)updateState(state=>{state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:item.x,y:item.y};state.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_dropped");}
   function startAjieCombat(){const actor=director.actors.ajie;if(actor){actor.hostile=true;actor.damageable=true;actor.interactable=false;actor.attackTarget="body";actor.bodyHits=0;actor.attackPhase=null;actor.chaseElapsed=0;}}
   function waitAjieCombat(){closeDialogue();director.runtime.waitFor({events:[eventType("AJIE_DOWNED"),eventType("AJIE_LEFT")],target:event=>event.type===eventType("AJIE_DOWNED")?"chapter1_ajie_downed_wait":"chapter1_explore"});}
@@ -245,12 +293,13 @@
   };
   const targetResolvers={
     ketiFirstContact:event=>event.type===eventType("ACTOR_INTERACTED")?"keti_question":event.type===eventType("ACTOR_EATEN")?"eaten_slimes":"keti_dead",
-    ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead"
+    ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead",
+    caveCombatOutcome
   };
-  const choiceActions={waitForWall:wallWait,waitForExit:exitWait,takeSword,takeRing,swallowAjie:()=>swallowActor("ajie"),swallowLisi:()=>swallowActor("lisi"),releaseAjie:()=>releaseActor("ajie"),releaseLisi:()=>releaseActor("lisi"),dropSword,startAjieCombat};
+  const choiceActions={waitForWall:wallWait,waitForExit:exitWait,takeSword,takeRing,drinkSoup,takePotion,wakeAjianFace:()=>wakeAjian("face"),wakeAjianFoot:()=>wakeAjian("foot"),rewakeAjianFace:()=>rewakeAjian("face"),rewakeAjianFoot:()=>rewakeAjian("foot"),cutAjianRope,spawnGoblinEncounter:()=>spawnGoblinEncounter(false),swallowAjian,healAjian,lickRescuedAjian,revealAjian,mountAjian,swallowAjie:()=>swallowActor("ajie"),swallowLisi:()=>swallowActor("lisi"),releaseAjie:()=>releaseActor("ajie"),releaseLisi:()=>releaseActor("lisi"),dropSword,startAjieCombat};
 
   const hasItem=(state,id)=>!!(state.inventory&&state.inventory.slots||[]).find(slot=>slot.id===id&&slot.count>0);
-  const choiceConditions={hasSword:state=>hasItem(state,"ironSword"),hasAjie:state=>hasItem(state,"ajie"),hasLisi:state=>hasItem(state,"lisi"),ajieAlive:state=>state.actors.ajie.status==="alive",lisiAlive:state=>state.actors.lisi.status==="alive"};
+  const choiceConditions={hasSword:state=>hasItem(state,"ironSword"),hasPotion:state=>hasItem(state,"healingPotion"),hasAjie:state=>hasItem(state,"ajie"),hasLisi:state=>hasItem(state,"lisi"),ajieAlive:state=>state.actors.ajie.status==="alive",lisiAlive:state=>state.actors.lisi.status==="alive",ajianFootAvailable:state=>!state.flags.ajianRescueFootLicked,canMountAjian:()=>!rider&&stomachWeight()+3<=CFG.carryCapacity};
   function compileChoice(choice){const compiled=Object.assign({},choice);if(typeof choice.when==="string"){compiled.when=choiceConditions[choice.when];if(typeof compiled.when!=="function")throw new Error("Unknown story choice condition: "+choice.when);}if(choice.action){compiled.run=choiceActions[choice.action];if(typeof compiled.run!=="function")throw new Error("Unknown story choice action: "+choice.action);delete compiled.action;}return compiled;}
   function compileNode(node){
     const compiled={id:node.id,goal:node.goal,progress:node.progress};
@@ -272,12 +321,13 @@
       }
       else if(currentNode()==="chapter1_explore")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
       else if(currentNode()==="chapter1_ajie_downed_wait")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
+      else if(currentNode()==="cave_explore")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
       return true;
     }
     if(kind==="item"){
       target.inside=true;
       if(typeof root.focusDialogueTarget==="function")root.focusDialogueTarget(target);
-      if(currentNode()==="chapter1_explore")emit("ITEM_INTERACTED",{itemId:targetId(target)});
+      if(currentNode()==="chapter1_explore"||currentNode()==="cave_explore")emit("ITEM_INTERACTED",{itemId:targetId(target)});
       return true;
     }
     if(payload&&typeof payload.apply==="function")payload.apply();
@@ -296,8 +346,14 @@
       updateState(state=>{StateApi.ensureActor(state,actorId,{status:eaten?(actorId==="keti"?"eaten":"swallowed"):"dead",location:eaten?"stomach":lastMap,corpsePresent:!eaten});},eaten?actorId+"_eaten":actorId+"_dead");emit(eaten?"ACTOR_EATEN":"ACTOR_DIED",{actorId});
     }else if(name==="actorReleased"){
       const actorId=payload&&payload.actorId;if(!actorId)return;
-      updateState(state=>{StateApi.ensureActor(state,actorId,{status:"unconscious",location:lastMap,x:payload.x,y:payload.y});},actorId+"_released");
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:actorId==="ajian"&&state.flags.ajianCritical?"critical":"unconscious",location:lastMap,x:payload.x,y:payload.y,hp:payload.hp});},actorId+"_released");
       if(actorId==="lisi"&&director.actors.ajie&&director.actors.ajie.hostile){director.actors.ajie.hostile=false;director.actors.ajie.damageable=false;director.actors.ajie.interactable=false;director.actors.ajie.resting=6;director.runtime.follow("chapter1_lisi_released");}
+    }else if(name==="actorCritical"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;updateState(state=>{if(actorId==="ajian")state.flags.ajianCritical=true;StateApi.ensureActor(state,actorId,{status:"critical",hp:payload.hp,location:lastMap});},actorId+"_critical");
+    }else if(name==="actorHealed"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;updateState(state=>{if(actorId==="ajian")state.flags.ajianCritical=false;StateApi.ensureActor(state,actorId,{status:"alive",hp:payload.hp,location:lastMap});},actorId+"_healed");
+    }else if(name==="riderMounted"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;updateState(state=>{state.player.rider=actorId;StateApi.ensureActor(state,actorId,{status:"riding",location:lastMap});},actorId+"_mounted");
     }else if(name==="actorDowned"){
       const actorId=payload&&payload.actorId;if(!actorId)return;
       updateState(state=>{StateApi.ensureActor(state,actorId,{status:"downed",location:lastMap});},actorId+"_downed");emit("AJIE_DOWNED",{actorId});
@@ -342,9 +398,10 @@
       director.runtime.follow("dialogue_4");
     }
     const map=MS[lastMap];
-    if(lastMap!==TM&&!exitSent&&map)for(const exit of map.exits||[]){const r=exit.rect;if(r&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]){exitSent=true;loadMap({mapId:exit.targetMap,entry:exit.targetEntry,checkpoint:currentNode()});break;}}
+    if(lastMap!==TM&&!exitSent&&map)for(const exit of map.exits||[]){const r=exit.rect;if(r&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]){exitSent=true;saveCurrent();loadMap({mapId:exit.targetMap,entry:exit.targetEntry,checkpoint:currentNode()});if(exit.targetMap===Maps.TYPES.CHAPTER1_CAVE){const state=snapshot();director.runtime.follow(!state.flags.caveEntered?"cave_intro":state.flags.goblinFightStarted&&!state.flags.goblinsDefeated?"cave_goblin_combat":"cave_explore");}else if(exit.targetMap===Maps.TYPES.CHAPTER1_FOREST)director.runtime.follow("chapter1_explore");break;}}
     if(map&&!snapshot().flags.bridgeSeen)for(const trigger of map.triggers||[]){const r=trigger.rect;if(trigger.id==="bridge_approach"&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]){updateState(state=>{state.flags.bridgeSeen=true;state.quests.lowerBridge={status:"active",title:"给桥桩充能，放下吊桥",priority:20,target:6,progress:0};},"bridge_seen");banner("吊桥被收起了。围住桥桩并持续充能。更深处也许能找到环形节点。");saveCurrent();break;}}
-    if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
+    if(currentNode()==="cave_goblin_combat"&&snapshot().flags.goblinFightStarted&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
+    else if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
     observedEnemies=enemies.length;
   }
 
@@ -354,7 +411,7 @@
   function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
 
   function createDirector(state,slot){
-    return {slot,spawned:false,keti:null,actors:{},items:{},checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,waitForMemoryBlur,memoryBlur,nameInput,storyEnd,chapterExplore,waitAjieCombat,waitDownedInteraction}})};
+    return {slot,spawned:false,keti:null,actors:{},items:{},checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,waitForMemoryBlur,memoryBlur,nameInput,storyEnd,chapterExplore,caveExplore,waitCaveCombat,revealAjian,resolveAjianRewake,waitAjieCombat,waitDownedInteraction}})};
   }
 
   function start(slot){
@@ -364,17 +421,22 @@
     director.runtime.start(Story.start);
     return {ok:true,slot:director.slot};
   }
+  function chapterResumeNode(state){
+    if(state.currentMap===Maps.TYPES.CHAPTER1_CAVE){if(state.flags.chapter1RingTaken&&["chapter1_ring","chapter1_ring_tutorial"].includes(state.currentNode))return"cave_explore";return state.currentNode&&Story.nodes[state.currentNode]?state.currentNode:(state.flags.goblinFightStarted&&!state.flags.goblinsDefeated?"cave_goblin_combat":"cave_explore");}
+    return state.currentNode&&Story.nodes[state.currentNode]?state.currentNode:"chapter1_explore";
+  }
   function resume(slot){
     if(!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
     const loaded=saveStore.load(slot);if(!loaded.ok)return loaded;if(loaded.empty)return start(slot);
     stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";
     const state=new StateApi.StoryStateStore(loaded.data),checkpoint=loaded.data.checkpoint;
     director=createDirector(state,Number(slot)||1);
+    if([Maps.TYPES.CHAPTER1_FOREST,Maps.TYPES.CHAPTER1_CAVE].includes(loaded.data.currentMap)){const nodeId=chapterResumeNode(loaded.data);loadMap({mapId:loaded.data.currentMap,entry:loaded.data.currentMap===Maps.TYPES.CHAPTER1_CAVE?"cave_entrance":"forest_cave_return",checkpoint:nodeId});director.runtime.start(nodeId);return {ok:true,slot:director.slot,resumed:true,legacy:!!loaded.legacy};}
     const nodeId=checkpoint&&checkpoint.nodeId||(loaded.data.currentMap===WM?"wilderness_start":Story.start);
     director.runtime.start(nodeId);
     return {ok:true,slot:director.slot,resumed:true,legacy:!!loaded.legacy};
   }
-  function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
+  function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");if([Maps.TYPES.CHAPTER1_FOREST,Maps.TYPES.CHAPTER1_CAVE].includes(checkpoint.state.currentMap)){const nodeId=chapterResumeNode(checkpoint.state);loadMap({mapId:checkpoint.state.currentMap,entry:checkpoint.state.currentMap===Maps.TYPES.CHAPTER1_CAVE?"cave_entrance":"forest_cave_return",checkpoint:nodeId});director.runtime.start(nodeId);}else director.runtime.start(checkpoint.nodeId);}
   function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
 
   root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,questList,questText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
