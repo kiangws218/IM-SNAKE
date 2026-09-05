@@ -31,6 +31,11 @@
     return true;
   }
   function item(ctx,id,x,y,t){
+    if(id==="nodeRing"){
+      ctx.save();ctx.translate(x,y);ctx.strokeStyle="#ffd76e";ctx.lineWidth=Math.max(3,t*.14);
+      ctx.beginPath();ctx.arc(0,0,t*.34,0,Math.PI*2);ctx.stroke();ctx.fillStyle="rgba(255,215,110,.2)";
+      ctx.beginPath();ctx.arc(0,0,t*.5,0,Math.PI*2);ctx.fill();ctx.restore();return true;
+    }
     if(id!=="ironSword")return false;
     ctx.save();ctx.translate(x,y);ctx.rotate(-.65);
     ctx.fillStyle="#c8ccd5";ctx.fillRect(-t*.08,-t*.48,t*.16,t*.72);

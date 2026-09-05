@@ -23,7 +23,7 @@
   const updateState=(mutator,reason)=>director&&director.runtime.state.update(mutator,reason);
   const hint=action=>Dialogue.actionHint?Dialogue.actionHint(action,1):"";
   const movementHint=()=>["up","left","down","right"].map(action=>root.InputMap&&root.InputMap.bindingLabel(1,action)).filter(Boolean).join("/");
-  const withHints=text=>String(text||"").replace(/\{fire\}/g,hint("fire")).replace(/\{interact\}/g,hint("interact")).replace(/\{move\}/g,"["+movementHint()+"]");
+  const withHints=text=>String(text||"").replace(/\{fire\}/g,hint("fire")).replace(/\{interact\}/g,hint("interact")).replace(/\{node\}/g,hint("node")).replace(/\{move\}/g,"["+movementHint()+"]");
 
   function closeDialogue(){
     if(typeof root.closePanel==="function")root.closePanel();
@@ -50,9 +50,10 @@
   }
 
   function levelFromMap(map){
+    const flags=snapshot()&&snapshot().flags||{};
     return {
-      cleanMap:!!map.cleanMap,solidOutside:map.solidOutside||null,obstacles:map.obstacles||[],
-      mechs:(map.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),
+      cols:map.cols,rows:map.rows,cleanMap:!!map.cleanMap,solidOutside:map.solidOutside||null,obstacles:map.obstacles||[],terrain:map.terrain||[],
+      mechs:(map.gates||[]).filter(g=>!g.openFlag||!flags[g.openFlag]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})).concat((map.mechs||[]).filter(m=>!m.doneFlag||!flags[m.doneFlag])),
       waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
     };
   }
@@ -72,7 +73,7 @@
 
   function saveCurrent(){
     if(!director||!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
-    const state=director.runtime.state.snapshot();
+    const state=director.runtime.state.snapshot();state.player.nodeCharges=charges;
     Object.entries(director.actors||{}).forEach(([actorId,actor])=>{if(actor){const saved=state.actors[actorId]||(state.actors[actorId]={});saved.x=actor.x;saved.y=actor.y;if(actor.downed)saved.status="downed";else if(actor.unconscious)saved.status="unconscious";}});
     const sword=stomachPickups.find(item=>item.id==="ironSword");if(sword)state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:sword.x,y:sword.y};
     return saveStore.save(director.slot,state,{currentNode:state.currentNode,currentMap:lastMap,completed:state.flags&&state.flags.storyCompleted});
@@ -82,7 +83,8 @@
     const id=args.mapId,map=MS[id];if(!map)throw new Error("Unknown story map: "+id);
     const previousMap=lastMap;lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
     updateState(state=>{if(previousMap&&previousMap!==id)Object.keys(state.actors||{}).forEach(actorId=>{const actor=state.actors[actorId];if(actor.status==="unconscious"&&actor.location===previousMap&&!String(previousMap).includes("camp")){actor.status="dead";actor.location=null;}});if(map.chapter&&state.chapter!==map.chapter){state.chapter=map.chapter;state.counters.chapterBeansEaten=0;state.counters.chapterBeansSpit=0;state.flags.chapter1HungerSeen=false;state.flags.chapter1HungerPending=false;}state.currentMap=id;},"map_selected");
-    playMode="story";storyStage=id===TM?0:id===WM?5:8;reset(true);buildFromLevel(levelFromMap(map));
+    playMode="story";storyStage=id===TM?0:id===WM?5:8;if(typeof root.setWorldSize==="function")root.setWorldSize(map.cols,map.rows);reset(true);buildFromLevel(levelFromMap(map));
+    charges=snapshot().flags.chapter1RingTaken?Math.max(0,Math.min(CFG.nodeMax,Number(snapshot().player.nodeCharges)||0)):0;
     groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
     enemies.length=0;npcs.length=0;director.actors={};director.items={};
     const spawn=(args.entry&&map.entryPoints&&map.entryPoints[args.entry])||map.spawn;
@@ -93,7 +95,7 @@
     const rules=map.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;
     for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();
     (map.enemySpawns||[]).forEach(enemyAt);
-    (map.items||[]).forEach(spec=>{const storyId=spec.storyId||spec.id,saved=snapshot().worldItems&&snapshot().worldItems[storyId];if(saved&&saved.status==="stomach")return;const item={storyId,id:spec.id,x:saved&&saved.status==="ground"?saved.x:spec.x,y:saved&&saved.status==="ground"?saved.y:spec.y,interactive:saved&&saved.status==="ground"?false:!!spec.interactive,inside:false};stomachPickups.push(item);director.items[item.storyId]=item;});
+    (map.items||[]).forEach(spec=>{const storyId=spec.storyId||spec.id,saved=snapshot().worldItems&&snapshot().worldItems[storyId];if(saved&&["stomach","consumed"].includes(saved.status))return;const item={storyId,id:spec.id,x:saved&&saved.status==="ground"?saved.x:spec.x,y:saved&&saved.status==="ground"?saved.y:spec.y,interactive:saved&&saved.status==="ground"?false:!!spec.interactive,inside:false};stomachPickups.push(item);director.items[item.storyId]=item;});
     (map.npcs||[]).forEach(spec=>{
       const actorId=spec.id||spec.kind,type=NPC_TYPES[spec.kind],actor=snapshot().actors[actorId];
       if(!type||actor&&["dead","eaten","swallowed","bones","left"].includes(actor.status))return;
@@ -110,7 +112,7 @@
     document.getElementById("pickList").innerHTML="";
     ensurePrimarySpawnSafe();
     emit("MAP_LOADED",{mapId:id,spawnId:args.entry||null,clearForwardSeconds:3});
-    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":id===WM?"地图 2 · 荒野：寻找哭声":"第一章 · 森林：自由探索");
+    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":id===WM?"地图 2 · 荒野：寻找哭声":"第一章 · "+map.name);
     rememberCheckpoint(args.checkpoint||(id===TM?"prologue_start":id===WM?"wilderness_start":"chapter1_start"));
   }
 
@@ -216,7 +218,7 @@
     if(snapshot().flags.chapter1HungerPending&&!snapshot().flags.chapter1HungerSeen){director.runtime.follow("chapter1_hunger");return;}
     director.runtime.waitFor({events:[eventType("CHAPTER1_HUNGER_READY"),eventType("ITEM_INTERACTED"),eventType("ACTOR_INTERACTED")],target:event=>{
       if(event.type===eventType("CHAPTER1_HUNGER_READY"))return"chapter1_hunger";
-      if(event.type===eventType("ITEM_INTERACTED"))return"chapter1_sword";
+      if(event.type===eventType("ITEM_INTERACTED"))return event.payload&&event.payload.itemId==="cave_ring"?"chapter1_ring":"chapter1_sword";
       const state=snapshot(),ajie=state.actors.ajie.status==="alive",lisi=state.actors.lisi.status==="alive";
       if(state.flags.findAjianAccepted){banner("任务进行中：寻找阿见");return"chapter1_explore";}
       if(state.flags.chapter1SwordRecognizedPending){updateState(next=>{next.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_notice_consumed");return ajie&&lisi?"chapter1_sword_recognized":ajie?"chapter1_sword_recognized_ajie":lisi?"chapter1_sword_recognized_lisi":"chapter1_explore";}
@@ -226,6 +228,7 @@
     }});
   }
   function takeSword(){const item=director.items.forest_sword;if(item&&root.collectStoryItem(item)){updateState(state=>{state.flags.chapter1SwordTaken=true;state.worldItems.forest_sword={status:"stomach",mapId:lastMap};},"chapter1_sword_taken");}}
+  function takeRing(){const item=director.items.cave_ring;if(item&&root.collectStoryRing(item)){if(typeof root.openMechanicGate==="function")root.openMechanicGate("cave_shortcut_wall");updateState(state=>{state.flags.chapter1RingTaken=true;state.flags.caveShortcutOpen=true;state.player.nodeCharges=charges;state.worldItems.cave_ring={status:"consumed",mapId:lastMap};},"chapter1_ring_taken");}}
   function swallowActor(actorId){const actor=director.actors[actorId];if(actor&&root.swallowStoryNPC(actor))director.actors[actorId]=null;}
   function releaseActor(actorId){const actor=snapshot().actors[actorId]||{};if(root.releaseStoryActor(actorId,actor.x,actor.y))director.actors[actorId]=npcs.find(n=>targetId(n)===actorId)||null;}
   function dropSword(){const item=root.dropStoryItem("ironSword");if(item)updateState(state=>{state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:item.x,y:item.y};state.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_dropped");}
@@ -244,7 +247,7 @@
     ketiFirstContact:event=>event.type===eventType("ACTOR_INTERACTED")?"keti_question":event.type===eventType("ACTOR_EATEN")?"eaten_slimes":"keti_dead",
     ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead"
   };
-  const choiceActions={waitForWall:wallWait,waitForExit:exitWait,takeSword,swallowAjie:()=>swallowActor("ajie"),swallowLisi:()=>swallowActor("lisi"),releaseAjie:()=>releaseActor("ajie"),releaseLisi:()=>releaseActor("lisi"),dropSword,startAjieCombat};
+  const choiceActions={waitForWall:wallWait,waitForExit:exitWait,takeSword,takeRing,swallowAjie:()=>swallowActor("ajie"),swallowLisi:()=>swallowActor("lisi"),releaseAjie:()=>releaseActor("ajie"),releaseLisi:()=>releaseActor("lisi"),dropSword,startAjieCombat};
 
   const hasItem=(state,id)=>!!(state.inventory&&state.inventory.slots||[]).find(slot=>slot.id===id&&slot.count>0);
   const choiceConditions={hasSword:state=>hasItem(state,"ironSword"),hasAjie:state=>hasItem(state,"ajie"),hasLisi:state=>hasItem(state,"lisi"),ajieAlive:state=>state.actors.ajie.status==="alive",lisiAlive:state=>state.actors.lisi.status==="alive"};
@@ -301,6 +304,8 @@
     }else if(name==="actorLeft"){
       const actorId=payload&&payload.actorId;if(!actorId)return;
       updateState(state=>{StateApi.ensureActor(state,actorId,{status:"left",location:null});},actorId+"_left");emit("AJIE_LEFT",{actorId});
+    }else if(name==="nodeChargesChanged"){
+      updateState(state=>{state.player.nodeCharges=Math.max(0,Number(payload&&payload.charges)||0);},"node_charges_changed");
     }else if(name==="worldItemDropped"){
       if(payload&&payload.id==="ironSword"){
         const noticed=!payload.noticedBefore&&Object.values(director.actors||{}).some(actor=>actor&&!actor.unconscious&&!actor.hostile&&Math.hypot(actor.x-payload.x,actor.y-payload.y)<=2);
@@ -316,6 +321,8 @@
       if(currentNode()==="chapter1_combat_pending")director.runtime.follow("chapter1_ajie_body_learned");
     }else if(name==="inventoryChanged"){
       updateState(state=>{state.inventory=payload.inventory;state.player.bodyLength=payload.bodyLength||snake.len;if((payload.inventory.slots||[]).some(slot=>slot.id==="ironSword"&&slot.count>0))state.worldItems.forest_sword={status:"stomach",mapId:lastMap};},payload.reason||"inventory_changed");saveCurrent();
+    }else if(name==="mechanicCompleted"&&payload&&payload.id==="bridge_pillar"){
+      updateState(state=>{state.flags.bridgeLowered=true;state.quests.lowerBridge={status:"completed",title:"放下吊桥",priority:20};},"bridge_lowered");saveCurrent();banner("桥桩充能完成，吊桥已经放下！");
     }
     const state=snapshot();
     if(state&&state.chapter==="chapter1"&&!state.flags.chapter1HungerSeen&&!state.flags.chapter1HungerPending&&(state.counters.chapterBeansEaten>=10||state.counters.chapterBeansSpit>=10)){
@@ -334,12 +341,16 @@
       updateState(state=>{state.flags.tutorialTimeoutSeen=true;},"tutorial_timeout");
       director.runtime.follow("dialogue_4");
     }
+    const map=MS[lastMap];
+    if(lastMap!==TM&&!exitSent&&map)for(const exit of map.exits||[]){const r=exit.rect;if(r&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]){exitSent=true;loadMap({mapId:exit.targetMap,entry:exit.targetEntry,checkpoint:currentNode()});break;}}
+    if(map&&!snapshot().flags.bridgeSeen)for(const trigger of map.triggers||[]){const r=trigger.rect;if(trigger.id==="bridge_approach"&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]){updateState(state=>{state.flags.bridgeSeen=true;state.quests.lowerBridge={status:"active",title:"给桥桩充能，放下吊桥",priority:20,target:6,progress:0};},"bridge_seen");banner("吊桥被收起了。围住桥桩并持续充能。更深处也许能找到环形节点。");saveCurrent();break;}}
     if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
     observedEnemies=enemies.length;
   }
 
   function goalText(){if(snapshot()&&snapshot().flags.findAjianAccepted&&currentNode()==="chapter1_explore")return"寻找阿见";const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";const suffix=goal.inputHint?" "+(goal.inputHint==="move"?"["+movementHint()+"]":hint(goal.inputHint)):"";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target+suffix;return (goal.text||"按剧情继续")+suffix;}
-  function questText(){const state=snapshot();return state&&state.flags.findAjianAccepted?"主线任务\n寻找阿见":"";}
+  function questList(){const state=snapshot();if(!state)return[];const quests=Object.assign({},state.quests||{});if(state.flags.findAjianAccepted&&!quests.findAjian)quests.findAjian={status:"active",title:"寻找阿见",priority:10};const bridge=typeof MECHS!=="undefined"&&MECHS.find(mech=>mech.id==="bridge_pillar");if(quests.lowerBridge&&bridge&&!bridge.done)quests.lowerBridge=Object.assign({},quests.lowerBridge,{progress:Math.floor(bridge.prog*10)/10,target:bridge.charge});return Object.keys(quests).map(id=>Object.assign({id},quests[id])).filter(quest=>quest.status==="active").sort((a,b)=>(Number(a.priority)||0)-(Number(b.priority)||0));}
+  function questText(){const quests=questList();return quests.length?"任务目标\n"+quests.map(quest=>"• "+quest.title+(Number.isFinite(quest.progress)&&Number.isFinite(quest.target)?" "+Math.min(quest.progress,quest.target)+"/"+quest.target:"")).join("\n"):"";}
   function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
 
   function createDirector(state,slot){
@@ -366,7 +377,7 @@
   function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
   function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
 
-  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,questText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
+  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,questList,questText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
   root.storyControllerInteraction=routeInteraction;
   root.storyControllerOwns=owns;
   root.storyControllerInteract=target=>routeInteraction("actor",target);

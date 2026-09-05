@@ -26,6 +26,11 @@ const { splitPages, createInputGate } = global.IMS_STORY_DIALOGUE;
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+function testNodeChargeMigration() {
+  assert.strictEqual(mergeDefaults({flags:{chapter1RingTaken:true},player:{name:"旧存档"}}).player.nodeCharges,1,"旧存档取得圆环后应迁移为 1 点充能");
+  assert.strictEqual(mergeDefaults({flags:{chapter1RingTaken:true},player:{nodeCharges:0}}).player.nodeCharges,0,"明确损失的充能不能在读档时恢复");
+}
+
 function testEventSubscriptions() {
   const bus = new EventBus();
   let calls = 0;
@@ -189,6 +194,7 @@ async function testStopDetachesWait() {
 }
 
 (async () => {
+  testNodeChargeMigration();
   testEventSubscriptions();
   testStateDefaultsAndPersistence();
   testDialoguePageSplitting();

@@ -275,6 +275,22 @@ try{
   if(sandbox.__IMS.stomach.slots.some(slot=>slot.id==="ironSword")||sandbox.__IMS.stomachPickups.filter(item=>item.id==="ironSword").length!==1)
     throw new Error("Sword dialogue duplicated the sword instead of consuming one inventory item");
   console.log("[chapter one forest + hunger + sword + encounter] OK");
+  sandbox.closePanel();sandbox.storyDirector().runtime.follow("chapter1_explore");frames(1);
+  sandbox.storyDirector().runtime.state.update(state=>{state.flags.findAjianAccepted=true;state.quests.findAjian={status:"active",title:"寻找阿见",priority:10};},"test_multi_quest");
+  sandbox.__IMS.snake.fx=86;sandbox.__IMS.snake.fy=30;frames(2);
+  if(sandbox.__IMS.world.cols!==100||sandbox.__IMS.world.rows!==60||!els["questHud"].textContent.includes("寻找阿见")||!els["questHud"].textContent.includes("吊桥"))throw new Error("Chapter map dimensions or multi-quest HUD was not applied: "+JSON.stringify({world:sandbox.__IMS.world,hud:els["questHud"].textContent,state:sandbox.storyDirector().runtime.state.snapshot()}));
+  if(sandbox.__IMS.charges!==0)throw new Error("Story node ability was available before the cave ring");
+  sandbox.__IMS.snake.fx=84;sandbox.__IMS.snake.fy=10;frames(2);
+  const caveRing=sandbox.__IMS.stomachPickups.find(item=>item.storyId==="cave_ring");
+  if(sandbox.storyDirector().runtime.state.get("currentMap")!==storyMaps[sandbox.IMS_STORY_MAPS.TYPES.CHAPTER1_CAVE].id||sandbox.__IMS.world.cols!==64||sandbox.__IMS.world.rows!==32||!caveRing)throw new Error("Cave transition, dimensions, or ring spawn failed");
+  sandbox.storyControllerInteraction("item",caveRing);frames(1);chooseStory("吃掉黄色圆环");chooseStory("明白了");
+  if(sandbox.__IMS.stomachPickups.some(item=>item.storyId==="cave_ring")||!sandbox.storyDirector().runtime.state.get("flags.caveShortcutOpen")||sandbox.__IMS.charges!==1)throw new Error("Ring pickup did not unlock one charge and open the cave shortcut");
+  sandbox.__IMS.snake.fx=3;sandbox.__IMS.snake.fy=16;frames(2);
+  const bridgePillar=sandbox.__IMS.mechs.find(mech=>mech.id==="bridge_pillar");
+  if(!bridgePillar)throw new Error("Forest bridge pillar did not reload");
+  bridgePillar.prog=bridgePillar.charge+1;sandbox.updateMechs(.01);frames(1);
+  if(!sandbox.storyDirector().runtime.state.get("flags.bridgeLowered")||els["questHud"].textContent.includes("吊桥"))throw new Error("Bridge completion did not resolve its quest");
+  console.log("[chapter maps + multi-quest + ring shortcut + bridge] OK");
   els["pauseHome"].onclick();
   frames(2);
   els["ovBtn3"].onclick();

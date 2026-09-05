@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.39</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.40</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -134,7 +134,7 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.39（重量与投掷碰撞）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.40（第一章地图骨架）</span></h1>
 <div id="hud">
   <span class="chip"><b id="p1Tag"></b> ❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
@@ -205,6 +205,8 @@ const CFG={
   neckGuard:4,
   seedLife:10,
 };
+const DEFAULT_WORLD_SIZE={cols:72,rows:48};
+function setWorldSize(cols,rows){CFG.cols=Math.max(32,Math.round(Number(cols)||DEFAULT_WORLD_SIZE.cols));CFG.rows=Math.max(20,Math.round(Number(rows)||DEFAULT_WORLD_SIZE.rows));}
 
 const VIEW_W=32,VIEW_H=20;
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
@@ -226,7 +228,7 @@ const api={
 /* ===== 扩展系统：虚拟输入 / 地形区域 / 机关 / 开场（v0.16） ===== */
 const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
 let touchMode=false;
-let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
+let ZONES=[],MECHS=[],TERRAINS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false,fireNeedsRelease=false;
 let curses=[];
 let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false,dialogueFocus=null,memoryVomit=null;
@@ -261,11 +263,13 @@ function grantReward(r){
   }
   else if(r.type==="buff"){TEMPBUFF.mult=r.mult||2;TEMPBUFF.t=r.dur||10;ftext(snake.fx,snake.fy-1,(r.name||"狂暴")+" "+TEMPBUFF.t+"s","#ff8f5e");}
   else if(r.type==="seedClear"){seeds.length=0;ftext(snake.fx,snake.fy-1,"弹幕清除！","#7fd1e8");}
+  else if(r.type==="openGate"){openMechanicGate(r.gateId);notifyStoryEvent("mechanicCompleted",{id:r.id||r.gateId,gateId:r.gateId});}
 }
+function openMechanicGate(id){const gate=MECHS.find(mech=>mech.kind==="gate"&&mech.id===id);if(!gate)return false;for(const cell of gate.cellIdx||[]){obstacles.delete(cell);voidCells.delete(cell);}gate.done=true;computeEnclosure();return true;}
 function updateMechs(dt){
   for(const m of MECHS){
     if(m.done||m.kind!=="pillar")continue;
-    const enc=prisonMask[K(m.x,m.y)]>=0&&prisonRegionBody[prisonMask[K(m.x,m.y)]];
+    const region=prisonMask[K(m.x,m.y)],enc=region>=0&&prisonRegionBody[region]&&(!m.requiresNode||prisonRegionNode[region]);
     if(enc)m.prog+=dt;
     else m.prog=Math.max(0,m.prog-dt*.5);
     if(m.prog>=m.charge){
@@ -487,6 +491,7 @@ function computeEnclosure(){
   const vis=new Uint8Array(total),q=[];
   for(let x=0;x<CFG.cols;x++)for(const y of[0,CFG.rows-1])if(!block[K(x,y)]&&!vis[K(x,y)]){vis[K(x,y)]=1;q.push(K(x,y));}
   for(let y=0;y<CFG.rows;y++)for(const x of[0,CFG.cols-1])if(!block[K(x,y)]&&!vis[K(x,y)]){vis[K(x,y)]=1;q.push(K(x,y));}
+  for(const cell of voidCells){const x=cell%CFG.cols,y=(cell/CFG.cols)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(inB(nx,ny)&&!block[K(nx,ny)]&&!vis[K(nx,ny)]){vis[K(nx,ny)]=1;q.push(K(nx,ny));}}}
   while(q.length){
     const i=q.pop(),x=i%CFG.cols,y=(i/CFG.cols)|0;
     for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
@@ -640,6 +645,11 @@ function collectStoryItem(item){
   if(!added.added)return false;
   stomachPickups.splice(stomachPickups.indexOf(item),1);puff(item.x,item.y,added.item.color||"#f5f5fa");return true;
 }
+function collectStoryRing(item){
+  if(!item||!stomachPickups.includes(item))return false;
+  stomachPickups.splice(stomachPickups.indexOf(item),1);charges=Math.min(CFG.nodeMax,charges+1);
+  notifyStoryEvent("nodeChargesChanged",{charges});ftext(item.x,item.y-.5,"环形节点充能 +1！","#ffd76e");puff(item.x,item.y,"#ffd76e");return true;
+}
 function swallowStoryNPC(n){
   if(!n||!npcs.includes(n))return false;
   const actorId=n.storyId||n.actorId||n.kind,added=addStomachItem(actorId,1,"actor_swallowed");
@@ -790,6 +800,7 @@ function placeNode(){
   const maxHp=CFG.nodeHp+RUN.nodeHpBonus;
   mapNodes.push({owner:1,x:cx,y:cy,hp:maxHp,maxHp,covered:true,bob:0});
   charges--;
+  notifyStoryEvent("nodeChargesChanged",{charges});
   nodesPlaced++;
   ftext(cx+.5,cy-.5,"放置节点","#ffd76e");
   puff(cx+.5,cy+.5,"#ffd76e");
@@ -801,7 +812,7 @@ function updateMapNodes(dt){
     const covered=n.owner===2?CoopMode.bodyHas(K(n.x,n.y)):occSet.has(K(n.x,n.y));
     if(n.covered&&!covered){
       mapNodes.splice(i,1);
-      if(n.owner===2)CoopMode.refundCharge();else charges=Math.min(CFG.nodeMax,charges+1);
+      if(n.owner===2)CoopMode.refundCharge();else{charges=Math.min(CFG.nodeMax,charges+1);notifyStoryEvent("nodeChargesChanged",{charges});}
       ftext(n.x+.5,n.y+.2,"节点回收 +1","#8fe36b");
       puff(n.x+.5,n.y+.5,"#ffd76e");
       continue;
@@ -1377,6 +1388,7 @@ function cutTail(){
 }
 
 function buildFromLevel(L){
+  if(L.cols||L.rows)setWorldSize(L.cols,L.rows);
   if(L.cleanMap){obstacles=new Set();voidCells=new Set();}
   else buildObstacles();
   if(L.solidOutside){
@@ -1389,6 +1401,7 @@ function buildFromLevel(L){
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   }
   ZONES=(L.zones||[]).map(z=>Object.assign({},z));
+  TERRAINS=(L.terrain||[]).map(t=>Object.assign({},t));
   MECHS=(L.mechs||[]).map(m=>Object.assign({prog:0,done:false},m));
   for(const m of MECHS){
     if(m.kind==="gate"){
@@ -1423,7 +1436,7 @@ function introScene(){
 }
 function startIntro(){
   const sc=introScene();
-  playMode="intro";
+  playMode="intro";setWorldSize();
   resetRun();
   reset(true);
   buildFromLevel({obstacles:sc.corridorRects||[[10,22],[40,23]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0});
@@ -1540,6 +1553,7 @@ function coilPath(){
 function startLevel(){
   const L=LEVELS[levelIdx];
   playMode="campaign";
+  setWorldSize(L.cols,L.rows);
   reset(true);
   buildFromLevel(L);
   snake.len=Math.max(CFG.minLen,Math.min(carry.len,120));
@@ -1634,6 +1648,7 @@ function buildTutArena(){
 }
 function startTutorial(){
   playMode="tutorial";
+  setWorldSize();
   resetRun();
   reset(true);
   tutIdx=-1;
@@ -1647,6 +1662,7 @@ function startTutorial(){
 }
 function restartCurrentTut(){
   playMode="tutorial";
+  setWorldSize();
   resetRun();
   reset(true);
   buildTutArena();
@@ -1952,6 +1968,7 @@ function ensurePrimarySpawnSafe(){
 }
 function startBossFight(){
   playMode="boss";
+  setWorldSize();
   resetRun();
   reset(false);
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
@@ -2379,7 +2396,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.39 · 本地双人合作 / 重量系统版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
+    "玩法原型 v0.40 · 第一章地图骨架版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 "+InputMap.bindingLabel(1,"fire")+" 站桩吐豆 ｜ "+InputMap.bindingLabel(1,"interact")+" 确认对话<br>"+
     InputMap.bindingLabel(1,"prevItem")+" / "+InputMap.bindingLabel(1,"nextItem")+" 切换胃袋主位（豆子或特殊物品）<br>"+
@@ -2403,6 +2420,7 @@ function showMenu(){
 }
 function startGame(){
   playMode="sandbox";
+  setWorldSize();
   resetRun();
   reset(false);
   tutIdx=-1;
@@ -2433,6 +2451,12 @@ function render(){
   for(let x=x0;x<x1;x++)for(let y=y0;y<y1;y++){
     if((x+y)%2===0){ctx.fillStyle="#151627";ctx.fillRect(x*T,y*T,T,T);}
   }
+  const terrainColors={water:"#155f7d",mountain:"#313746",cliff:"#51433e",camp:"#67482f",altar:"#44365d",caveFloor:"#292735"};
+  for(const t of TERRAINS){
+    const r=t.rect||[t.x,t.y,t.w,t.h],rx=r[0],ry=r[1],rw=r[2],rh=r[3];
+    ctx.fillStyle=t.color||terrainColors[t.kind]||"#242638";
+    ctx.fillRect(rx*T,ry*T,rw*T,rh*T);
+  }
   ctx.fillStyle="#080912";
   for(const o of voidCells){
     const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
@@ -2443,6 +2467,12 @@ function render(){
     const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
     if(voidCells.has(o))continue;
     if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
+  }
+  for(const t of TERRAINS){
+    if(t.kind==="caveFloor")continue;
+    const r=t.rect||[t.x,t.y,t.w,t.h];
+    ctx.fillStyle=t.color||terrainColors[t.kind]||"#242638";
+    ctx.fillRect(r[0]*T,r[1]*T,r[2]*T,r[3]*T);
   }
   ctx.strokeStyle="#34355a";ctx.lineWidth=4;
   ctx.strokeRect(2,2,CFG.cols*T-4,CFG.rows*T-4);
@@ -2967,14 +2997,15 @@ function loop(now){
 
 buildPanel();GameSettings.init();reset(false);showMenu();requestAnimationFrame(loop);
 const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debugRoot.__IMS={
+  get world(){return{cols:CFG.cols,rows:CFG.rows};},
   get npcs(){return npcs;},get snake(){return snake;},get panelOpen(){return panelOpen;},
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},
   get alive(){return alive;},get moveLock(){return moveLock;},
-  get mechs(){return MECHS;},get enemies(){return enemies;},get boss(){return boss;},get bossStakes(){return bossStakes;},
+  get mechs(){return MECHS;},get terrain(){return TERRAINS;},get charges(){return charges;},get enemies(){return enemies;},get boss(){return boss;},get bossStakes(){return bossStakes;},
   get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
   get stomach(){return stomach.status();},get stomachPickups(){return stomachPickups;},get projs(){return projs;},
-  openPanel,closePanel,openCurseCard,CURSED_POOL
+  openPanel,closePanel,openCurseCard,CURSED_POOL,setWorldSize,openMechanicGate,collectStoryRing
 };
 </script>
 <script src="story-controller.js"></script>
