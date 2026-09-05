@@ -4,6 +4,8 @@
 
 游戏实际读取 `prototype/story-data.js`。Arcweave 原稿保存在 `story/source/project_settings.json`，规范化中间数据和待确认报告位于 `story/generated/`；它们不会未经确认直接覆盖运行数据。
 
+第一章供制作人集中修改的文字母稿为 `story/第一章对白总稿.md`。该文件统一收录已实装对白、旁白、选项和后续草案；制作人可以整份修改后交回。程序实装完成并通过测试后，再同步 `[已实装]` 标记。运行时仍以 `prototype/story-data.js` 为准，避免未经确认的草案自动进入游戏。
+
 拿到新的 Arcweave 原始导出后，应保留原始文件，并运行 `node tools/import-arcweave.js story/source/project_settings.json` 和 `node tools/arcweave-tests.js`。转换器保留 UUID、连接和段落边界；不要再手工维护多份对白。
 
 ## 当前游玩与存档规则

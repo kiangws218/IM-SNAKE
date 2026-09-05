@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>哥布林洞窟 · 剧情流程文档</title>
+<style>
+  :root{
+    --bg: #14181a;
+    --bg-panel: #1a2023;
+    --line: #2e373b;
+    --text: #dfe6e6;
+    --text-dim: #8a9598;
+    --story: #cfd9d6;
+    --moss: #6fa088;
+    --amber: #c99a4a;
+    --amber-dim: #6b5730;
+    --blood: #b8583f;
+    --system: #6f8fa0;
+    --system-dim: #3a4a52;
+    --todo: #d9b13a;
+    --todo-bg: #2b260f;
+    --serif: 'Iowan Old Style', 'Georgia', 'Songti SC', serif;
+    --sans: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body{
+    margin:0; background: var(--bg); color: var(--text);
+    font-family: var(--sans); line-height: 1.65;
+    padding: 40px 20px 120px;
+  }
+  .wrap{ max-width: 900px; margin: 0 auto; }
+  header h1{
+    font-family: var(--serif); font-size: 28px; font-weight:600;
+    margin: 0 0 6px; letter-spacing: .5px;
+  }
+  header p{ color: var(--text-dim); font-size: 13.5px; margin:0; }
+
+  .confirmed{
+    margin: 22px 0 10px; padding: 14px 18px;
+    background: rgba(111,160,136,0.08);
+    border: 1px solid var(--moss);
+    border-radius: 6px; font-size: 13px;
+  }
+  .confirmed b{ color: var(--moss); }
+  .confirmed ul{ margin: 8px 0 0; padding-left: 20px; }
+  .confirmed li{ margin-bottom: 4px; color: var(--text-dim); }
+
+  .legend{
+    display:flex; flex-wrap:wrap; gap: 10px 18px;
+    margin: 18px 0 40px; padding: 14px 18px;
+    background: var(--bg-panel); border: 1px solid var(--line);
+    border-radius: 6px; font-size: 12.5px; color: var(--text-dim);
+  }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+
+  .section-title{
+    font-family: var(--serif); font-size: 20px; color: var(--amber);
+    margin: 46px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .node{
+    position:relative; background: var(--bg-panel);
+    border: 1px solid var(--line); border-left: 3px solid var(--moss);
+    border-radius: 4px; padding: 16px 20px; margin-bottom: 14px;
+  }
+  .node.choice-hub{ border-left-color: var(--amber); }
+  .node.combat{ border-left-color: var(--blood); }
+  .node.todo{ border-left-color: var(--todo); background: var(--todo-bg); }
+
+  .id-tag{ font-family:'SF Mono',Menlo,monospace; font-size:10.5px; color: var(--text-dim); }
+  .node-title{ font-size: 14px; font-weight:600; color: var(--moss); margin: 2px 0 10px; }
+  .node.choice-hub .node-title{ color: var(--amber); }
+  .node.combat .node-title{ color: var(--blood); }
+
+  .line{ font-family: var(--serif); color: var(--story); font-size: 15.5px; margin: 0 0 6px; }
+  .beat{ color: var(--text-dim); font-size: 12.5px; margin-top: 6px; }
+  .cond{
+    display:inline-block; font-family:'SF Mono',Menlo,monospace; font-size:11px;
+    color: var(--system); background: rgba(111,143,160,0.12);
+    border: 1px solid var(--system-dim); border-radius:3px;
+    padding: 2px 7px; margin-top: 8px; margin-right:6px;
+  }
+  .assume{
+    display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color: var(--todo);
+    background: rgba(217,177,58,0.08); border: 1px dashed var(--todo-bg);
+    border-radius: 4px; padding: 8px 10px; margin-top: 10px;
+  }
+  .assume b{ flex:none; }
+
+  .branches{
+    margin-left: 20px; padding-left: 22px; border-left: 1px dashed var(--line);
+    margin-top: 10px; display:flex; flex-direction:column; gap: 14px;
+  }
+  .branch-label{ font-size:12px; color: var(--amber); font-weight:600; margin-bottom:-4px; }
+  .branch-label.blood{ color: var(--blood); }
+
+  .connector{ width:1px; height:20px; background: var(--line); margin: 0 0 0 20px; }
+
+  details.template{
+    background: rgba(0,0,0,0.18); border: 1px solid var(--line);
+    border-radius: 4px; padding: 4px 14px; margin-top: 12px;
+  }
+  details.template summary{
+    cursor: pointer; font-size: 12.5px; color: var(--system);
+    padding: 8px 0; list-style:none;
+  }
+  details.template summary::-webkit-details-marker{ display:none; }
+  details.template summary::before{ content: '▸ 展开完整节点模板（含异常处理） '; color: var(--system); }
+  details.template[open] summary::before{ content: '▾ 收起节点模板 '; }
+
+  .field{ margin: 10px 0; font-size: 13px; }
+  .field-label{ color: var(--system); font-weight:600; font-size:12px; display:block; margin-bottom:3px; }
+  .field-value{ color: var(--text-dim); }
+  .default-tag{
+    display:inline-block; font-size:10.5px; color: var(--moss);
+    background: rgba(111,160,136,0.1); border:1px solid var(--moss);
+    border-radius: 3px; padding: 1px 6px; margin-left: 6px;
+  }
+
+  .endnote{ margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--text-dim); font-size: 12.5px; }
+
+  .line{ display:flex; align-items:baseline; gap:8px; }
+  .enter-mark{
+    font-family: var(--sans); font-size: 10.5px; color: var(--system);
+    background: rgba(111,143,160,0.12); border:1px solid var(--system-dim);
+    border-radius: 3px; padding: 0px 5px; flex: none;
+  }
+</style>
+</head>
+<body>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>哥布林洞窟 · 剧情流程文档（草稿 v0.2）</h1>
+    <p>河边营地支线 · 阿见 / 阿杰 / 丽丝　·　台词已按翻页拆分为短句</p>
+  </header>
+
+  <div class="confirmed">
+    <b>本版更新：</b>
+    <ul>
+      <li>所有对白台词按"一句一页"拆分，用 <span class="enter-mark">回车</span> 标记每次翻页的位置，方便直接誊到游戏里</li>
+      <li>已代入：奖励对话由丽丝开口；知会路线阿见不在营地；吃掉队友"及时吐出=昏迷可挽回／拖进下一章=消化死亡"</li>
+    </ul>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--moss)"></i>剧情/叙述</span>
+    <span><i class="dot" style="background:var(--amber)"></i>玩家选择</span>
+    <span><i class="dot" style="background:var(--blood)"></i>战斗/冲突</span>
+    <span><i class="dot" style="background:var(--system)"></i>系统条件/变量</span>
+    <span><i class="dot" style="background:var(--todo)"></i>待你确认</span>
+  </div>
+
+  <!-- ===================== 山洞入口 ===================== -->
+  <div class="section-title">一、山洞入口</div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-01</div>
+    <div class="node-title">进入新地图：山洞</div>
+    <div class="beat">哥布林都外出打猎，附近暂无哥布林出没。地图刷新少量豆子，分布若干史莱姆。可互动物品：篝火堆（纯氛围，已确认无功能）、一锅仍冒着热气的浓汤。</div>
+  </div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-01a</div>
+    <div class="node-title">互动：热汤</div>
+    <p class="line"><span>锅里的汤还冒着热气。</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>似乎有人刚离开不久。</span></p>
+    <div class="beat">选项：喝掉汤 / 离开</div>
+    <div class="branches">
+      <div>
+        <div class="branch-label">喝掉</div>
+        <div class="node">
+          <p class="line"><span>汤有些烫。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>但暖意从喉咙一直到胃里。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>你感觉好受了一些。</span></p>
+          <div class="cond">回复少量生命</div>
+        </div>
+      </div>
+      <div>
+        <div class="branch-label">离开</div>
+        <div class="node"><div class="beat">无事发生，继续探索</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 发现阿见 ===================== -->
+  <div class="section-title">二、发现悬空少女（阿见）</div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-02</div>
+    <div class="node-title">场景</div>
+    <p class="line"><span>继续深入，一个身材丰满的少女被绳索吊在半空。</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>双脚离地，似乎已经昏迷。</span></p>
+    <div class="beat">互动选项：舔她的脸 / 舔她的脚</div>
+  </div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-02-CHOICE</div>
+    <div class="node-title">舔脸 / 舔脚 → 少女惊醒</div>
+    <div class="branches">
+      <div>
+        <div class="branch-label">舔脸</div>
+        <div class="node">
+          <p class="line"><span>一股湿滑冰冷的触感从脸颊传来，让她瞬间清醒。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>少女猛地惊醒，看到你（巨蛇）吓得尖叫一声。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>随即像是想起了什么，又慌忙捂住自己的嘴。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>眼神惊恐地左右张望，似乎害怕引来什么人。</span></p>
+        </div>
+      </div>
+      <div>
+        <div class="branch-label">舔脚</div>
+        <div class="node">
+          <p class="line"><span>脚底传来的痒意让她猛地一颤，整个人都惊醒了过来。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>（同上：尖叫→捂嘴→紧张张望）</span></p>
+          <div class="cond">追加：一股奇妙的感觉从你心底升起，似乎饥饿感没有那么强烈了</div>
+          <div class="beat">全篇所有"舔脚"选项统一追加这句，后文不再重复标注</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-03</div>
+    <div class="node-title">追问身份</div>
+    <div class="branches">
+      <div>
+        <div class="branch-label">A "你是谁"</div>
+        <div class="node">
+          <p class="line"><span>"我……我是……"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>（她欲言又止，含糊地从牙缝里挤出一个音节，又猛地摇头）</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"不……没什么。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"你……你跟他们不是一伙的吧？"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"我是被哥布林抓到这里来的。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"他们要对我……"（她声音发颤，没有继续说下去）</span></p>
+        </div>
+      </div>
+      <div>
+        <div class="branch-label">B "你为什么在这里"</div>
+        <div class="node">
+          <p class="line"><span>她浑身发抖："我是被哥布林抓到这里来的……"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"他们说要对我……"（猛地打了个寒颤，没有说完这句话）</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="beat">两条选项之后剧情汇合，均进入 CAVE-04（哥布林归巢）</div>
+  </div>
+
+  <!-- ===================== 哥布林战斗 ===================== -->
+  <div class="section-title">三、哥布林归巢·遭遇战</div>
+
+  <div class="node combat">
+    <div class="id-tag">CAVE-04</div>
+    <div class="node-title">战斗演出</div>
+    <p class="line"><span>少女的尖叫惊动了洞穴深处的哥布林。</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>画面演出：哥布林现身，向少女方向缓慢逼近。</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>但目标始终是玩家——哥布林只会攻击玩家，不会对少女出手。</span></p>
+    <div class="cond">射箭时静止不动　|　不射箭时以 2格/秒 缓慢靠近玩家</div>
+    <div class="cond">少女的濒死状态只可能由玩家自己的吐豆误伤造成，与哥布林的行为无关</div>
+
+    <details class="template">
+      <summary></summary>
+      <div class="field"><span class="field-label">场景/地图</span><span class="field-value">山洞 · 少女悬挂处</span></div>
+      <div class="field"><span class="field-label">正常推进条件</span><span class="field-value">玩家吐豆击杀哥布林，且全程未误伤少女</span></div>
+      <div class="field"><span class="field-label">玩家可以自由做什么</span><span class="field-value">走位躲避射箭、吐豆攻击、绕后偷袭</span></div>
+      <div class="field"><span class="field-label">暂时禁止什么</span><span class="field-value">允许中途离开地图，少女保留在原昏迷/濒死状态等待 <span class="default-tag">已确认</span></span></div>
+      <div class="field"><span class="field-label">如果玩家提前完成目标</span><span class="field-value">不适用，本节点即目标本身</span></div>
+      <div class="field"><span class="field-label">如果关键NPC提前死亡</span><span class="field-value">少女不会真正死亡，血量归零直接判定为 CAVE-05B（濒死昏迷），不算剧情死亡</span></div>
+      <div class="field"><span class="field-label">如果玩家离开区域</span><span class="field-value">允许，见"暂时禁止什么" <span class="default-tag">已确认</span></span></div>
+      <div class="field"><span class="field-label">如果玩家自己死亡</span><span class="field-value">回到山洞入口检查点重新挑战 <span class="default-tag">默认规则</span></span></div>
+      <div class="field"><span class="field-label">如果重复触发</span><span class="field-value">不适用，一次性战斗节点</span></div>
+      <div class="field"><span class="field-label">如果两名玩家同时触发</span><span class="field-value">共享同一战斗状态与结局判定 <span class="default-tag">默认规则</span></span></div>
+      <div class="field"><span class="field-label">如果倒计时和玩家操作同时发生</span><span class="field-value">不适用，无倒计时</span></div>
+      <div class="field"><span class="field-label">完成后进入</span><span class="field-value">CAVE-05A（击杀成功）或 CAVE-05B（少女濒死）</span></div>
+      <div class="field"><span class="field-label">重试时从哪里恢复</span><span class="field-value">山洞入口检查点</span></div>
+    </details>
+  </div>
+
+  <!-- ===================== 分支A ===================== -->
+  <div class="section-title">四、分支 A · 击杀哥布林成功</div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-05A</div>
+    <div class="node-title">与少女对话</div>
+    <p class="line"><span>"你……你救了我？"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>（她愣愣地看着你，随即松了口气，眼眶有些湿润）</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"谢谢你……"</span></p>
+    <div class="beat">选项：A 给她松绑　B 舔她的脚　C 吃掉她</div>
+    <div class="assume"><b>⚠️</b><span>这三个选项是否为终结性选择（选一个即定走向，不能回头选另一个）？我先按"终结性"处理，因为松绑/吞噬两条路径互斥。</span></div>
+  </div>
+
+  <div class="branches">
+    <div>
+      <div class="branch-label">A 松绑</div>
+      <div class="node">
+        <p class="line"><span>少女被放下来，揉着发麻的手腕。</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>犹豫了一下，还是开口坦白：</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"其实……我不是女孩子。"（声音低了下去）</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"我本来是个男人，是中了哥布林巫师的诅咒才变成这副样子的。"</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"逃跑的时候剑也弄丢了，最后还是被他们抓了回来。"</span></p>
+        <div class="beat">→ 进入 CAVE-06</div>
+      </div>
+    </div>
+    <div>
+      <div class="branch-label">B 舔她的脚</div>
+      <div class="node">
+        <p class="line"><span>少女惊叫着缩起脚，脸涨得通红。</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>随即又像是想起什么，慢慢把脚重新伸了过来：</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"……既然你救了我，那就……让你舔个够吧。"（别扭地转过头去，耳根发红）</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>她顿了顿，又低声说：</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"不过……我其实不是女孩子。是中了哥布林巫师的诅咒……"</span></p>
+        <div class="beat">→ 进入 CAVE-06</div>
+      </div>
+    </div>
+    <div>
+      <div class="branch-label blood">C 吃掉她</div>
+      <div class="node combat">
+        <div class="beat">body_length +1　has_ajian = true（存入胃袋）</div>
+        <div class="beat">之后玩家可再吐出她，触发下方 CAVE-06b</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-06b</div>
+    <div class="node-title">吐出后坦白（黏液腐蚀衣物）</div>
+    <p class="line"><span>少女被吐出来，浑身湿漉漉的。</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>低头一看，衣服已经被腐蚀得所剩无几，她惊叫着抱住自己：</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"哎呀！你……你想对我做什么！"（慌乱地捂住身体）</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>随即像是自暴自弃般苦笑："……算了，反正你都看到了。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"我原本是个男人，只是中了哥布林巫师的诅咒才变成这样。"</span></p>
+    <div class="beat">→ 进入 CAVE-06</div>
+  </div>
+
+  <!-- ===================== 分支B ===================== -->
+  <div class="section-title">五、分支 B · 少女濒死昏迷</div>
+
+  <div class="node combat">
+    <div class="id-tag">CAVE-05B</div>
+    <div class="node-title">濒死状态</div>
+    <p class="line"><span>你上前查看，少女倒在地上，气息微弱，一动不动。</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>她没有死，但已经陷入了濒死的昏迷。</span></p>
+    <div class="beat">选项：A 给她松绑　B 舔她的脚　C 吃掉她　D 使用回复药水（若持有）</div>
+
+    <details class="template">
+      <summary></summary>
+      <div class="field"><span class="field-label">如果玩家提前完成目标（即找到药水前先选择离开）</span><span class="field-value">少女保持濒死昏迷状态原地等待，不会真正死亡，玩家可离开后带药水回来再处理 <span class="default-tag">已按你的确认</span></span></div>
+      <div class="field"><span class="field-label">如果关键NPC提前死亡</span><span class="field-value">不会发生——本节点已保证少女不会真死</span></div>
+      <div class="field"><span class="field-label">如果重复触发</span><span class="field-value">玩家可反复回来查看/使用药水，状态不重置，直到治愈或吞下带走为止</span></div>
+    </details>
+  </div>
+
+  <div class="branches">
+    <div>
+      <div class="branch-label">A 松绑</div>
+      <div class="node">
+        <p class="line"><span>她没有醒来，只是无力地滑落到地上，依旧昏迷不醒。</span></p>
+        <div class="beat">可继续选 B / C，也可离开——离开后卡在此状态，直到玩家想到办法</div>
+      </div>
+    </div>
+    <div>
+      <div class="branch-label">B 舔她的脚</div>
+      <div class="node">
+        <p class="line"><span>脚底的痒意让她猛地一颤，虚弱地睁开了眼：</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"……好痛……"（声音气若游丝）</span></p>
+        <div class="beat">仍处于濒死状态，尚未真正脱险，还需药水或其他手段救治</div>
+      </div>
+    </div>
+    <div>
+      <div class="branch-label blood">C 吃掉她</div>
+      <div class="node combat"><div class="beat">同分支A的C：吐出后触发CAVE-06b文本变体，但仍需先脱离濒死状态才能正常坦白——建议吐出后若仍濒死则先走"虚弱版"对话，用药水或时间恢复后再触发完整坦白</div></div>
+    </div>
+    <div>
+      <div class="branch-label">D 使用回复药水</div>
+      <div class="node">
+        <p class="line"><span>药水命中她的瞬间，气色渐渐恢复。</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>她缓缓睁开眼睛，虚弱地坐起身来。</span></p>
+        <div class="beat">→ 直接进入 CAVE-06（清醒版坦白，同分支A文本）</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-ITEM-01</div>
+    <div class="node-title">道具：回复药水（木箱）</div>
+    <p class="line"><span>少女被绑处旁边放着一个木箱，里面是一瓶泛着绿光的回复药水。</span></p>
+    <div class="cond">存入胃袋，可反复吐出/收回，与铁剑同类道具</div>
+    <div class="beat">用法：吐向濒死的阿见 → 治愈他；吐到自己身上 → 回复玩家生命值</div>
+  </div>
+
+  <!-- ===================== 坦白汇合 + 认剑 ===================== -->
+  <div class="section-title">六、坦白后续（三条路径汇合）</div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-06</div>
+    <div class="node-title">系统判定：背包是否有铁剑</div>
+    <div class="branches">
+      <div>
+        <div class="branch-label">若有铁剑 → 弹出"吐出铁剑"选项</div>
+        <div class="node">
+          <p class="line"><span>阿见看到剑，愣住了：</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"哎呀，这……这是我的剑！你……你在哪里捡到的？"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>玩家："你，你是不是叫阿见？"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>阿见浑身一震："你……你怎么会知道我的名字？！"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>玩家："你的同伴在找你。他们就在河边的营地等你。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>阿见（表情黯淡下来）："我……我不能回去。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"我的身体已经变成了这副样子……"</span></p>
+        </div>
+      </div>
+      <div>
+        <div class="branch-label">若无铁剑</div>
+        <div class="node">
+          <p class="line"><span>阿见低声说："我得把我的剑找回来……"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>（顿了顿，眼神有些迷茫）</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>玩家："你是不是叫阿见？"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>阿见浑身一震："你……你怎么会知道我的名字？！"</span></p>
+          <div class="beat">（后续接回"你的同伴在找你……我不能回去"，与有剑分支相同）</div>
+        </div>
+      </div>
+    </div>
+    <div class="beat">→ 两条路径汇合，进入 CAVE-08</div>
+  </div>
+
+  <!-- ===================== 去留抉择 ===================== -->
+  <div class="section-title">七、阿见的去留抉择</div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-08</div>
+    <div class="node-title">选项</div>
+    <div class="beat">A 吃掉他，强行带回去　B 那你接下来要做什么？</div>
+    <div class="branches">
+      <div>
+        <div class="branch-label blood">A</div>
+        <div class="node combat"><div class="beat">body_length +1，has_ajian = true　→ 直接进入 CAVE-10</div></div>
+      </div>
+      <div>
+        <div class="branch-label">B</div>
+        <div class="node">
+          <p class="line"><span>阿见："我要找到那个对我下诅咒的巫师。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"想办法把身体变回去。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>（玩家心中盘算：他现在既没有武器，又是这副女子之身，一个人行动太危险了。）</span></p>
+          <div class="beat">再选项：A 吃掉他带回去　B 我会帮你留意的（离开）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-08b</div>
+    <div class="node-title">选"我会帮你留意的" 之后</div>
+    <div class="cond">阿见留在山洞原地，此时若玩家直接回山洞，仍能找到他并继续互动</div>
+    <div class="assume"><b>⚠️</b><span>关键判定：一旦玩家先去营地和阿杰/丽丝对话（触发CAVE-10b"知会"分支），完成对话后阿见状态切换为"暂时失踪"——再回山洞就找不到他了。也就是说"直接回山洞"和"先去营地对话"是两条互斥的后续。这个判定按你的描述实现，如理解有误请指出。</span></div>
+  </div>
+
+  <!-- ===================== 祭坛 ===================== -->
+  <div class="section-title">八、祭坛 · 环形节点</div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-09</div>
+    <div class="node-title">祭坛道具</div>
+    <p class="line"><span>洞穴更深处的祭坛上，摆着一个泛着诡异光泽的黄色圆环。</span></p>
+    <div class="beat">选项：吃掉 / 离开</div>
+    <div class="branches">
+      <div>
+        <div class="branch-label">吃掉</div>
+        <div class="node">
+          <div class="cond">永久解锁能力：环形节点（一次性消耗，不进胃袋）</div>
+          <p class="line"><span>系统提示："获得能力：环形节点——你现在可以在移动路径上放置节点，让身体穿越自己。"</span></p>
+        </div>
+      </div>
+      <div>
+        <div class="branch-label">离开</div>
+        <div class="node"><div class="beat">道具保留原地，之后任意时候重返山洞都可以再来吃掉获取 <span class="default-tag">已确认</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 回营地 ===================== -->
+  <div class="section-title">九、回营地交接（两条完成路线）</div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-10</div>
+    <div class="node-title">触发</div>
+    <div class="beat">靠近河边营地的阿杰/丽丝，或主动对话 → 丽丝："你找到阿见了吗？"</div>
+    <div class="beat">若身上带着阿见（已吞下）→ 选项：吐出阿见 / 离开（暂不交出）→ 走 CAVE-11【带回路线】</div>
+    <div class="beat">若没带阿见本人，只是想转述情况 → 走 CAVE-10b【知会路线】</div>
+  </div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-11</div>
+    <div class="node-title">带回路线：交接剧情</div>
+    <p class="line"><span>阿杰、丽丝看清阿见的模样，都愣住了。</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>丽丝："阿见……？这、这怎么回事？你怎么变成……"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>（阿杰的神情忽然变得古怪起来，欲言又止，没有说话）</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>阿见（低着头）："是……是这位大人救了我。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"但我现在这幅样子，没办法回去见父亲……"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"我必须先找到那个诅咒我的巫师。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>阿杰（握紧拳头）："一定会把你变回去的。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"不然……父亲大人不知道会对你做出什么。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>丽丝（叹了口气，转向玩家解释）："我们的父亲……是个古怪的人。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"我们本是三姐弟——不过，姐姐那边似乎出了些不太好的事……"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>（阿杰和阿见的神色都变得复杂起来，谁都没有再说话）</span></p>
+    <div class="assume"><b>⚠️</b><span>此处刻意没有点破"阿杰其实是女扮男装"的秘密，只写神态。</span></div>
+  </div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-10b</div>
+    <div class="node-title">知会路线：转述剧情（不带回阿见本人）</div>
+    <p class="line"><span>丽丝："你找到阿见了吗？"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>玩家："我在山洞里救了他。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"但他中了诅咒，已经出发去寻找解除诅咒的办法了。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>丽丝（皱眉）："他中了什么诅咒？"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>玩家："他……变成了女孩子。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>（阿杰听到这句话，神情又流露出一丝古怪，没有说话）</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>丽丝："谢谢你帮我们找到他的下落。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"接下来的路太危险了，我们会自己出发去找他。"</span></p>
+    <div class="cond">此后若玩家返回山洞，阿见已不在原地——暂时下落不明</div>
+  </div>
+
+  <div class="node">
+    <div class="id-tag">CAVE-12</div>
+    <div class="node-title">任务完成："寻找阿见"</div>
+    <div class="beat">无论走 CAVE-11（带回）还是 CAVE-10b（知会），"寻找阿见"任务都会完成。</div>
+    <div class="cond">但只有【带回路线】阿见本人才会出现在营地；【知会路线】里阿见没有跟着回来，营地只有阿杰、丽丝两人，阿见此后暂不在场</div>
+    <div class="beat">追加两句引导对话，衔接可选新任务"寻找哥布林巫师"（可接可不接）</div>
+  </div>
+
+  <!-- ===================== 任务奖励 ===================== -->
+  <div class="section-title">十、任务奖励</div>
+
+  <div class="node choice-hub">
+    <div class="id-tag">CAVE-13</div>
+    <div class="node-title">奖励对话</div>
+    <p class="line"><span>丽丝凑了过来，面露难色：</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"我们身上……只剩十枚金币了。"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>"你是想要金币，还是……"</span><span class="enter-mark">回车</span></p>
+    <p class="line"><span>（一阵难以忍受的饥饿感突然袭来，你感觉自己似乎控制不住，很想吃人）</span></p>
+    <div class="beat">选项：A 要金币　B 舔一下脚（选择对象）　C 吃掉（选择对象）</div>
+    <div class="cond">若阿见没有跟着回到营地（知会路线），此处只能在阿杰 / 丽丝二人中选择目标，没有阿见这个选项</div>
+  </div>
+
+  <div class="branches">
+    <div>
+      <div class="branch-label">A 要金币</div>
+      <div class="node"><div class="beat">获得 10 金币，任务奖励结算完毕</div></div>
+    </div>
+
+    <div>
+      <div class="branch-label">B 舔脚（选对象）</div>
+      <details class="template">
+        <summary></summary>
+        <div class="field">
+          <span class="field-label">舔阿杰的脚</span>
+          <p class="line"><span>阿杰满脸涨红，猛地缩回脚：</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"你、你干什么！"（嘴上凶，却没有真的挣脱或攻击，反而透出一丝不自然的慌乱）</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>丽丝在一旁憋笑，阿见则一脸茫然地看着这一幕</span></p>
+        </div>
+        <div class="field">
+          <span class="field-label">舔丽丝的脚</span>
+          <p class="line"><span>丽丝愣了一下，随即无奈地笑了笑，任由你舔：</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"既然这样能让你好受些，那就……随你吧。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>阿杰在一旁别过头去，耳根发红；阿见小声惊呼了一下，随即又不敢多说什么</span></p>
+        </div>
+        <div class="field">
+          <span class="field-label">舔阿见的脚</span>
+          <p class="line"><span>阿见浑身一颤，像是想起了山洞里的经历，下意识地想缩脚，但还是强迫自己忍住了：</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>"……没、没关系的，你帮了我这么多。"</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>阿杰脸色一沉，紧盯着你；丽丝则担忧地看向阿见，似乎怕她想起不好的回忆</span></p>
+        </div>
+        <div class="field"><span class="field-label">共同效果</span><span class="field-value">追加台词："一股奇妙的感觉从你心底升起，饥饿感缓解了不少。" → 食欲值下降 <span class="default-tag">对应角色性格设定</span></span></div>
+      </details>
+    </div>
+
+    <div>
+      <div class="branch-label blood">C 吃掉（选对象）</div>
+      <details class="template">
+        <summary></summary>
+        <div class="field">
+          <span class="field-label">吃掉阿杰</span>
+          <p class="line"><span>丽丝瞪大眼睛，难以置信地后退一步。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>随即又强撑着站稳，握紧了拳头却不敢真的上前；</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>（若阿见在场）阿见吓得捂住了嘴，眼眶瞬间红了</span></p>
+        </div>
+        <div class="field">
+          <span class="field-label">吃掉丽丝</span>
+          <p class="line"><span>阿杰整个人僵在原地，随即怒吼一声想要冲上来。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>却又在看清你的体型后生生停住脚步，只能死死攥着拳头；</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>（若阿见在场）阿见早已被吓得哭出声来</span></p>
+        </div>
+        <div class="field">
+          <span class="field-label">吃掉阿见（仅带回路线可选）</span>
+          <p class="line"><span>丽丝失声惊叫，下意识捂住了嘴；</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>阿杰脸色瞬间铁青，攥紧拳头却因为忌惮你的体型迟迟不敢动手。</span><span class="enter-mark">回车</span></p>
+          <p class="line"><span>只是死死盯着你，声音发抖："你……你怎么能……"</span></p>
+        </div>
+      </details>
+
+      <div class="node" style="margin-top:10px">
+        <div class="node-title" style="color:var(--blood)">吃掉之后的两种走向</div>
+        <div class="cond">被吃角色进入"濒死昏迷"状态，此时不算死亡</div>
+        <div class="beat"><b>① 及时吐出</b>——无论吐在哪里，被吃角色只是昏迷，没有死。若正好吐在营地、命中或靠近另外的NPC身边，会触发一段专门的收场对话（见下方"开玩笑"分支）。</div>
+        <div class="beat"><b>② 一直没吐、直接带着进入下一章地图</b>——胃袋里的角色会被消化，变成尸体，永久死亡。这是真正的"黑化"结局，需要为此准备明确的后备剧情（沿用 STORY.md 默认规则第4条：关键NPC死亡必须有后备节点）。</div>
+        <div class="assume"><b>⚠️</b><span>"永久死亡"这条我目前只按你的描述记录了机制（被消化=死），具体死亡后剧情怎么收场（比如影响后续章节、其他角色反应）还没有内容，需要你后续补充。</span></div>
+      </div>
+
+      <div class="node" style="margin-top:10px">
+        <div class="id-tag">CAVE-13b</div>
+        <div class="node-title">及时吐出后的"开玩笑"收场</div>
+        <p class="line"><span>被吐出来的人还有些发懵，愣愣地看着你，一时反应不过来。</span></p>
+        <div class="beat">玩家选项：我开玩笑的</div>
+        <p class="line"><span>其中一人松了一口气，没好气地笑骂：</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"哎呀……我就知道你其实是个好人。"</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>另一人则皱起眉头，语气里带着后怕的责怪：</span><span class="enter-mark">回车</span></p>
+        <p class="line"><span>"你……你别总开这种玩笑好不好！"</span></p>
+        <div class="beat">收场后剧情继续，任务奖励结算完毕</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="endnote">
+    这一版把所有台词按"一句一页"拆分，<span class="enter-mark">回车</span> 标记翻页位置，直接对照着敲进游戏就行，不用你自己再拆一遍。唯一还留白的是"永久死亡"后具体怎么影响后续剧情，你想好后告诉我。确认无误的话，下一步我可以把这份文档转成 Arcweave 能直接导入的 JSON 结构。
+  </div>
+
+</div>
+</body>
+</html>
