@@ -14,13 +14,13 @@
     return {
       schemaVersion:1,storyId:"prologue",chapter:"prologue",
       currentNode:"Start",currentMap:null,
-      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,chapter1MeetingSeen:false,findAjianAccepted:false,findAjianDeclined:false,chapter1RingTaken:false,caveShortcutOpen:false,bridgeSeen:false,bridgeLowered:false,caveEntered:false,caveSoupDrunk:false,cavePotionTaken:false,lickWakeLearned:false,ajianFound:false,ajianAwake:false,ajianUntied:false,ajianIdentityKnown:false,ajianFaceLicked:false,ajianFootLicked:false,ajianFirstWakeMethod:null,ajianRewakeReaction:null,ajianRescueFootLicked:false,ajianSwallowedOnce:false,goblinFightStarted:false,goblinsDefeated:false,ajianCritical:false},
+      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,chapter1MeetingSeen:false,findAjianAccepted:false,findAjianDeclined:false,chapter1RingTaken:false,caveShortcutOpen:false,bridgeSeen:false,bridgeLowered:false,caveEntered:false,caveSoupDrunk:false,cavePotionTaken:false,lickWakeLearned:false,ajianFound:false,ajianAwake:false,ajianUntied:false,ajianIdentityKnown:false,ajianFaceLicked:false,ajianFootLicked:false,ajianFirstWakeMethod:null,ajianRewakeReaction:null,ajianRescueFootLicked:false,ajianSwallowedOnce:false,goblinFightStarted:false,goblinsDefeated:false,ajianCritical:false,campSettlementSeen:false,campArrivalMethod:null,campRewardClaimed:false,campRewardKind:null,campRewardActor:null,banditResolved:false,banditCombatStarted:false,banditRewardClaimed:false,banditClueKnown:false},
       quests:{},
-      actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults(),ajian:actorDefaults()},
+      actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults(),ajian:actorDefaults(),buck:actorDefaults(),miro:actorDefaults()},
       encounters:{},
       worldItems:{},
       counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0,chapterBeansEaten:0,chapterBeansSpit:0},
-      player:{name:"",bodyLength:4,nodeCharges:0,rider:null},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
+      player:{name:"",bodyLength:4,nodeCharges:0,rider:null,gold:0},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
     };
   }
 

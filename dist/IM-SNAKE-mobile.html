@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>我蛇了（I SNAKED）· 玩法原型 v0.39</title>
+<title>我蛇了（I SNAKED）· 玩法原型 v0.41</title>
 <style>
   :root{ --fg:#e8e6f0; --dim:#8b88a3; }
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -134,10 +134,11 @@
 </style>
 </head>
 <body>
-<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.39（重量与投掷碰撞）</span></h1>
+<h1>我蛇了 <span>I SNAKED · 玩法原型 v0.41（哥布林洞窟）</span></h1>
 <div id="hud">
   <span class="chip"><b id="p1Tag"></b> ❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
+  <span class="chip">金币 <b id="gold" style="color:#ffd76e"></b></span>
   <span class="chip">负重 <b id="weight"></b></span>
   <span class="chip">豆伤 <b id="dmg" style="color:#ffd76e"></b></span>
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
@@ -603,6 +604,9 @@ const NPC_TYPES={
   },
   ajie:{actorId:"ajie",name:"阿杰",sub:"寻找弟弟的冒险者",hp:8,r:.46,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
   lisi:{actorId:"lisi",name:"丽丝",sub:"阿杰的同伴",hp:8,r:.44,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
+  ajian:{actorId:"ajian",name:"阿见",sub:"被哥布林诅咒的冒险者",hp:8,r:.44,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
+  buck:{actorId:"buck",name:"巴克",sub:"吊桥前的劫匪",hp:10,r:.48,foodValue:1,greet:"站住！过桥费三枚金币，或者把那把铁剑留下。",options:[{label:"离开",action:"leave"}],drops:[]},
+  miro:{actorId:"miro",name:"米罗",sub:"吊桥前的劫匪",hp:10,r:.46,foodValue:1,greet:"别耍花样，我们看见你从洞窟出来了。",options:[{label:"离开",action:"leave"}],drops:[]},
 };
 
 const DIALOG_TREES={
@@ -688,12 +692,16 @@ const ENEMY_TYPES={
     kind:"ranged", name:"针刺花", hp:16, r:.62,
     body:"#b55088", cadence:4, telegraph:.7, bulletSpeed:2, drops:2,
   },
+  goblin_archer:{
+    kind:"ranged", name:"哥布林弓箭手", hp:8, speed:1.4, r:.48,
+    body:"#799447", cadence:2.2, telegraph:.55, bulletSpeed:3, drops:1,
+  },
 };
 
 /* 沙盒模式各类型的同屏上限（选关/战役模式以关卡 caps 为准） */
 const SANDBOX_CAPS={
   slime:3, mini_slime:0, split_slime:2, turtle:2,
-  giant_slime:1, boar:2, bomber:2, rat:2, flower:2,
+  giant_slime:1, boar:2, bomber:2, rat:2, flower:2, goblin_archer:0,
 };
 
 </script>
@@ -859,6 +867,10 @@ const SANDBOX_CAPS={
     ironSword: { id: "ironSword", name: "生锈的铁剑", shortName: "铁剑", maxStack: 99, length: 1, weight: 2, damageMult: 2, color: "#aeb3bd" },
     ajie: { id: "ajie", name: "昏迷的阿杰", shortName: "阿杰", maxStack: 1, length: 1, weight: 3, actorId: "ajie", releaseActor: true, color: "#6d83b3" },
     lisi: { id: "lisi", name: "昏迷的丽丝", shortName: "丽丝", maxStack: 1, length: 1, weight: 3, actorId: "lisi", releaseActor: true, color: "#d68aa8" },
+    ajian: { id: "ajian", name: "昏迷的阿见", shortName: "阿见", maxStack: 1, length: 1, weight: 3, actorId: "ajian", releaseActor: true, color: "#d7a6c7" },
+    buck: { id: "buck", name: "昏迷的巴克", shortName: "巴克", maxStack: 1, length: 1, weight: 3, actorId: "buck", releaseActor: true, color: "#a9705d" },
+    miro: { id: "miro", name: "昏迷的米罗", shortName: "米罗", maxStack: 1, length: 1, weight: 3, actorId: "miro", releaseActor: true, color: "#6e99b2" },
+    healingPotion: { id: "healingPotion", name: "回复药水", shortName: "药水", maxStack: 99, length: 1, weight: 1, healing:1, consumableOnImpact:true, color: "#62d98b" },
     ajieBones: { id: "ajieBones", name: "阿杰的骨头", shortName: "阿杰骨头", maxStack: 1, length: 1, weight: 1, damage: 2, actorId: "ajie", color: "#e8e2cf" },
     lisiBones: { id: "lisiBones", name: "丽丝的骨头", shortName: "丽丝骨头", maxStack: 1, length: 1, weight: 1, damage: 2, actorId: "lisi", color: "#e8e2cf" }
   };
@@ -1415,11 +1427,13 @@ const SANDBOX_CAPS={
     return {
       schemaVersion:1,storyId:"prologue",chapter:"prologue",
       currentNode:"Start",currentMap:null,
-      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,chapter1MeetingSeen:false,findAjianAccepted:false,findAjianDeclined:false},
-      actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults()},
+      flags:{tutorialGateBroken:false,tutorialExitUnlocked:false,tutorialTimeoutSeen:false,memoryBlurSeen:false,storyCompleted:false,chapter1HungerSeen:false,chapter1HungerPending:false,chapter1SwordTaken:false,chapter1SwordRecognizedPending:false,chapter1MeetingSeen:false,findAjianAccepted:false,findAjianDeclined:false,chapter1RingTaken:false,caveShortcutOpen:false,bridgeSeen:false,bridgeLowered:false,caveEntered:false,caveSoupDrunk:false,cavePotionTaken:false,lickWakeLearned:false,ajianFound:false,ajianAwake:false,ajianUntied:false,ajianIdentityKnown:false,ajianFaceLicked:false,ajianFootLicked:false,ajianFirstWakeMethod:null,ajianRewakeReaction:null,ajianRescueFootLicked:false,ajianSwallowedOnce:false,goblinFightStarted:false,goblinsDefeated:false,ajianCritical:false,campSettlementSeen:false,campArrivalMethod:null,campRewardClaimed:false,campRewardKind:null,campRewardActor:null,banditResolved:false,banditCombatStarted:false,banditRewardClaimed:false,banditClueKnown:false},
+      quests:{},
+      actors:{keti:actorDefaults(),ajie:actorDefaults(),lisi:actorDefaults(),ajian:actorDefaults(),buck:actorDefaults(),miro:actorDefaults()},
+      encounters:{},
       worldItems:{},
       counters:{tutorialBeansEaten:0,tutorialBeansSpit:0,tutorialGateSpit:0,slimesDefeated:0,chapterBeansEaten:0,chapterBeansSpit:0},
-      player:{name:"",bodyLength:4},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
+      player:{name:"",bodyLength:4,nodeCharges:0,rider:null,gold:0},inventory:{version:1,selectedIndex:0,slots:[{id:"bean",count:0}]},checkpoint:null
     };
   }
 
@@ -1432,11 +1446,15 @@ const SANDBOX_CAPS={
       else if(value!==undefined)out[key]=value;
     });
     out.flags=Object.assign({},base.flags,input.flags||{});
+    out.quests=clone(input.quests||base.quests);
+    if(out.flags.findAjianAccepted&&!out.quests.findAjian)out.quests.findAjian={status:"active",title:"寻找阿见",priority:10};
     out.actors={};
     const actorIds=new Set([...Object.keys(base.actors),...Object.keys(input.actors||{})]);
     actorIds.forEach(id=>{out.actors[id]=Object.assign(actorDefaults(),base.actors[id]||{},(input.actors&&input.actors[id])||{});});
     out.counters=Object.assign({},base.counters,input.counters||{});
+    out.encounters=clone(input.encounters||base.encounters);
     out.player=Object.assign({},base.player,input.player||{});
+    if(out.flags.chapter1RingTaken&&(!input.player||!Object.prototype.hasOwnProperty.call(input.player,"nodeCharges")))out.player.nodeCharges=1;
     out.inventory=clone(input.inventory||base.inventory);
     return out;
   }
@@ -1476,12 +1494,21 @@ const SANDBOX_CAPS={
 /* bundled: story-maps.js */
 "use strict";
 (function(root){
-const TYPES=Object.freeze({TUTORIAL:"prologue_tutorial",WILDERNESS:"prologue_wilderness",CHAPTER1_FOREST:"chapter1_forest"});
+const TYPES=Object.freeze({TUTORIAL:"prologue_tutorial",WILDERNESS:"prologue_wilderness",CHAPTER1_FOREST:"chapter1_forest",CHAPTER1_CAVE:"chapter1_cave"});
 const STORY_MAPS={
-[TYPES.TUTORIAL]:{id:TYPES.TUTORIAL,name:"教学地图",kind:"story",spawn:{x:8.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},cleanMap:true,solidOutside:[4,16,51,16],obstacles:[],beans:[[16,24],[24,24],[32,24],[42,24],[48,24],[51,24]],gates:[{id:"tutorial_fragile_gate",kind:"fragile_gate",x:48,y:16,w:3,h:1,need:3,breakEvent:"map.fragile_gate_broken"}],exits:[{id:"tutorial_exit",rect:[47,14,5,3],requiresGate:"tutorial_fragile_gate",targetMap:TYPES.WILDERNESS,targetSpawn:"wilderness_entry"}],interactions:{mechanics:["tutorial_fragile_gate"],exits:["tutorial_exit"]},npcs:[],enemySpawns:[],rules:{allowFreeSnakeAfterTimeout:true,exitRequiresGate:true,beanTarget:0}},
-[TYPES.WILDERNESS]:{id:TYPES.WILDERNESS,name:"荒野",kind:"story",spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,12,60,1],[4,36,60,1],[4,12,1,11],[4,28,1,8],[63,12,1,25],[20,18,2,2],[31,29,2,2],[48,16,2,2]],beans:[],gates:[],exits:[],interactions:{actors:["keti"]},npcs:[{id:"keti",kind:"keti",x:42.5,y:24.5}],enemySpawns:[],entryPoints:{wilderness_entry:{x:7.5,y:24.5,dir:{x:1,y:0}}},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:10,initialRandomBeans:8,beanRespawn:3}},
-[TYPES.CHAPTER1_FOREST]:{id:TYPES.CHAPTER1_FOREST,name:"森林",kind:"story",chapter:"chapter1",spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},cleanMap:true,obstacles:[[18,15,3,2],[28,31,4,2],[42,12,3,3],[53,29,4,2]],beans:[[11,23],[14,25],[17,21],[20,26],[23,22],[26,24]],gates:[],exits:[],interactions:{actors:["ajie","lisi"],items:["forest_sword"]},items:[{storyId:"forest_sword",id:"ironSword",x:31.5,y:19.5,interactive:true}],npcs:[{id:"ajie",kind:"ajie",x:48.5,y:22.5,damageable:false,patrol:[[48.5,22.5],[55.5,22.5]],speed:2},{id:"lisi",kind:"lisi",x:50.5,y:25.5,damageable:false,patrol:[[50.5,25.5],[57.5,25.5]],speed:1}],enemySpawns:[{type:"slime",x:18.5,y:23.5},{type:"slime",x:24.5,y:26.5},{type:"flower",x:29.5,y:19.5}],rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:12,initialRandomBeans:8,beanRespawn:3}}
+[TYPES.TUTORIAL]:{id:TYPES.TUTORIAL,name:"教学地图",kind:"story",cols:72,rows:48,spawn:{x:8.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},cleanMap:true,solidOutside:[4,16,51,16],obstacles:[],beans:[[16,24],[24,24],[32,24],[42,24],[48,24],[51,24]],gates:[{id:"tutorial_fragile_gate",kind:"fragile_gate",x:48,y:16,w:3,h:1,need:3,breakEvent:"map.fragile_gate_broken"}],exits:[{id:"tutorial_exit",rect:[47,14,5,3],requiresGate:"tutorial_fragile_gate",targetMap:TYPES.WILDERNESS,targetSpawn:"wilderness_entry"}],interactions:{mechanics:["tutorial_fragile_gate"],exits:["tutorial_exit"]},npcs:[],enemySpawns:[],rules:{allowFreeSnakeAfterTimeout:true,exitRequiresGate:true,beanTarget:0}},
+[TYPES.WILDERNESS]:{id:TYPES.WILDERNESS,name:"荒野",kind:"story",cols:72,rows:48,spawn:{x:7.5,y:24.5,dir:{x:1,y:0},clearForwardSeconds:3},obstacles:[[4,12,60,1],[4,36,60,1],[4,12,1,11],[4,28,1,8],[63,12,1,25],[20,18,2,2],[31,29,2,2],[48,16,2,2]],beans:[],gates:[],exits:[],interactions:{actors:["keti"]},npcs:[{id:"keti",kind:"keti",x:42.5,y:24.5}],enemySpawns:[],entryPoints:{wilderness_entry:{x:7.5,y:24.5,dir:{x:1,y:0}}},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:10,initialRandomBeans:8,beanRespawn:3}},
+[TYPES.CHAPTER1_FOREST]:{id:TYPES.CHAPTER1_FOREST,name:"森林与河岸",kind:"story",chapter:"chapter1",cols:100,rows:60,spawn:{x:7.5,y:30.5,dir:{x:1,y:0},clearForwardSeconds:3},entryPoints:{forest_cave_return:{x:84.5,y:11.5,dir:{x:0,y:1}}},cleanMap:true,solidOutside:[2,2,96,56],terrain:[{kind:"mountain",rect:[38,2,54,8]},{kind:"caveEntrance",rect:[82,3,5,7]},{kind:"water",rect:[45,51,47,7]},{kind:"cliff",rect:[92,10,4,48]},{kind:"camp",rect:[68,43,10,7]}],obstacles:[[17,18,3,2],[24,38,4,2],[37,31,3,3],[57,15,4,2],[62,39,3,2],[38,2,44,8],[87,2,5,8],[45,51,47,7],[92,10,4,17],[92,33,4,25]],beans:[[11,29],[14,32],[17,27],[20,34],[23,30],[26,33],[34,25],[38,29],[42,34],[46,27]],gates:[{id:"bridge_gate",x:92,y:27,w:4,h:6,need:999,openFlag:"bridgeLowered"}],mechs:[{kind:"pillar",id:"bridge_pillar",x:87,y:30,charge:6,requiresNode:true,doneFlag:"bridgeLowered",reward:{type:"openGate",id:"bridge_pillar",gateId:"bridge_gate"}}],triggers:[{id:"bridge_approach",rect:[84,22,8,17]}],exits:[{id:"forest_cave_entrance",rect:[83,4,3,5],targetMap:TYPES.CHAPTER1_CAVE,targetEntry:"cave_entrance"}],interactions:{actors:["ajie","lisi"],items:["forest_sword"],exits:["forest_cave_entrance"]},items:[{storyId:"forest_sword",id:"ironSword",x:30.5,y:25.5,interactive:true}],npcs:[{id:"ajie",kind:"ajie",x:48.5,y:28.5,damageable:false,patrol:[[48.5,28.5],[55.5,28.5]],speed:2},{id:"lisi",kind:"lisi",x:50.5,y:32.5,damageable:false,patrol:[[50.5,32.5],[57.5,32.5]],speed:1}],enemySpawns:[{type:"slime",x:16.5,y:29.5},{type:"slime",x:21.5,y:34.5},{type:"slime",x:26.5,y:27.5},{type:"flower",x:29.5,y:24.5},{type:"slime",x:39.5,y:31.5}],rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:16,initialRandomBeans:8,beanRespawn:3}},
+[TYPES.CHAPTER1_CAVE]:{id:TYPES.CHAPTER1_CAVE,name:"哥布林洞窟",kind:"story",chapter:"chapter1",cols:64,rows:32,spawn:{x:6.5,y:16.5,dir:{x:1,y:0},clearForwardSeconds:3},entryPoints:{cave_entrance:{x:6.5,y:16.5,dir:{x:1,y:0}}},cleanMap:true,solidOutside:[2,8,60,17],terrain:[{kind:"caveFloor",rect:[2,13,60,7]},{kind:"caveFloor",rect:[18,8,27,17]},{kind:"caveVoid",rect:[2,8,16,5]},{kind:"caveVoid",rect:[2,20,16,5]},{kind:"caveVoid",rect:[45,8,17,5]},{kind:"caveVoid",rect:[45,20,17,5]},{kind:"caveExit",rect:[2,14,2,5]},{kind:"altar",rect:[57,14,3,5]}],obstacles:[[2,8,16,5],[2,20,16,5],[45,8,17,5],[45,20,17,5]],beans:[[9,16],[15,18],[22,21],[28,10],[38,22],[48,17]],gates:[],exits:[{id:"cave_exit",rect:[2,14,2,5],targetMap:TYPES.CHAPTER1_FOREST,targetEntry:"forest_cave_return"}],interactions:{actors:["ajian"],items:["cave_soup","cave_potion","cave_ring"],exits:["cave_exit"]},items:[{storyId:"cave_soup",id:"hotSoup",x:14.5,y:16.5,interactive:true},{storyId:"cave_potion",id:"healingPotion",x:32.5,y:11.5,interactive:true},{storyId:"cave_ring",id:"nodeRing",x:58.5,y:16.5,interactive:true}],npcs:[{id:"ajian",kind:"ajian",x:29.5,y:12.5,initialStatus:"bound_unconscious",interactable:true,interactiveWhenUnconscious:true,damageable:false,storyProtected:true}],enemySpawns:[],encounters:[{id:"cave_goblin_archers",origin:[[52.5,16.5],[55.5,18.5]],approach:[[39.5,16.5],[42.5,18.5]],trigger:"ajian_awake"}],landmarks:{soup:[14.5,16.5],ajian:[29.5,12.5],potionChest:[32.5,11.5],altar:[58.5,16.5]},rules:{clearForwardSeconds:3,spawnProtectionSeconds:3,beanTarget:6,initialRandomBeans:0,beanRespawn:4}}
 };
+const forest=STORY_MAPS[TYPES.CHAPTER1_FOREST];
+forest.entryPoints.forest_cave_return={x:56.5,y:11.5,dir:{x:0,y:1}};
+forest.terrain=forest.terrain.map(t=>t.kind==="caveEntrance"?Object.assign({},t,{rect:[55,3,5,7]}):t);
+forest.obstacles=forest.obstacles.map(o=>o[0]===38&&o[1]===2?[38,2,15,8]:o).map(o=>o[0]===87&&o[1]===2?[60,2,27,8]:o);
+forest.triggers.push({id:"camp_settlement",rect:[68,41,10,10]});
+forest.exits=forest.exits.map(e=>Object.assign({},e,{rect:e.id==="forest_cave_entrance"?[55,4,5,5]:e.rect}));
+forest.interactions.actors.push("ajian","buck","miro");
+forest.npcs.push({id:"buck",kind:"buck",x:70.5,y:27.5,damageable:false,bandit:true,speed:1.2},{id:"miro",kind:"miro",x:70.5,y:30.5,damageable:false,bandit:true,speed:1});
 root.IMS_STORY_MAPS={TYPES,STORY_MAPS,clone:value=>JSON.parse(JSON.stringify(value))};
 })(typeof window!=="undefined"?window:globalThis);
 
@@ -1566,7 +1593,10 @@ root.IMS_STORY_RUNTIME={StoryRuntime,applyPatch};
   const palettes={
     keti:{hair:"#704b3b",skin:"#ffd3b5",cloth:"#f0d7e2",accent:"#82c8df"},
     ajie:{hair:"#253653",skin:"#f1bd98",cloth:"#536b9d",accent:"#d8e5ff"},
-    lisi:{hair:"#8a435d",skin:"#ffd0ae",cloth:"#b85f83",accent:"#ffd2e1"}
+    lisi:{hair:"#8a435d",skin:"#ffd0ae",cloth:"#b85f83",accent:"#ffd2e1"},
+    ajian:{hair:"#5d344f",skin:"#ffd0ae",cloth:"#73558f",accent:"#ffe08a"},
+    buck:{hair:"#3b2a25",skin:"#c58b6d",cloth:"#765047",accent:"#e2b36c"},
+    miro:{hair:"#202b37",skin:"#d49b78",cloth:"#49627a",accent:"#a7d7e8"}
   };
   function palette(id){return palettes[id]||null;}
   function portrait(ctx,id,crying){
@@ -1593,6 +1623,13 @@ root.IMS_STORY_RUNTIME={StoryRuntime,applyPatch};
     return true;
   }
   function item(ctx,id,x,y,t){
+    if(id==="nodeRing"){
+      ctx.save();ctx.translate(x,y);ctx.strokeStyle="#ffd76e";ctx.lineWidth=Math.max(3,t*.14);
+      ctx.beginPath();ctx.arc(0,0,t*.34,0,Math.PI*2);ctx.stroke();ctx.fillStyle="rgba(255,215,110,.2)";
+      ctx.beginPath();ctx.arc(0,0,t*.5,0,Math.PI*2);ctx.fill();ctx.restore();return true;
+    }
+    if(id==="hotSoup"){ctx.save();ctx.translate(x,y);ctx.fillStyle="#6f4932";ctx.fillRect(-t*.35,-t*.05,t*.7,t*.32);ctx.fillStyle="#e7a95b";ctx.fillRect(-t*.27,-t*.08,t*.54,t*.12);ctx.strokeStyle="#eee1ca";ctx.lineWidth=2;for(const ox of[-.14,.12]){ctx.beginPath();ctx.moveTo(t*ox,-t*.17);ctx.quadraticCurveTo(t*(ox+.08),-t*.32,t*ox,-t*.42);ctx.stroke();}ctx.restore();return true;}
+    if(id==="healingPotion"){ctx.save();ctx.translate(x,y);ctx.fillStyle="#c7b18b";ctx.fillRect(-t*.12,-t*.4,t*.24,t*.14);ctx.fillStyle="#62d98b";ctx.fillRect(-t*.25,-t*.22,t*.5,t*.55);ctx.fillStyle="#c8ffe0";ctx.fillRect(-t*.15,-t*.14,t*.1,t*.25);ctx.restore();return true;}
     if(id!=="ironSword")return false;
     ctx.save();ctx.translate(x,y);ctx.rotate(-.65);
     ctx.fillStyle="#c8ccd5";ctx.fillRect(-t*.08,-t*.48,t*.16,t*.72);
@@ -1611,7 +1648,7 @@ root.IMS_STORY_RUNTIME={StoryRuntime,applyPatch};
 (function(root){
   const MAPS=root.IMS_STORY_MAPS.TYPES;
   const progress=(step,total=8)=>({chapter:"序章",step,total});
-  const chapterProgress=(step,total=5)=>({chapter:"第一章",step,total});
+  const chapterProgress=(step,total=10)=>({chapter:"第一章",step,total});
   const textGoal=text=>({kind:"text",text});
   const counterGoal=(label,counter,target,inputHint)=>({kind:"counter",label,counter,target,inputHint});
 
@@ -1746,27 +1783,114 @@ root.IMS_STORY_RUNTIME={StoryRuntime,applyPatch};
       ,chapter1_hunger:{id:"chapter1_hunger",progress:chapterProgress(1),goal:textGoal("阅读对话"),dialogue:{speaker:"我",sub:"第一章 · 森林",pages:["好饿……","为什么一点饱腹感都没有呢？"],choices:[{id:"continue",label:"继续探索",set:{"flags.chapter1HungerSeen":true,"flags.chapter1HungerPending":false},next:"chapter1_explore"}]}}
       ,chapter1_sword:{id:"chapter1_sword",progress:chapterProgress(2),goal:textGoal("查看铁剑"),dialogue:{speaker:"我",sub:"森林中的遗失物",pages:["一把生锈的铁剑落在地上，似乎是谁遗失在这里的。"],choices:[{id:"eat",label:"吃掉铁剑",action:"takeSword",next:"chapter1_sword_eaten"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
       ,chapter1_sword_eaten:{id:"chapter1_sword_eaten",progress:chapterProgress(2),goal:textGoal("继续探索"),dialogue:{speaker:"我",sub:"铁剑进入了胃袋",pages:["有些扎喉咙……","但是饥饿感并没有缓解。"],choices:[{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_meeting:{id:"chapter1_meeting",progress:chapterProgress(3),goal:textGoal("回应两名冒险者"),dialogue:{speaker:"阿杰",sub:"第一章 · 森林相遇",pages:["我操！怎么会有这么大的蛇！","阿杰拔出腰间的剑指向你：讨伐你这样的魔物，正是我训练至今的愿望！","丽丝：阿杰！你冷静一下！","丽丝：它看起来并没有恶意……","丽丝：而且，我们还要抓紧时间，找到你失踪的弟弟，不是吗？"],choices:[{id:"eat_ajie",label:"吃掉阿杰",when:"ajieAlive",action:"swallowAjie",next:"chapter1_ajie_swallowed",danger:true},{id:"eat_lisi",label:"吃掉丽丝",when:"lisiAlive",action:"swallowLisi",next:"chapter1_lisi_swallowed",danger:true},{id:"sword",label:"吐出铁剑",when:"hasSword",action:"dropSword",next:"chapter1_sword_recognized"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_ajie_swallowed:{id:"chapter1_ajie_swallowed",progress:chapterProgress(3),goal:textGoal("回应丽丝"),dialogue:{speaker:"丽丝",sub:"阿杰被吞下",pages:["咦啊啊啊啊！！","你把阿杰给……！","丽丝被吓得瘫坐在地上，双腿不断发抖。"],choices:[{id:"release",label:"吐出阿杰",when:"hasAjie",action:"releaseAjie",next:"chapter1_ajie_released"},{id:"eat_lisi",label:"吃掉丽丝",when:"lisiAlive",action:"swallowLisi",next:"chapter1_both_swallowed",danger:true},{id:"sword",label:"吐出铁剑",when:"hasSword",action:"dropSword",next:"chapter1_sword_recognized"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_meeting:{id:"chapter1_meeting",progress:chapterProgress(3),goal:textGoal("回应两名冒险者"),dialogue:{speaker:"阿杰",sub:"第一章 · 森林相遇",pages:["我操！怎么会有这么大的蛇！","阿杰拔出腰间的剑指向你：讨伐你这样的魔物，正是我训练至今的愿望！","丽丝：阿杰！你冷静一下！","丽丝：它看起来并没有恶意……","丽丝：而且，我们还要抓紧时间，找到你失踪的弟弟，不是吗？"],choices:[{id:"hunger",label:"（一阵突如其来的饥饿袭来，你控制不住自己……）",next:"chapter1_meeting_hunger"}]}}
+      ,chapter1_meeting_hunger:{id:"chapter1_meeting_hunger",progress:chapterProgress(3),goal:textGoal("压制突然袭来的饥饿"),dialogue:{speaker:"旁白",sub:"失控的饥饿",pages:["饥饿压过了思考，你的视线不受控制地在两人之间游移。"],choices:[{id:"eat_ajie",label:"吃掉阿杰",when:"ajieAlive",action:"swallowAjie",next:"chapter1_ajie_swallowed",danger:true},{id:"eat_lisi",label:"吃掉丽丝",when:"lisiAlive",action:"swallowLisi",next:"chapter1_lisi_swallowed",danger:true},{id:"sword",label:"吐出铁剑",when:"hasSword",action:"dropSword",next:"chapter1_sword_recognized"}]}}
+      ,chapter1_ajie_swallowed:{id:"chapter1_ajie_swallowed",progress:chapterProgress(3),goal:textGoal("回应丽丝"),dialogue:{speaker:"丽丝",sub:"阿杰被吞下",pages:["咦啊啊啊啊！！","你把阿杰给……！","丽丝被吓得瘫坐在地上，双腿不断发抖。"],choices:[{id:"release",label:"吐出阿杰",when:"hasAjie",action:"releaseAjie",next:"chapter1_ajie_released"},{id:"eat_lisi",label:"吃掉丽丝",when:"lisiAlive",action:"swallowLisi",next:"chapter1_both_swallowed",danger:true},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
       ,chapter1_ajie_released:{id:"chapter1_ajie_released",progress:chapterProgress(3),goal:textGoal("继续探索"),dialogue:{speaker:"我",sub:"阿杰昏迷",pages:["你喉咙一滚，把浑身沾满粘液的阿杰吐了出来。","阿杰昏了过去，胸口规律地起伏。","在粘液的腐蚀下，阿杰的衣服残缺不整。","丽丝：咦啊啊啊啊！！","丽丝：阿杰……你的衣服！","丽丝连忙用手捂住眼睛，却又从指缝里偷偷张望。","丽丝：……咦？","丽丝：阿杰……你怎么没有……","丽丝：难道说，阿杰其实是女生？"],choices:[{id:"leave",label:"离开",next:"chapter1_explore"}]}}
       ,chapter1_lisi_swallowed:{id:"chapter1_lisi_swallowed",progress:chapterProgress(3),goal:textGoal("面对阿杰"),dialogue:{speaker:"阿杰",sub:"丽丝被吞下",pages:["啊！可恶的混蛋！","把丽丝还回来！","阿杰拔出剑冲向你。"],choices:[{id:"release",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"chapter1_lisi_released"},{id:"fight",label:"迎战",action:"startAjieCombat",next:"chapter1_combat_pending",danger:true}]}}
       ,chapter1_lisi_released:{id:"chapter1_lisi_released",progress:chapterProgress(3),goal:textGoal("继续探索"),dialogue:{speaker:"我",sub:"丽丝昏迷",pages:["你喉咙一滚，把浑身沾满粘液的丽丝吐了出来。","在粘液的腐蚀下，丽丝的衣服残缺不整。","阿杰立刻飞扑上去接住丽丝，随后整张脸涨得通红。","阿杰：我……我以后再找你算账！"],choices:[{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_both_swallowed:{id:"chapter1_both_swallowed",progress:chapterProgress(3),goal:textGoal("决定下一步"),dialogue:{speaker:"我",sub:"森林恢复安静",pages:["两人的声音都消失在你的腹中。"],choices:[{id:"release_ajie",label:"吐出阿杰",when:"hasAjie",action:"releaseAjie",next:"chapter1_ajie_released"},{id:"release_lisi",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"chapter1_lisi_released"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_sword_recognized:{id:"chapter1_sword_recognized",progress:chapterProgress(4),goal:textGoal("解释铁剑的来历"),dialogue:{speaker:"阿杰",sub:"阿见的剑",pages:["啊！是阿见的剑！","果然……是你吃了他吗？"],choices:[{id:"found",label:"这是我在森林里捡到的",next:"chapter1_quest_request"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_quest_request:{id:"chapter1_quest_request",progress:chapterProgress(4),goal:textGoal("是否帮助寻找阿见"),dialogue:{speaker:"丽丝",sub:"寻找阿见",pages:["那你有见到他吗？可不可以请你……","阿杰：等等！怎么可以请求魔物的帮助。","丽丝：可不可以请你帮帮我们找到阿见？我们会尽可能地报答你！"],choices:[{id:"accept",label:"同意",set:{"flags.findAjianAccepted":true},next:"chapter1_quest_accepted"},{id:"decline",label:"拒绝",set:{"flags.findAjianDeclined":true},next:"chapter1_quest_declined"}]}}
+      ,chapter1_ajie_unconscious:{id:"chapter1_ajie_unconscious",progress:chapterProgress(3),goal:textGoal("查看昏迷的阿杰"),dialogue:{speaker:"旁白",sub:"昏迷的阿杰",pages:["阿杰浑身沾满粘液，仍处于昏迷之中。"],choices:[{id:"eat",label:"吃掉阿杰",action:"swallowAjie",next:"chapter1_explore",danger:true},{id:"face",label:"舔他的脸",when:"lickWakeLearned",action:"wakeAjieFace",next:"chapter1_ajie_woken_face"},{id:"foot",label:"舔他的脚",when:"lickWakeLearned",action:"wakeAjieFoot",next:"chapter1_ajie_woken_foot"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_ajie_woken_face:{id:"chapter1_ajie_woken_face",progress:chapterProgress(3),goal:textGoal("继续探索"),dialogue:{speaker:"阿杰",sub:"被舔醒的阿杰",pages:["唔……什么东西黏在我脸上……","阿杰猛地睁开眼，手忙脚乱地擦着脸。","是你？！等等，我怎么还活着？"],choices:[{id:"leave",label:"让他缓一缓",next:"chapter1_explore"}]}}
+      ,chapter1_ajie_woken_foot:{id:"chapter1_ajie_woken_foot",progress:chapterProgress(3),goal:textGoal("继续探索"),dialogue:{speaker:"阿杰",sub:"被舔醒的阿杰",pages:["阿杰的腿猛地一缩，差点凭本能踢出去。","谁在碰我的脚……是你？！","他盯着你看了片刻，发现自己还活着，神情变得十分复杂。"],choices:[{id:"leave",label:"让他缓一缓",next:"chapter1_explore"}]}}
+      ,chapter1_lisi_unconscious:{id:"chapter1_lisi_unconscious",progress:chapterProgress(3),goal:textGoal("查看昏迷的丽丝"),dialogue:{speaker:"旁白",sub:"昏迷的丽丝",pages:["丽丝浑身沾满粘液，呼吸平稳，却没有醒来。"],choices:[{id:"eat",label:"吃掉丽丝",action:"swallowLisi",next:"chapter1_explore",danger:true},{id:"face",label:"舔她的脸",when:"lickWakeLearned",action:"wakeLisiFace",next:"chapter1_lisi_woken_face"},{id:"foot",label:"舔她的脚",when:"lickWakeLearned",action:"wakeLisiFoot",next:"chapter1_lisi_woken_foot"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_lisi_woken_face:{id:"chapter1_lisi_woken_face",progress:chapterProgress(3),goal:textGoal("继续探索"),dialogue:{speaker:"丽丝",sub:"被舔醒的丽丝",pages:["嗯……好痒……","丽丝缓缓睁开眼，看到近在咫尺的蛇头后整个人僵了一下。","你没有吃掉我……是在叫醒我吗？"],choices:[{id:"leave",label:"让她休息一下",next:"chapter1_explore"}]}}
+      ,chapter1_lisi_woken_foot:{id:"chapter1_lisi_woken_foot",progress:chapterProgress(3),goal:textGoal("继续探索"),dialogue:{speaker:"丽丝",sub:"被舔醒的丽丝",pages:["丽丝缩起脚，迷迷糊糊地醒了过来。","咦……刚才是什么？","她看了看你，又看了看自己湿漉漉的脚，脸一下红了起来。"],choices:[{id:"leave",label:"让她休息一下",next:"chapter1_explore"}]}}
+      ,chapter1_both_swallowed:{id:"chapter1_both_swallowed",progress:chapterProgress(3),goal:textGoal("决定下一步"),dialogue:{speaker:"我",sub:"森林恢复安静",pages:["两人的声音都消失在你的腹中。"],choices:[{id:"release_ajie",label:"吐出阿杰",when:"hasAjie",action:"releaseAjie",next:"chapter1_ajie_released_alone"},{id:"release_lisi",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"chapter1_lisi_released_alone"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_ajie_released_alone:{id:"chapter1_ajie_released_alone",progress:chapterProgress(3),goal:textGoal("决定下一步"),dialogue:{speaker:"旁白",sub:"寂静的森林",pages:["你喉咙一滚，把浑身沾满粘液的阿杰吐了出来。","阿杰昏了过去，胸口仍在规律地起伏。","四周没有任何人回应，丽丝的声音仍被隔在你的腹中。"],choices:[{id:"release_lisi",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"chapter1_both_released_unconscious"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_lisi_released_alone:{id:"chapter1_lisi_released_alone",progress:chapterProgress(3),goal:textGoal("决定下一步"),dialogue:{speaker:"旁白",sub:"寂静的森林",pages:["你把浑身沾满粘液的丽丝吐了出来。","她倒在草地上，呼吸微弱却平稳。","四周没有任何人回应，阿杰的声音仍被隔在你的腹中。"],choices:[{id:"release_ajie",label:"吐出阿杰",when:"hasAjie",action:"releaseAjie",next:"chapter1_both_released_unconscious"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_both_released_unconscious:{id:"chapter1_both_released_unconscious",progress:chapterProgress(3),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"寂静的森林",pages:["你再次收紧喉咙，把仍在腹中的另一个人也吐了出来。","阿杰和丽丝倒在草地上，两人都没有醒来。","森林里只剩下风吹过树叶的声音。"],choices:[{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_sword_recognized:{id:"chapter1_sword_recognized",progress:chapterProgress(4),goal:textGoal("解释铁剑的来历"),dialogue:{speaker:"阿杰",sub:"阿见的剑",pages:["啊！是阿见的剑！","果然……是你吃了他吗？"],choices:[{id:"found",label:"这是我在森林里捡到的",next:"chapter1_quest_request"}]}}
+      ,chapter1_quest_request:{id:"chapter1_quest_request",progress:chapterProgress(4),goal:textGoal("是否帮助寻找阿见"),dialogue:{speaker:"丽丝",sub:"寻找阿见",pages:["那你有见到他吗？可不可以请你……","阿杰：等等！怎么可以请求魔物的帮助。","丽丝：可不可以请你帮帮我们找到阿见？我们会尽可能地报答你！"],choices:[{id:"accept",label:"同意",set:{"flags.findAjianAccepted":true,"quests.findAjian":{"status":"active","title":"寻找阿见","priority":10}},next:"chapter1_quest_accepted"},{id:"decline",label:"拒绝",set:{"flags.findAjianDeclined":true},next:"chapter1_quest_declined"}]}}
       ,chapter1_quest_accepted:{id:"chapter1_quest_accepted",progress:chapterProgress(5),goal:textGoal("继续探索"),dialogue:{speaker:"丽丝",sub:"已接取：寻找阿见",pages:["谢谢你！我们也会继续寻找阿见的。","你其实不是一般的魔物，对吗？","我们之前遇到的魔物都不会说话。","我们的营地在河边，可以在那里找到我们。","希望一切顺利！"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
       ,chapter1_quest_declined:{id:"chapter1_quest_declined",progress:chapterProgress(5),goal:textGoal("继续探索"),dialogue:{speaker:"丽丝",sub:"暂时拒绝",pages:["好吧……我们还会继续寻找阿见的。","有缘分的话再见吧！","你以后仍可以在河边的营地找到我们。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
-      ,chapter1_lisi_only:{id:"chapter1_lisi_only",progress:chapterProgress(3),goal:textGoal("回应丽丝"),dialogue:{speaker:"丽丝",sub:"只剩丽丝清醒",pages:["丽丝仍在发抖，但没有立刻逃走。","丽丝：你……究竟想做什么？"],choices:[{id:"eat_lisi",label:"吃掉丽丝",when:"lisiAlive",action:"swallowLisi",next:"chapter1_both_swallowed",danger:true},{id:"sword",label:"吐出铁剑",when:"hasSword",action:"dropSword",next:"chapter1_sword_recognized_lisi"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_lisi_only:{id:"chapter1_lisi_only",progress:chapterProgress(3),goal:textGoal("回应丽丝"),dialogue:{speaker:"丽丝",sub:"只剩丽丝清醒",pages:["丽丝仍在发抖，但没有立刻逃走。","丽丝：你……究竟想做什么？"],choices:[{id:"eat_lisi",label:"吃掉丽丝",when:"lisiAlive",action:"swallowLisi",next:"chapter1_both_swallowed",danger:true},{id:"release_ajie",label:"吐出阿杰",when:"hasAjie",action:"releaseAjie",next:"chapter1_ajie_released"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
       ,chapter1_ajie_only:{id:"chapter1_ajie_only",progress:chapterProgress(3),goal:textGoal("回应阿杰"),dialogue:{speaker:"阿杰",sub:"只剩阿杰清醒",pages:["阿杰握紧了剑，视线始终没有离开你。"],choices:[{id:"release_lisi",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"chapter1_lisi_released"},{id:"eat_ajie",label:"吃掉阿杰",when:"ajieAlive",action:"swallowAjie",next:"chapter1_both_swallowed",danger:true},{id:"sword",label:"吐出铁剑",when:"hasSword",action:"dropSword",next:"chapter1_sword_recognized_ajie"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_sword_recognized_lisi:{id:"chapter1_sword_recognized_lisi",progress:chapterProgress(4),goal:textGoal("解释铁剑的来历"),dialogue:{speaker:"丽丝",sub:"阿见的剑",pages:["啊！这是阿见的剑！","难道……你吃了他吗？"],choices:[{id:"found",label:"这是我在森林里捡到的",next:"chapter1_quest_request"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_sword_recognized_ajie:{id:"chapter1_sword_recognized_ajie",progress:chapterProgress(4),goal:textGoal("解释铁剑的来历"),dialogue:{speaker:"阿杰",sub:"阿见的剑",pages:["啊！是阿见的剑！","果然……是你吃了他吗？"],choices:[{id:"found",label:"这是我在森林里捡到的",next:"chapter1_quest_request_ajie"},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
-      ,chapter1_quest_request_ajie:{id:"chapter1_quest_request_ajie",progress:chapterProgress(4),goal:textGoal("是否帮助寻找阿见"),dialogue:{speaker:"阿杰",sub:"寻找阿见",pages:["……如果真是你捡到的，那你也许闻到过阿见的气味。","我不喜欢向魔物求助。","但如果你愿意帮我找到弟弟，我会记下这份人情。"],choices:[{id:"accept",label:"同意",set:{"flags.findAjianAccepted":true},next:"chapter1_quest_accepted_ajie"},{id:"decline",label:"拒绝",set:{"flags.findAjianDeclined":true},next:"chapter1_quest_declined_ajie"}]}}
+      ,chapter1_sword_recognized_lisi:{id:"chapter1_sword_recognized_lisi",progress:chapterProgress(4),goal:textGoal("解释铁剑的来历"),dialogue:{speaker:"丽丝",sub:"阿见的剑",pages:["啊！这是阿见的剑！","难道……你吃了他吗？"],choices:[{id:"found",label:"这是我在森林里捡到的",next:"chapter1_quest_request"}]}}
+      ,chapter1_sword_recognized_ajie:{id:"chapter1_sword_recognized_ajie",progress:chapterProgress(4),goal:textGoal("解释铁剑的来历"),dialogue:{speaker:"阿杰",sub:"阿见的剑",pages:["啊！是阿见的剑！","果然……是你吃了他吗？"],choices:[{id:"found",label:"这是我在森林里捡到的",next:"chapter1_quest_request_ajie"}]}}
+      ,chapter1_quest_request_ajie:{id:"chapter1_quest_request_ajie",progress:chapterProgress(4),goal:textGoal("是否帮助寻找阿见"),dialogue:{speaker:"阿杰",sub:"寻找阿见",pages:["……如果真是你捡到的，那你也许闻到过阿见的气味。","我不喜欢向魔物求助。","但如果你愿意帮我找到弟弟，我会记下这份人情。"],choices:[{id:"accept",label:"同意",set:{"flags.findAjianAccepted":true,"quests.findAjian":{"status":"active","title":"寻找阿见","priority":10}},next:"chapter1_quest_accepted_ajie"},{id:"decline",label:"拒绝",set:{"flags.findAjianDeclined":true},next:"chapter1_quest_declined_ajie"}]}}
       ,chapter1_quest_accepted_ajie:{id:"chapter1_quest_accepted_ajie",progress:chapterProgress(5),goal:textGoal("继续探索"),dialogue:{speaker:"阿杰",sub:"已接取：寻找阿见",pages:["……谢谢。","我们的营地在河边。如果找到线索，就去那里找我。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
       ,chapter1_quest_declined_ajie:{id:"chapter1_quest_declined_ajie",progress:chapterProgress(5),goal:textGoal("继续探索"),dialogue:{speaker:"阿杰",sub:"暂时拒绝",pages:["随你。","我会自己继续找。你要是改变主意，就来河边的营地。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
       ,chapter1_combat_pending:{id:"chapter1_combat_pending",progress:chapterProgress(3),goal:textGoal("击倒阿杰，或躲避追击 30 秒"),enter:{action:"waitAjieCombat"}}
       ,chapter1_ajie_body_learned:{id:"chapter1_ajie_body_learned",progress:chapterProgress(3),goal:textGoal("阿杰改变了攻击目标"),dialogue:{speaker:"阿杰",sub:"战斗中",pages:["什么？攻击竟然无法对巨蛇的身体造成伤害……","难道要打头才可以？"],choices:[{id:"continue",label:"继续战斗",next:"chapter1_combat_pending"}]}}
       ,chapter1_ajie_downed_wait:{id:"chapter1_ajie_downed_wait",progress:chapterProgress(3),goal:textGoal("靠近倒地的阿杰与他交谈"),enter:{action:"waitDownedInteraction"}}
-      ,chapter1_ajie_downed:{id:"chapter1_ajie_downed",progress:chapterProgress(3),goal:textGoal("回应阿杰"),dialogue:{speaker:"阿杰",sub:"战败",pages:["我认可了你的强大，再无话说！","只可惜让丽丝陪我一起死了……"],choices:[{id:"release_lisi",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"chapter1_lisi_released"},{id:"eat_ajie",label:"吃掉阿杰",action:"swallowAjie",next:"chapter1_both_swallowed",danger:true},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_ajie_downed:{id:"chapter1_ajie_downed",progress:chapterProgress(3),goal:textGoal("回应阿杰"),dialogue:{speaker:"阿杰",sub:"战败",pages:["我认可了你的强大，再无话说！","只可惜让丽丝陪我一起死了……"],choices:[{id:"release_lisi",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"chapter1_lisi_released_after_fight"},{id:"eat_ajie",label:"吃掉阿杰",action:"swallowAjie",next:"chapter1_both_swallowed",danger:true},{id:"leave",label:"离开",next:"chapter1_explore"}]}}
+      ,chapter1_lisi_released_after_fight:{id:"chapter1_lisi_released_after_fight",progress:chapterProgress(4),goal:textGoal("询问两人的目的"),dialogue:{speaker:"旁白",sub:"战斗之后",pages:["你把丽丝吐了出来。阿杰踉跄着扑上前，确认她仍在呼吸后，紧握剑柄的手终于松了些。","我：你们在寻找什么人吗？","阿杰：……你刚才差点把丽丝吃了，现在又问这个？","他盯着你看了片刻，又低头看向安然无恙的丽丝。","阿杰：我们在找阿见，我失踪的弟弟。他的剑丢在这片森林里，人却一直没有回来。","阿杰：你既然愿意把丽丝还回来……如果见到阿见，就告诉他我们在河边的营地等他。"],choices:[{id:"accept",label:"答应帮忙寻找阿见",set:{"flags.findAjianAccepted":true,"quests.findAjian":{"status":"active","title":"寻找阿见","priority":10}},next:"chapter1_quest_accepted_ajie"},{id:"decline",label:"暂时不答应",set:{"flags.findAjianDeclined":true},next:"chapter1_quest_declined_ajie"}]}}
+      ,bandit_intro:{id:"bandit_intro",progress:chapterProgress(10),goal:textGoal("应对吊桥前的劫匪"),dialogue:{speaker:"巴克",sub:"吊桥前的劫匪",pages:["巴克：站住！过路费，三枚金币。","玩家：为什么？","巴克：哪他妈那么多为什么。交钱，然后滚。","米罗：阁下若没有金币，留下值钱的东西也可。"],choices:[{id:"pay",label:"支付3枚金币",when:"hasGold3",action:"payBandits",next:"bandit_paid"},{id:"sword",label:"吐出铁剑",when:"hasSword",action:"tradeSword",next:"bandit_sword_paid"},{id:"refuse",label:"拒绝",next:"bandit_threat"}]}}
+      ,bandit_paid:{id:"bandit_paid",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"米罗",sub:"过路费",pages:["米罗收起金币，退到路边。","米罗：方才有一批哥布林从这里经过，为首的似乎是个巫师。它们已经过桥了。","巴克：少他妈多嘴。钱收了，放它过去。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,bandit_sword_paid:{id:"bandit_sword_paid",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"巴克",sub:"抵账",pages:["你把铁剑吐在巴克脚边。","巴克：锈成这副鬼样子……妈的，算了。剑留下，你滚吧。","米罗：方才也有一批哥布林往桥那边去了，为首的拿着法杖，想来是个巫师。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,bandit_threat:{id:"bandit_threat",progress:chapterProgress(10),goal:textGoal("摆脱劫匪"),dialogue:{speaker:"巴克",sub:"路被拦住",pages:["巴克：不给？那我他妈就从你肚子里自己找。","米罗没有接话，只是慢慢举起短弓。"],choices:[{id:"release_ajie",label:"吐出阿杰",when:"hasAjie",action:"releaseAjie",next:"bandit_hostage_threat"},{id:"release_lisi",label:"吐出丽丝",when:"hasLisi",action:"releaseLisi",next:"bandit_hostage_threat"},{id:"release_ajian",label:"吐出阿见",when:"hasAjian",action:"releaseAjian",next:"bandit_hostage_threat"},{id:"swallow_buck",label:"吃掉巴克",when:"buckAlive",action:"swallowBuck",next:"bandit_buck_swallowed",danger:true},{id:"swallow_miro",label:"吃掉米罗",when:"miroAlive",action:"swallowMiro",next:"bandit_miro_swallowed",danger:true},{id:"rob",label:"反过来让他们交钱",next:"bandit_reverse_challenge"},{id:"fight",label:"准备战斗",action:"startBanditCombat",next:"bandit_combat"}]}}
+      ,bandit_reverse_challenge:{id:"bandit_reverse_challenge",progress:chapterProgress(10),goal:textGoal("回应劫匪"),dialogue:{speaker:"巴克",sub:"反向打劫",pages:["玩家：现在轮到你们交钱了。六枚。","巴克：我操，你还真敢反过来抢老子？","米罗：既然双方都不肯退让，恐怕只能以兵刃分胜负了。","巴克：说人话。","米罗：要打起来了。"],choices:[{id:"fight",label:"动手",action:"startBanditCombat",next:"bandit_combat"}]}}
+      ,bandit_hostage_threat:{id:"bandit_hostage_threat",progress:chapterProgress(10),goal:textGoal("逼退劫匪"),dialogue:{speaker:"旁白",sub:"胃袋里的人",pages:["一个浑身黏液的人摔在地上，仍然昏迷。","米罗：阁下胃中竟真有人……巴克，此事恐怕不妥。","巴克：我他妈看见了。用不着你提醒。"],choices:[{id:"rob",label:"把你们的钱交出来",action:"reverseBanditRobbery",next:"bandit_robbed"},{id:"fight",label:"还是打一场",action:"startBanditCombat",next:"bandit_combat"}]}}
+      ,bandit_buck_swallowed:{id:"bandit_buck_swallowed",progress:chapterProgress(10),goal:textGoal("处置剩下的劫匪"),dialogue:{speaker:"米罗",sub:"巴克被吞下",pages:["巴克的骂声很快消失在你的喉咙深处。","米罗握着短弓站在原地，脸色发白。","米罗：钱财可以交给阁下。还请先放巴克出来。"],choices:[{id:"rob",label:"先把钱交出来",action:"reverseBanditRobbery",next:"bandit_robbed"},{id:"release",label:"吐出巴克",action:"releaseBuck",next:"bandit_released"},{id:"eat",label:"把米罗也吃掉",action:"swallowMiro",next:"bandit_both_swallowed",danger:true}]}}
+      ,bandit_miro_swallowed:{id:"bandit_miro_swallowed",progress:chapterProgress(10),goal:textGoal("处置剩下的劫匪"),dialogue:{speaker:"巴克",sub:"米罗被吞下",pages:["米罗来不及出声便被你吞了下去。","巴克：我操……把他吐出来！","巴克握紧武器，却没有立刻冲上来。"],choices:[{id:"rob",label:"把钱袋交出来",action:"reverseBanditRobbery",next:"bandit_robbed"},{id:"release",label:"吐出米罗",action:"releaseMiro",next:"bandit_released"},{id:"eat",label:"把巴克也吃掉",action:"swallowBuck",next:"bandit_both_swallowed",danger:true},{id:"fight",label:"让巴克动手",action:"startBanditCombat",next:"bandit_combat"}]}}
+      ,bandit_released:{id:"bandit_released",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"劫匪退让",pages:["被吐出来的人倒在地上，没有醒来。","仍然清醒的劫匪向后退开：人既然还活着，我们不再阻拦。先前有一批哥布林过了桥，为首的是个巫师。"],choices:[{id:"leave",label:"继续探索",action:"resolveBanditThreat",next:"chapter1_explore"}]}}
+      ,bandit_both_swallowed:{id:"bandit_both_swallowed",progress:chapterProgress(10),goal:textGoal("查看掉落物"),dialogue:{speaker:"旁白",sub:"劫匪留下的钱袋",pages:["两名劫匪都进了你的胃袋。地上留下一个钱袋和一张潦草的路线图。","路线图标出了一批已经过桥的哥布林，为首者拿着法杖。"],choices:[{id:"take",label:"收下6枚金币",action:"reverseBanditRobbery",next:"chapter1_explore"}]}}
+      ,bandit_robbed:{id:"bandit_robbed",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"反向打劫",pages:["对方把钱袋丢到你面前。里面共有6枚金币。","为了让你赶紧离开，他又说出一条消息：先前有一批哥布林过桥，为首的是个巫师。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,bandit_combat:{id:"bandit_combat",progress:chapterProgress(10),goal:textGoal("击晕两名劫匪"),enter:{action:"waitBanditCombat"}}
+      ,bandit_search:{id:"bandit_search",progress:chapterProgress(10),goal:textGoal("搜查劫匪"),dialogue:{speaker:"旁白",sub:"战斗结束",pages:["两名劫匪都失去了反抗能力。一个钱袋落在地上。","钱袋里有6枚金币，还有一张画着吊桥的路线图。图上标着一群哥布林，领头者拿着法杖。"],choices:[{id:"take",label:"收下金币并继续",action:"claimBanditCombatReward",next:"chapter1_explore"}]}}
+      ,bandit_resolved:{id:"bandit_resolved",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"不再拦路",pages:["这里已经没有人能够再次收取过路费。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,bandit_resolved_buck:{id:"bandit_resolved_buck",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"巴克",sub:"不再拦路",pages:["钱也给了，路也让了。还站这儿干什么？赶紧滚。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,bandit_resolved_miro:{id:"bandit_resolved_miro",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"米罗",sub:"不再拦路",pages:["约定已经履行。阁下可以自行通行。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_settlement_rider_both:{id:"camp_settlement_rider_both",progress:chapterProgress(10),goal:textGoal("在营地交回阿见"),dialogue:{speaker:"阿见",sub:"河边营地",pages:["阿杰！丽丝！","丽丝：那是……阿见？","阿杰：阿见！你还活着！","阿见：对不起，让你们担心了。我没事，是他救了我。","阿见从你的背上慢慢滑下来。阿杰冲上前扶住他，却在看清他的模样后愣住了。","阿见：诅咒还没有解除。其他的，我慢慢解释。"],choices:[{id:"continue",label:"谈谈报酬",next:"camp_reward_lisi"}]}}
+      ,camp_settlement_rider_lisi:{id:"camp_settlement_rider_lisi",progress:chapterProgress(10),goal:textGoal("在营地交回阿见"),dialogue:{speaker:"阿见",sub:"河边营地",pages:["丽丝！原来你真的在这里！","丽丝：阿见……真的是你！太好了。先下来，我扶着你。","阿见从你的背上慢慢滑下来。","阿见：是他救了我。诅咒还没有解除，其他的我慢慢解释。"],choices:[{id:"continue",label:"谈谈报酬",next:"camp_reward_lisi_only"}]}}
+      ,camp_settlement_rider_ajie:{id:"camp_settlement_rider_ajie",progress:chapterProgress(10),goal:textGoal("在营地交回阿见"),dialogue:{speaker:"阿见",sub:"河边营地",pages:["阿杰！原来你真的在这里！","阿杰：阿见！你怎么会骑在这条蛇背上……算了，先下来再说。","阿见从你的背上慢慢滑下来。","阿见：是他救了我。诅咒还没有解除，其他的我慢慢解释。"],choices:[{id:"continue",label:"谈谈报酬",next:"camp_reward_ajie"}]}}
+      ,camp_settlement_stomach_both:{id:"camp_settlement_stomach_both",progress:chapterProgress(10),goal:textGoal("在营地交回阿见"),dialogue:{speaker:"旁白",sub:"河边营地",pages:["阿见浑身沾满黏液地躺在营火旁。","他还有呼吸，却仍在昏迷。","丽丝：这个女孩子……等等，是阿见吗？他还有呼吸，先让他躺下。","阿杰：阿见！……先把他安顿好。","丽丝：谢谢你把他带回来。等他醒来，我们会把事情问清楚。"],choices:[{id:"continue",label:"谈谈报酬",next:"camp_reward_lisi"}]}}
+      ,camp_settlement_stomach_lisi:{id:"camp_settlement_stomach_lisi",progress:chapterProgress(10),goal:textGoal("在营地交回阿见"),dialogue:{speaker:"旁白",sub:"河边营地",pages:["阿见浑身沾满黏液地躺在营火旁。","他还有呼吸，却仍在昏迷。","丽丝：这个女孩子……等等，是阿见吗？","丽丝：……他还有呼吸。谢谢你把他带回来，我会照顾他的。"],choices:[{id:"continue",label:"谈谈报酬",next:"camp_reward_lisi_only"}]}}
+      ,camp_settlement_stomach_ajie:{id:"camp_settlement_stomach_ajie",progress:chapterProgress(10),goal:textGoal("在营地交回阿见"),dialogue:{speaker:"旁白",sub:"河边营地",pages:["阿见浑身沾满黏液地躺在营火旁。","他还有呼吸，却仍在昏迷。","阿杰：这个女孩是……阿见！","阿杰：……他还活着。谢谢你把他带回来。"],choices:[{id:"continue",label:"谈谈报酬",next:"camp_reward_ajie"}]}}
+      ,camp_reward_lisi:{id:"camp_reward_lisi",progress:chapterProgress(10),goal:textGoal("选择报酬"),dialogue:{speaker:"丽丝",sub:"任务奖励",pages:["我们身上……只剩十枚金币了。","你是想要金币，还是……","旁白：一阵难以忍受的饥饿感突然袭来。","旁白：你感觉自己快要控制不住，很想吃掉面前的人。"],choices:[{id:"gold",label:"要10枚金币",action:"claimCampReward",next:"camp_settled"},{id:"lick_ajie",label:"舔一下阿杰的脚",when:"ajieAlive",action:"claimCampLick",next:"camp_lick_ajie"},{id:"lick_lisi",label:"舔一下丽丝的脚",when:"lisiAlive",action:"claimCampLick",next:"camp_lick_lisi"},{id:"eat_ajie",label:"吃掉阿杰",when:"ajieAlive",action:"claimCampEatAjie",next:"camp_eat_ajie",danger:true},{id:"eat_lisi",label:"吃掉丽丝",when:"lisiAlive",action:"claimCampEatLisi",next:"camp_eat_lisi",danger:true}]}}
+      ,camp_reward_lisi_only:{id:"camp_reward_lisi_only",progress:chapterProgress(10),goal:textGoal("选择报酬"),dialogue:{speaker:"丽丝",sub:"任务奖励",pages:["我身上……只剩十枚金币了。","你是想要金币，还是……","旁白：一阵难以忍受的饥饿感突然袭来。","旁白：你感觉自己快要控制不住，很想吃掉面前的人。"],choices:[{id:"gold",label:"要10枚金币",action:"claimCampReward",next:"camp_settled"},{id:"lick",label:"舔一下丽丝的脚",action:"claimCampLick",next:"camp_lick_lisi_alone"},{id:"eat",label:"吃掉丽丝",action:"claimCampEatLisi",next:"camp_eat_lisi_alone",danger:true}]}}
+      ,camp_reward_ajie:{id:"camp_reward_ajie",progress:chapterProgress(10),goal:textGoal("选择报酬"),dialogue:{speaker:"阿杰",sub:"任务奖励",pages:["我不喜欢欠别人人情。","我身上只有十枚金币。拿去。","旁白：一阵难以忍受的饥饿感突然袭来。","旁白：你感觉自己快要控制不住，很想吃掉面前的人。"],choices:[{id:"gold",label:"要10枚金币",action:"claimCampReward",next:"camp_settled"},{id:"lick",label:"舔一下阿杰的脚",action:"claimCampLick",next:"camp_lick_ajie_alone"},{id:"eat",label:"吃掉阿杰",action:"claimCampEatAjie",next:"camp_eat_ajie_alone",danger:true}]}}
+      ,camp_lick_ajie:{id:"camp_lick_ajie",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"阿杰",sub:"奇怪的报酬",pages:["你、你干什么！","阿杰满脸涨红，猛地缩回脚。嘴上很凶，却没有拔剑。","丽丝：噗……原来你也有害怕的东西。","旁白：一股奇妙的感觉从你心底升起，饥饿感缓解了不少。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_lick_lisi:{id:"camp_lick_lisi",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"丽丝",sub:"奇怪的报酬",pages:["既然这样能让你好受些，那就……随你吧。","丽丝无奈地笑了笑，没有躲开。","阿杰：喂！你别太得寸进尺！","旁白：一股奇妙的感觉从你心底升起，饥饿感缓解了不少。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_lick_ajie_alone:{id:"camp_lick_ajie_alone",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"阿杰",sub:"奇怪的报酬",pages:["你、你干什么！","阿杰满脸涨红，猛地缩回脚。嘴上很凶，却没有拔剑。","旁白：一股奇妙的感觉从你心底升起，饥饿感缓解了不少。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_lick_lisi_alone:{id:"camp_lick_lisi_alone",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"丽丝",sub:"奇怪的报酬",pages:["既然这样能让你好受些，那就……随你吧。","丽丝无奈地笑了笑，没有躲开。","旁白：一股奇妙的感觉从你心底升起，饥饿感缓解了不少。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_eat_ajie:{id:"camp_eat_ajie",progress:chapterProgress(10),goal:textGoal("决定是否把阿杰吐出来"),dialogue:{speaker:"丽丝",sub:"失控的饥饿",pages:["阿杰！","把他吐出来……求你了。","阿见：你不是来帮我们的吗……请把阿杰还回来，好吗？"],choices:[{id:"release",label:"吐出阿杰",action:"releaseAjie",next:"camp_release_ajie"},{id:"leave",label:"带着阿杰离开",next:"chapter1_explore"}]}}
+      ,camp_eat_lisi:{id:"camp_eat_lisi",progress:chapterProgress(10),goal:textGoal("决定是否把丽丝吐出来"),dialogue:{speaker:"旁白",sub:"失控的饥饿",pages:["阿杰的手猛地按上剑柄，却没有拔剑。他盯着你，强迫自己站在原地。","阿杰：把丽丝吐出来。现在。","阿杰：我知道你听得懂，也知道你能把人还回来。别逼我求你。","阿见：丽丝……！请把她吐出来，她会害怕的。"],choices:[{id:"release",label:"吐出丽丝",action:"releaseLisi",next:"camp_release_lisi"},{id:"leave",label:"带着丽丝离开",next:"chapter1_explore"}]}}
+      ,camp_eat_ajie_alone:{id:"camp_eat_ajie_alone",progress:chapterProgress(10),goal:textGoal("决定是否把阿杰吐出来"),dialogue:{speaker:"旁白",sub:"失控的饥饿",pages:["阿杰消失在你的喉咙深处。营火旁一下安静下来。","你仍能把他吐出来。"],choices:[{id:"release",label:"吐出阿杰",action:"releaseAjie",next:"camp_release_ajie"},{id:"leave",label:"带着阿杰离开",next:"chapter1_explore"}]}}
+      ,camp_eat_lisi_alone:{id:"camp_eat_lisi_alone",progress:chapterProgress(10),goal:textGoal("决定是否把丽丝吐出来"),dialogue:{speaker:"旁白",sub:"失控的饥饿",pages:["丽丝消失在你的喉咙深处。营火旁一下安静下来。","你仍能把她吐出来。"],choices:[{id:"release",label:"吐出丽丝",action:"releaseLisi",next:"camp_release_lisi"},{id:"leave",label:"带着丽丝离开",next:"chapter1_explore"}]}}
+      ,camp_release_ajie:{id:"camp_release_ajie",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"及时吐出",pages:["被吐出来的阿杰摔在地上，浑身沾满黏液，一动不动。","他还有呼吸，只是陷入了昏迷。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_release_lisi:{id:"camp_release_lisi",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"及时吐出",pages:["被吐出来的丽丝摔在地上，浑身沾满黏液，一动不动。","她还有呼吸，只是陷入了昏迷。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_settled:{id:"camp_settled",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"任务完成",pages:["十枚金币已经收好。","前方是吊桥。最近有哥布林往那边去了。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_ajian_unconscious:{id:"camp_ajian_unconscious",progress:chapterProgress(10),goal:textGoal("查看昏迷的阿见"),dialogue:{speaker:"旁白",sub:"河边营地",pages:["阿见躺在营火旁，呼吸平稳，只是还没有醒。"],choices:[{id:"face",label:"舔他的脸叫醒他",action:"rewakeAjianFace",next:"camp_ajian_woken"},{id:"foot",label:"舔他的脚叫醒他",action:"rewakeAjianFoot",next:"camp_ajian_woken"},{id:"leave",label:"让他继续休息",next:"chapter1_explore"}]}}
+      ,camp_ajian_woken:{id:"camp_ajian_woken",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"阿见",sub:"河边营地",pages:["唔……又是这样叫醒人。","不过，谢谢你把我带回来。诅咒还没有解除，等我缓过来再细说。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,camp_ajian_resting:{id:"camp_ajian_resting",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"阿见",sub:"河边营地",pages:["我没事，只是还有些累。","谢谢你把我带回来。哥布林巫师已经过桥了，我们之后还会再见。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,bandit_resolved_return:{id:"bandit_resolved_return",progress:chapterProgress(10),goal:textGoal("继续探索"),dialogue:{speaker:"米罗",sub:"吊桥前",pages:["我们不收第二次过路费。哥布林巫师带着队伍过桥后，往更远处去了。"],choices:[{id:"leave",label:"继续探索",next:"chapter1_explore"}]}}
+      ,cave_intro:{id:"cave_intro",progress:chapterProgress(6),goal:textGoal("探索哥布林洞窟"),dialogue:{speaker:"旁白",sub:"哥布林洞窟入口",pages:["山洞里残留着杂乱的脚印，篝火还没有完全熄灭。","哥布林似乎都外出打猎了，附近暂时没有动静。"],choices:[{id:"continue",label:"继续深入",set:{"flags.caveEntered":true},next:"cave_explore"}]}}
+      ,cave_explore:{id:"cave_explore",enter:{action:"caveExplore"},progress:chapterProgress(6),goal:textGoal("探索洞窟，寻找阿见")}
+      ,cave_soup:{id:"cave_soup",progress:chapterProgress(6),goal:textGoal("查看热汤"),dialogue:{speaker:"旁白",sub:"尚有余温的营火",pages:["锅里的汤还冒着热气。","似乎有人刚离开不久。"],choices:[{id:"drink",label:"喝掉汤",action:"drinkSoup",next:"cave_soup_drunk"},{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_soup_drunk:{id:"cave_soup_drunk",progress:chapterProgress(6),goal:textGoal("继续探索"),dialogue:{speaker:"我",sub:"热汤",pages:["汤有些烫。","但暖意从喉咙一直传到胃里。","你感觉好受了一些。"],choices:[{id:"continue",label:"继续探索",next:"cave_explore"}]}}
+      ,cave_soup_empty:{id:"cave_soup_empty",progress:chapterProgress(6),goal:textGoal("继续探索"),dialogue:{speaker:"旁白",sub:"空汤锅",pages:["锅里只剩下一点余温。"],choices:[{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_potion:{id:"cave_potion",progress:chapterProgress(6),goal:textGoal("查看木箱"),dialogue:{speaker:"旁白",sub:"阿见身旁的木箱",pages:["木箱里放着一瓶泛着绿光的回复药水。"],choices:[{id:"take",label:"收下回复药水",action:"takePotion",next:"cave_potion_taken"},{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_potion_taken:{id:"cave_potion_taken",progress:chapterProgress(6),goal:textGoal("继续探索"),dialogue:{speaker:"教学",sub:"回复药水",pages:["回复药水进入了胃袋。它重 1，可以堆叠。","把它吐出去后，命中人物或自己会回复 1 心；命中任何东西后药瓶都会碎掉，无法回收。"],choices:[{id:"continue",label:"明白了",next:"cave_explore"}]}}
+      ,cave_ajian_found:{id:"cave_ajian_found",progress:chapterProgress(7),goal:textGoal("叫醒被吊起的人"),dialogue:{speaker:"旁白",sub:"洞窟深处",pages:["继续深入，一个身材丰满的少女被绳索吊在半空。","她双脚离地，似乎已经昏迷。"],choices:[{id:"face",label:"舔她的脸",action:"wakeAjianFace",next:"cave_ajian_woke_face"},{id:"foot",label:"舔她的脚",action:"wakeAjianFoot",next:"cave_ajian_woke_foot"},{id:"leave",label:"暂时离开",next:"cave_explore"}]}}
+      ,cave_ajian_woke_face:{id:"cave_ajian_woke_face",progress:chapterProgress(7),goal:textGoal("帮助被绑住的人"),dialogue:{speaker:"少女",portrait:"ajian",sub:"被绳索吊起",pages:["一股湿滑冰冷的触感从脸颊传来，让她瞬间清醒。","少女猛地惊醒，看到眼前的巨蛇，尖叫一声后又慌忙捂住嘴。","等、等一下……别走。","绳子勒得好痛……求求你，先把我放下来。"],choices:[{id:"cut",label:"咬断绳索",action:"cutAjianRope",next:"cave_ajian_untied"},{id:"leave",label:"离开",next:"cave_ajian_left_bound"}]}}
+      ,cave_ajian_woke_foot:{id:"cave_ajian_woke_foot",progress:chapterProgress(7),goal:textGoal("帮助被绑住的人"),dialogue:{speaker:"少女",portrait:"ajian",sub:"被绳索吊起",pages:["脚底传来的痒意让她猛地一颤，整个人惊醒过来。","她看到眼前的巨蛇，尖叫一声后又立刻捂住嘴。","等、等一下……别走。","绳子勒得好痛……求求你，先把我放下来。"],choices:[{id:"cut",label:"咬断绳索",action:"cutAjianRope",next:"cave_ajian_untied"},{id:"leave",label:"离开",next:"cave_ajian_left_bound"}]}}
+      ,cave_ajian_left_bound:{id:"cave_ajian_left_bound",progress:chapterProgress(7),goal:textGoal("决定是否松绑"),dialogue:{speaker:"少女",portrait:"ajian",sub:"仍被吊着",pages:["等等……别把我一个人留在这里！"],choices:[{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_ajian_untie_return:{id:"cave_ajian_untie_return",progress:chapterProgress(7),goal:textGoal("替她松绑"),dialogue:{speaker:"少女",portrait:"ajian",sub:"仍被吊着",pages:["你回来了……求你先把绳子弄断，好吗？"],choices:[{id:"cut",label:"咬断绳索",action:"cutAjianRope",next:"cave_ajian_untied"},{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_ajian_untied:{id:"cave_ajian_untied",progress:chapterProgress(7),goal:textGoal("询问她的身份"),dialogue:{speaker:"旁白",sub:"绳索断开",pages:["你用牙尖勾住绳索，小心地将它咬断。","少女失去支撑，慌乱中抱住你的鼻尖，随后滑坐到地上。","少女：谢、谢谢……我还以为你会连我一起咬下去。"],choices:[{id:"who",label:"你是谁？",next:"cave_ajian_identity_who"},{id:"why",label:"你为什么在这里？",next:"cave_ajian_identity_why"}]}}
+      ,cave_ajian_identity_who:{id:"cave_ajian_identity_who",progress:chapterProgress(7),goal:textGoal("听她说明"),dialogue:{speaker:"少女",portrait:"ajian",sub:"身份不明",pages:["我……我是……","不……没什么。","你跟他们不是一伙的吧？","我是被哥布林抓到这里来的。","他们要对我……","旁白：她的声音发颤，没有继续说下去。"],choices:[{id:"continue",label:"继续",next:"cave_goblins_return"}]}}
+      ,cave_ajian_identity_why:{id:"cave_ajian_identity_why",progress:chapterProgress(7),goal:textGoal("听她说明"),dialogue:{speaker:"少女",portrait:"ajian",sub:"身份不明",pages:["我是被哥布林抓到这里来的……","他们说要对我……","旁白：她猛地打了个寒颤，没有把话说完。"],choices:[{id:"continue",label:"继续",next:"cave_goblins_return"}]}}
+      ,cave_goblins_return:{id:"cave_goblins_return",progress:chapterProgress(8),goal:textGoal("准备迎战"),dialogue:{speaker:"旁白",sub:"哥布林归巢",pages:["刚才的尖叫传进洞穴深处。","两名哥布林弓箭手从祭坛方向探出头，朝这里围了过来。","少女：它们回来了……！"],choices:[{id:"fight",label:"挡在她前面",action:"spawnGoblinEncounter",next:"cave_goblin_combat"}]}}
+      ,cave_goblin_combat:{id:"cave_goblin_combat",progress:chapterProgress(8),goal:textGoal("击败两名哥布林弓箭手"),enter:{action:"waitCaveCombat"}}
+      ,cave_ajian_rescued:{id:"cave_ajian_rescued",progress:chapterProgress(9),goal:textGoal("与获救的人交谈"),dialogue:{speaker:"少女",portrait:"ajian",sub:"战斗结束",pages:["你……你救了我？","她愣愣地看着你，紧绷的肩膀终于松了下来。","谢谢你……"],choices:[{id:"ask",label:"问她接下来怎么办",next:"cave_ajian_reveal"},{id:"lick",label:"舔她的脚",when:"ajianFootAvailable",action:"lickRescuedAjian",next:"cave_ajian_rescue_lick"},{id:"eat",label:"吃掉她",action:"swallowAjian",next:"cave_explore",danger:true},{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_ajian_rescue_lick:{id:"cave_ajian_rescue_lick",progress:chapterProgress(9),goal:textGoal("继续交谈"),dialogue:{speaker:"少女",portrait:"ajian",sub:"战斗结束",pages:["少女惊叫着缩起脚，脸涨得通红。","她迟疑了一会儿，还是别扭地把脚伸了回来。","……既然你救了我，那就……一下。"],choices:[{id:"back",label:"继续交谈",next:"cave_ajian_rescued"}]}}
+      ,cave_ajian_critical:{id:"cave_ajian_critical",progress:chapterProgress(9),goal:textGoal("救治濒死的少女"),dialogue:{speaker:"旁白",sub:"战斗结束",pages:["绳索已经断开，少女倒在地上，气息微弱，一动不动。","她没有死，但已经陷入濒死的昏迷。"],choices:[{id:"potion",label:"使用回复药水",when:"hasPotion",action:"healAjian",next:"cave_ajian_reveal"},{id:"lick",label:"舔她的脸",next:"cave_ajian_critical_brief"},{id:"eat",label:"吃掉她",action:"swallowAjian",next:"cave_explore",danger:true},{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_ajian_critical_brief:{id:"cave_ajian_critical_brief",progress:chapterProgress(9),goal:textGoal("寻找回复药水"),dialogue:{speaker:"阿见",sub:"短暂苏醒",pages:["我听得见……可是身体动不了……","他的眼睛再次合上了。"],choices:[{id:"leave",label:"寻找回复药水",next:"cave_explore"}]}}
+      ,cave_ajian_reveal:{id:"cave_ajian_reveal",enter:{action:"revealAjian"},progress:chapterProgress(9),goal:textGoal("听阿见坦白身份")}
+      ,cave_ajian_reveal_known:{id:"cave_ajian_reveal_known",progress:chapterProgress(9),goal:textGoal("带阿见回营地"),dialogue:{speaker:"阿见",sub:"获救后的坦白",pages:["其实……我不是女孩子。","我本来是个男人，是中了哥布林巫师的诅咒才变成这副样子的。","逃跑的时候，我把剑弄丢了，最后还是被它们抓了回来。","我：你是不是叫阿见？","你……你怎么会知道我的名字？！","我：阿杰和丽丝正在找你。他们在河边的营地等你。"],choices:[{id:"continue",label:"继续",next:"cave_ajian_sword"}]}}
+      ,cave_ajian_reveal_unknown:{id:"cave_ajian_reveal_unknown",progress:chapterProgress(9),goal:textGoal("带阿见回营地"),dialogue:{speaker:"阿见",sub:"获救后的坦白",pages:["其实……我不是女孩子。","我本来是个男人，是中了哥布林巫师的诅咒才变成这副样子的。","逃跑的时候，我把剑弄丢了，最后还是被它们抓了回来。","我叫阿见。我和两个同伴走散了。","我们原本约好在河边扎营……他们也许还在那里。","我：我没有见过他们，但可以带你去找那个营地。"],choices:[{id:"continue",label:"继续",next:"cave_ajian_sword"}]}}
+      ,cave_ajian_sword:{id:"cave_ajian_sword",progress:chapterProgress(9),goal:textGoal("决定阿见的去向"),dialogue:{speaker:"阿见",sub:"准备离开洞窟",pages:["我现在这个样子……一个人回去有点害怕。"],choices:[{id:"sword",label:"吐出铁剑",when:"hasSword",action:"dropSword",next:"cave_ajian_sword_recognized"},{id:"continue",label:"商量怎么回营地",next:"cave_ajian_destination"}]}}
+      ,cave_ajian_sword_recognized:{id:"cave_ajian_sword_recognized",progress:chapterProgress(9),goal:textGoal("决定阿见的去向"),dialogue:{speaker:"阿见",sub:"失而复得的剑",pages:["这……这是我的剑！你在哪里找到的？","我：在森林里。","阿见看了剑一眼，却没有伸手。","这个身体连剑都握不稳。还是先放在你那里吧。"],choices:[{id:"continue",label:"商量怎么回营地",next:"cave_ajian_destination"}]}}
+      ,cave_ajian_destination:{id:"cave_ajian_destination",progress:chapterProgress(10),goal:textGoal("把阿见带回河边营地"),dialogue:{speaker:"阿见",sub:"决定去向",pages:["你能带我去河边的营地吗？"],choices:[{id:"ride",label:"骑到我背上吧",when:"canMountAjian",action:"mountAjian",next:"cave_ajian_mounted"},{id:"eat",label:"吃掉阿见",action:"swallowAjian",next:"cave_explore",danger:true},{id:"leave",label:"暂时留在这里",next:"cave_explore"}]}}
+      ,cave_ajian_mounted:{id:"cave_ajian_mounted",progress:chapterProgress(10),goal:textGoal("把阿见带回河边营地"),dialogue:{speaker:"阿见",sub:"骑乘",pages:["骑、骑在你身上？","……总比再被吃一次好。","旁白：你伏低脑袋，把舌尖搭在地上。阿见沿着舌尖慢慢爬到头后第一节身体上坐稳。","好、好了。你走慢一点……"],choices:[{id:"go",label:"返回河边营地",next:"cave_explore"}]}}
+      ,cave_ajian_rewake:{id:"cave_ajian_rewake",progress:chapterProgress(9),goal:textGoal("叫醒阿见"),dialogue:{speaker:"旁白",sub:"被吐出的阿见",pages:["被吐出来的阿见浑身沾满粘液，仍在昏迷。"],choices:[{id:"eat",label:"再次吃掉",action:"swallowAjian",next:"cave_explore",danger:true},{id:"face",label:"舔他的脸",action:"rewakeAjianFace",next:"cave_ajian_rewake_resolve"},{id:"foot",label:"舔他的脚",action:"rewakeAjianFoot",next:"cave_ajian_rewake_resolve"},{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,cave_ajian_rewake_resolve:{id:"cave_ajian_rewake_resolve",enter:{action:"resolveAjianRewake"},progress:chapterProgress(9),goal:textGoal("查看阿见的状况")}
+      ,cave_ajian_rewake_same_face:{id:"cave_ajian_rewake_same_face",progress:chapterProgress(9),goal:textGoal("决定阿见的去向"),dialogue:{speaker:"阿见",sub:"再次舔脸唤醒",pages:["唔……这股又凉又黏的感觉……","等等，你上次就是这么把我叫醒的吧？","为什么我会开始熟悉这种感觉啊！","我刚才……又被你吃掉了吗？"],choices:[{id:"carry",label:"只是为了带你走",next:"cave_ajian_destination"},{id:"urge",label:"我有时控制不住自己",next:"cave_ajian_destination"},{id:"eat",label:"再次吃掉",action:"swallowAjian",next:"cave_explore",danger:true}]}}
+      ,cave_ajian_rewake_same_foot:{id:"cave_ajian_rewake_same_foot",progress:chapterProgress(9),goal:textGoal("决定阿见的去向"),dialogue:{speaker:"阿见",sub:"再次舔脚唤醒",pages:["旁白：阿见的脚趾猛地蜷了起来。","又、又来？！","……算了。至少你还记得把我叫醒。","我刚才……又被你吃掉了吗？"],choices:[{id:"carry",label:"只是为了带你走",next:"cave_ajian_destination"},{id:"urge",label:"我有时控制不住自己",next:"cave_ajian_destination"},{id:"eat",label:"再次吃掉",action:"swallowAjian",next:"cave_explore",danger:true}]}}
+      ,cave_ajian_rewake_switch_foot:{id:"cave_ajian_rewake_switch_foot",progress:chapterProgress(9),goal:textGoal("决定阿见的去向"),dialogue:{speaker:"阿见",sub:"换一种方式唤醒",pages:["呜哇！这次怎么换地方了？！","……不对，我为什么要问这个！","我刚才……又被你吃掉了吗？"],choices:[{id:"carry",label:"只是为了带你走",next:"cave_ajian_destination"},{id:"urge",label:"我有时控制不住自己",next:"cave_ajian_destination"},{id:"eat",label:"再次吃掉",action:"swallowAjian",next:"cave_explore",danger:true}]}}
+      ,cave_ajian_rewake_switch_face:{id:"cave_ajian_rewake_switch_face",progress:chapterProgress(9),goal:textGoal("决定阿见的去向"),dialogue:{speaker:"阿见",sub:"换一种方式唤醒",pages:["……这次是脸？太好了……","不对，这有什么值得庆幸的！","我刚才……又被你吃掉了吗？"],choices:[{id:"carry",label:"只是为了带你走",next:"cave_ajian_destination"},{id:"urge",label:"我有时控制不住自己",next:"cave_ajian_destination"},{id:"eat",label:"再次吃掉",action:"swallowAjian",next:"cave_explore",danger:true}]}}
+      ,chapter1_ring:{id:"chapter1_ring",progress:chapterProgress(6),goal:textGoal("查看黄色圆环"),dialogue:{speaker:"我",sub:"洞窟祭坛",pages:["祭坛上摆着一个泛着诡异光泽的黄色圆环。"],choices:[{id:"eat",label:"吃掉黄色圆环",action:"takeRing",next:"chapter1_ring_tutorial"},{id:"leave",label:"离开",next:"cave_explore"}]}}
+      ,chapter1_ring_tutorial:{id:"chapter1_ring_tutorial",progress:chapterProgress(6),goal:textGoal("了解环形节点"),dialogue:{speaker:"教学",sub:"获得环形节点",pages:["你获得了 1 点环形节点充能。","环形节点能让你从自己的身体上安全穿过，帮助你闭合包围并困住敌人。","按 {node} 在蛇头当前位置放置节点，再引导蛇头从节点处穿过自己的身体。尾巴完全通过后，节点会自动回收。","被困的敌人会攻击节点；节点被摧毁时，这点充能也会失去。"],choices:[{id:"continue",label:"明白了",next:"cave_explore"}]}}
     }
   };
 
@@ -1896,6 +2020,8 @@ const CFG={
   neckGuard:4,
   seedLife:10,
 };
+const DEFAULT_WORLD_SIZE={cols:72,rows:48};
+function setWorldSize(cols,rows){CFG.cols=Math.max(32,Math.round(Number(cols)||DEFAULT_WORLD_SIZE.cols));CFG.rows=Math.max(20,Math.round(Number(rows)||DEFAULT_WORLD_SIZE.rows));}
 
 const VIEW_W=32,VIEW_H=20;
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
@@ -1917,10 +2043,10 @@ const api={
 /* ===== 扩展系统：虚拟输入 / 地形区域 / 机关 / 开场（v0.16） ===== */
 const VInput={ax:0,ay:-1,active:false,boost:false,fire:false};
 let touchMode=false;
-let ZONES=[],MECHS=[],TEMPBUFF={mult:1,t:0};
+let ZONES=[],MECHS=[],TERRAINS=[],TEMPBUFF={mult:1,t:0};
 let intro=null,introSeen=false,fireKey=false,fireNeedsRelease=false;
 let curses=[];
-let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false,dialogueFocus=null,memoryVomit=null;
+let npcs=[],npcRespawns=[],panelNpc=null,npcNode=null,moveLock=false,npcSlots=null,npcPanelEl=null,panelOpen=false,freeze=false,dialogueFocus=null,memoryVomit=null,rider=null;
 let storyActive=false,storyStage=-1,storyTransitioning=false;
 let stomach=new IMS_STOMACH.StomachInventory(),stomachPickups=[],stomachHudKey="";
 let panelInputGate=null;
@@ -1952,13 +2078,15 @@ function grantReward(r){
   }
   else if(r.type==="buff"){TEMPBUFF.mult=r.mult||2;TEMPBUFF.t=r.dur||10;ftext(snake.fx,snake.fy-1,(r.name||"狂暴")+" "+TEMPBUFF.t+"s","#ff8f5e");}
   else if(r.type==="seedClear"){seeds.length=0;ftext(snake.fx,snake.fy-1,"弹幕清除！","#7fd1e8");}
+  else if(r.type==="openGate"){openMechanicGate(r.gateId);notifyStoryEvent("mechanicCompleted",{id:r.id||r.gateId,gateId:r.gateId});}
 }
+function openMechanicGate(id){const gate=MECHS.find(mech=>mech.kind==="gate"&&mech.id===id);if(!gate)return false;for(const cell of gate.cellIdx||[]){obstacles.delete(cell);voidCells.delete(cell);}gate.done=true;computeEnclosure();return true;}
 function updateMechs(dt){
   for(const m of MECHS){
     if(m.done||m.kind!=="pillar")continue;
-    const enc=prisonMask[K(m.x,m.y)]>=0&&prisonRegionBody[prisonMask[K(m.x,m.y)]];
+    const region=prisonMask[K(m.x,m.y)],enc=region>=0&&prisonRegionBody[region]&&(!m.requiresNode||prisonRegionNode[region]);
     if(enc)m.prog+=dt;
-    else m.prog=Math.max(0,m.prog-dt*.5);
+    else m.prog=Math.max(0,m.prog-dt*.2);
     if(m.prog>=m.charge){
       m.done=true;
       grantReward(m.reward);
@@ -2150,7 +2278,7 @@ function reset(forTutorial){
   CoopMode.reset();
   cam.x=Math.max(0,Math.min(CFG.cols-VIEW_W,snake.fx-VIEW_W/2));
   cam.y=Math.max(0,Math.min(CFG.rows-VIEW_H,snake.fy-VIEW_H/2));
-  cam.zoom=1;dialogueFocus=null;memoryVomit=null;
+  cam.zoom=1;dialogueFocus=null;memoryVomit=null;rider=null;
   computeEnclosure();
   if(forTutorial){
     for(let i=0;i<6;i++){
@@ -2178,6 +2306,7 @@ function computeEnclosure(){
   const vis=new Uint8Array(total),q=[];
   for(let x=0;x<CFG.cols;x++)for(const y of[0,CFG.rows-1])if(!block[K(x,y)]&&!vis[K(x,y)]){vis[K(x,y)]=1;q.push(K(x,y));}
   for(let y=0;y<CFG.rows;y++)for(const x of[0,CFG.cols-1])if(!block[K(x,y)]&&!vis[K(x,y)]){vis[K(x,y)]=1;q.push(K(x,y));}
+  for(const cell of voidCells){const x=cell%CFG.cols,y=(cell/CFG.cols)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(inB(nx,ny)&&!block[K(nx,ny)]&&!vis[K(nx,ny)]){vis[K(nx,ny)]=1;q.push(K(nx,ny));}}}
   while(q.length){
     const i=q.pop(),x=i%CFG.cols,y=(i/CFG.cols)|0;
     for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
@@ -2208,7 +2337,7 @@ function computeEnclosure(){
   for(let id=0;id<prisonRegions.length;id++){
     for(const i of prisonRegions[id]){
       const x=i%CFG.cols,y=(i/CFG.cols)|0;
-      let isNode=false;
+      let isNode=nodeKeys.has(i);
       for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
         if(nodeKeys.has(K(x+dx,y+dy))){isNode=true;break;}
       }
@@ -2313,7 +2442,7 @@ function nearNode(x,y){
 }
 
 function stomachSpecialWeight(){return stomach?stomach.getLengthContribution():0;}
-function stomachWeight(){return stomach&&typeof stomach.getWeight==="function"?stomach.getWeight():0;}
+function stomachWeight(){return(stomach&&typeof stomach.getWeight==="function"?stomach.getWeight():0)+(rider?3:0);}
 function isOverweight(){return stomachWeight()>CFG.carryCapacity;}
 function minBodyLength(){return CFG.minLen+stomachSpecialWeight();}
 function beanAmmo(){return Math.max(0,snake.len-minBodyLength());}
@@ -2331,6 +2460,27 @@ function collectStoryItem(item){
   if(!added.added)return false;
   stomachPickups.splice(stomachPickups.indexOf(item),1);puff(item.x,item.y,added.item.color||"#f5f5fa");return true;
 }
+function collectStoryRing(item){
+  if(!item||!stomachPickups.includes(item))return false;
+  stomachPickups.splice(stomachPickups.indexOf(item),1);charges=Math.min(CFG.nodeMax,charges+1);
+  notifyStoryEvent("nodeChargesChanged",{charges});ftext(item.x,item.y-.5,"环形节点充能 +1！","#ffd76e");puff(item.x,item.y,"#ffd76e");return true;
+}
+function consumeStoryItem(id){
+  const removed=stomach.remove(id,1);if(!removed.removed)return false;
+  snake.len=Math.max(minBodyLength(),snake.len-removed.removedWeight);computeSegs();syncStomachStory("story_item_used");return true;
+}
+function mountStoryActor(n){
+  if(!n||!npcs.includes(n)||rider||stomachWeight()+3>CFG.carryCapacity)return false;
+  npcs.splice(npcs.indexOf(n),1);rider={actorId:n.storyId||n.actorId||n.kind,startX:n.x,startY:n.y,mountT:1.2};
+  notifyStoryEvent("riderMounted",{actorId:rider.actorId});return true;
+}
+function restoreStoryRider(actorId){if(!actorId)return false;rider={actorId,startX:snake.fx,startY:snake.fy,mountT:0};return true;}
+function placeStoryActor(actorId,x,y,unconscious){
+  const existing=npcs.find(n=>(n.storyId||n.actorId||n.kind)===actorId);if(existing){rider=null;return existing;}
+  const type=NPC_TYPES[actorId];if(!type)return null;
+  const n={storyId:actorId,actorId,kind:actorId,x,y,r:type.r,hp:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false,unconscious:!!unconscious,critical:false,bound:false,storyProtected:true,damageable:false,interactable:true,speed:0,patrol:null,patrolIndex:0};
+  npcs.push(n);rider=null;return n;
+}
 function swallowStoryNPC(n){
   if(!n||!npcs.includes(n))return false;
   const actorId=n.storyId||n.actorId||n.kind,added=addStomachItem(actorId,1,"actor_swallowed");
@@ -2342,17 +2492,18 @@ function spawnReleasedActor(actorId,x,y,hp){
   if(!spot)for(let rad=0;rad<=8&&!spot;rad++)for(let dy=-rad;dy<=rad&&!spot;dy++)for(let dx=-rad;dx<=rad;dx++){const px=Math.floor(x)+dx,py=Math.floor(y)+dy;if(inB(px,py)&&isFree(px,py)){spot={x:px,y:py};break;}}
   if(!type||!spot)return false;
   const remainingHp=Number.isFinite(Number(hp))?Math.max(0,Number(hp)):type.hp;
-  npcs.push({kind:actorId,storyId:actorId,actorId,x:spot.x+.5,y:spot.y+.5,r:type.r,hp:remainingHp,maxHp:type.hp,flash:0,inside:false,unconscious:true,interactable:false,damageable:false});
-  notifyStoryEvent("actorReleased",{actorId,x:spot.x+.5,y:spot.y+.5});return true;
+  const special=actorId==="ajian";
+  npcs.push({kind:actorId,storyId:actorId,actorId,x:spot.x+.5,y:spot.y+.5,r:type.r,hp:remainingHp,maxHp:type.hp,flash:0,inside:false,unconscious:true,interactable:true,damageable:false,storyProtected:special});
+  notifyStoryEvent("actorReleased",{actorId,x:spot.x+.5,y:spot.y+.5,hp:remainingHp});return true;
 }
-function launchStomachPayload(id,item){
+function launchStomachPayload(id,item,actorHp){
   const speed=CFG.spitSpeed*RUN.spitSpeedMult*.75,sx=snake.fx+dir.x*1.2,sy=snake.fy+dir.y*1.2;
-  projs.push({owner:1,payloadId:id,payload:item,actorId:item.releaseActor?item.actorId:null,actorHp:item.releaseActor&&NPC_TYPES[item.actorId]?NPC_TYPES[item.actorId].hp:null,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
+  projs.push({owner:1,payloadId:id,payload:item,actorId:item.releaseActor?item.actorId:null,actorHp:item.releaseActor&&NPC_TYPES[item.actorId]?(Number.isFinite(Number(actorHp))?Number(actorHp):NPC_TYPES[item.actorId].hp):null,x:sx,y:sy,vx:dir.x*speed,vy:dir.y*speed,life:CFG.beanLife,grace:.3,trail:[],streak:0});
   shake=Math.max(shake,.18);ftext(snake.fx,snake.fy-1,"吐出："+item.shortName,"#ffd76e");
 }
-function releaseStoryActor(actorId,x,y){
+function releaseStoryActor(actorId,x,y,hp){
   const removed=stomach.remove(actorId,1);if(!removed.removed)return false;
-  snake.len=Math.max(minBodyLength(),snake.len-removed.removedWeight);computeSegs();launchStomachPayload(actorId,removed.item);syncStomachStory("actor_released");return true;
+  snake.len=Math.max(minBodyLength(),snake.len-removed.removedWeight);computeSegs();launchStomachPayload(actorId,removed.item,hp);syncStomachStory("actor_released");return true;
 }
 function startMemoryVomit(actorId){
   memoryVomit={actorId,beans:beanAmmo(),elapsed:0};
@@ -2395,6 +2546,13 @@ function cycleStomach(direction){
 }
 
 function pickUps(){
+  for(let i=projs.length-1;i>=0;i--){
+    const p=projs[i];
+    if(p.payloadId||p.owner!==1||p.grace>0||Math.hypot(p.x-snake.fx,p.y-snake.fy)>=RUN.pickupR)continue;
+    projs.splice(i,1);snake.len++;beansEaten++;projRecycled++;
+    notifyStoryEvent("beanEaten",{bean:{x:p.x,y:p.y,fromProj:true,flying:true}});
+    ftext(p.x,p.y,"飞行回收 +1","#8fe36b");puff(p.x,p.y,"#8fe36b");
+  }
   for(let i=groundBeans.length-1;i>=0;i--){
     const b=groundBeans[i];
     if(Math.hypot(b.x+.5-snake.fx,b.y+.5-snake.fy)<RUN.pickupR){
@@ -2452,7 +2610,8 @@ function stanceShot(){
     const used=stomach.consumeSelected();
     if(!used.fired){firing=false;fireNeedsRelease=true;ftext(snake.fx,snake.fy-1,selected.item.shortName+" 已经空了！","#ff5d5d");return;}
     snake.len=Math.max(minBodyLength(),snake.len-used.removedWeight);computeSegs();
-    launchStomachPayload(used.id,used.item);
+    const actorState=used.item.releaseActor&&playMode==="story"&&typeof storyDirector==="function"&&storyDirector()?storyDirector().runtime.state.get("actors."+used.item.actorId,{}):null;
+    launchStomachPayload(used.id,used.item,actorState&&actorState.hp);
     firing=false;fireNeedsRelease=true;syncStomachStory(used.item.releaseActor?"actor_released":"special_fired");return;
   }
   if(beanAmmo()<=0){
@@ -2481,6 +2640,7 @@ function placeNode(){
   const maxHp=CFG.nodeHp+RUN.nodeHpBonus;
   mapNodes.push({owner:1,x:cx,y:cy,hp:maxHp,maxHp,covered:true,bob:0});
   charges--;
+  notifyStoryEvent("nodeChargesChanged",{charges});
   nodesPlaced++;
   ftext(cx+.5,cy-.5,"放置节点","#ffd76e");
   puff(cx+.5,cy+.5,"#ffd76e");
@@ -2492,7 +2652,7 @@ function updateMapNodes(dt){
     const covered=n.owner===2?CoopMode.bodyHas(K(n.x,n.y)):occSet.has(K(n.x,n.y));
     if(n.covered&&!covered){
       mapNodes.splice(i,1);
-      if(n.owner===2)CoopMode.refundCharge();else charges=Math.min(CFG.nodeMax,charges+1);
+      if(n.owner===2)CoopMode.refundCharge();else{charges=Math.min(CFG.nodeMax,charges+1);notifyStoryEvent("nodeChargesChanged",{charges});}
       ftext(n.x+.5,n.y+.2,"节点回收 +1","#8fe36b");
       puff(n.x+.5,n.y+.5,"#ffd76e");
       continue;
@@ -2572,6 +2732,10 @@ function updateProjs(dt){
       }
     }
     if(fed){projs.splice(i,1);continue;}
+    if(hit&&p.payload&&p.payload.consumableOnImpact){
+      if(hit.cx!=null&&p.payload.healing&&bodyHas(K(hit.cx,hit.cy))){api.heal(p.payload.healing);ftext(p.x,p.y-.5,"+"+p.payload.healing,"#62d98b");}
+      puff(p.x,p.y,p.payload.color||"#62d98b");projs.splice(i,1);continue;
+    }
     if(hit&&sp>.05){
       if(p.actorId&&p.wallCd<=0){const d=beanDamage(1);p.actorHp-=d;p.wallCd=.2;ftext(p.x,p.y-.5,"-"+d,"#ff8f5e");}
       let[vx,vy]=rotateVec(p.vx,p.vy,(Math.random()-.5)*1.1);
@@ -2585,6 +2749,7 @@ function updateProjs(dt){
     for(let j=enemies.length-1;j>=0;j--){
       const e=enemies[j];
       if(Math.hypot(p.x-e.x,p.y-e.y)<e.r+.25){
+        if(p.payload&&p.payload.consumableOnImpact){p.consumed=true;puff(p.x,p.y,p.payload.color||"#62d98b");break;}
         const d=projectileDamage(p);
         e.hp-=d;e.flash=.15;spitHits++;
         if(p.actorId&&p.actorHitCd<=0){p.actorHp-=d;p.actorHitCd=.2;}
@@ -2594,8 +2759,10 @@ function updateProjs(dt){
         ricochet(p,e.x,e.y);
       }
     }
+    if(p.consumed){projs.splice(i,1);continue;}
     for(const n of npcs){
       if(Math.hypot(p.x-n.x,p.y-n.y)<n.r+.25){
+        if(p.payload&&p.payload.healing){n.hp=Math.min(n.maxHp,n.hp+p.payload.healing);n.flash=.15;p.consumed=true;notifyStoryEvent("actorHealed",{actorId:n.storyId||n.actorId||n.kind,hp:n.hp});ftext(n.x,n.y-.5,"+"+p.payload.healing,"#62d98b");break;}
         if(p.payloadId==="ironSword"&&!p.swordNoticed&&!n.unconscious&&(n.storyId==="ajie"||n.storyId==="lisi")){
           p.swordNoticed=true;notifyStoryEvent("swordNearActor",{actorId:n.storyId});
         }
@@ -2609,10 +2776,13 @@ function updateProjs(dt){
         break;
       }
     }
+    if(p.consumed){puff(p.x,p.y,p.payload.color||"#62d98b");projs.splice(i,1);continue;}
+    if(p.payload&&p.payload.healing&&p.grace<=0&&Math.hypot(p.x-snake.fx,p.y-snake.fy)<.7){api.heal(p.payload.healing);puff(p.x,p.y,p.payload.color||"#62d98b");projs.splice(i,1);continue;}
     for(let j=npcs.length-1;j>=0;j--){
       const n=npcs[j];
       if(n.hp<=0&&!n.downed){
-        if(n.storyId==="ajie"&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("actorDowned",{actorId:"ajie"});}
+        if(n.storyProtected){n.hp=1;n.damageable=false;n.interactable=true;n.unconscious=true;n.critical=true;notifyStoryEvent("actorCritical",{actorId:n.storyId,hp:n.hp});}
+        else if(n.storyId==="ajie"&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("actorDowned",{actorId:"ajie"});}
         else{if(panelNpc===n)closePanel();dieNPC(n);}
       }
     }
@@ -2637,7 +2807,7 @@ function updateProjs(dt){
       const spot=findFreeNear(Math.floor(p.x),Math.floor(p.y),2);
       if(spot){
         if(p.actorId)spawnReleasedActor(p.actorId,spot.x+.5,spot.y+.5,p.actorHp);
-        else if(p.payloadId){stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});notifyStoryEvent("worldItemDropped",{id:p.payloadId,x:spot.x+.5,y:spot.y+.5,noticedBefore:!!p.swordNoticed});}
+        else if(p.payloadId&&!(p.payload&&p.payload.consumableOnImpact)){stomachPickups.push({id:p.payloadId,x:spot.x+.5,y:spot.y+.5});notifyStoryEvent("worldItemDropped",{id:p.payloadId,x:spot.x+.5,y:spot.y+.5,noticedBefore:!!p.swordNoticed});}
         else groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
       }
       puff(p.x,p.y,p.payload&&p.payload.color||"#d95763");
@@ -2749,7 +2919,7 @@ function updateNPCs(dt){
             if(n.attackTarget==="body"){
               n.bodyHits=(n.bodyHits||0)+1;
               if(n.bodyHits>=2){n.attackTarget="head";notifyStoryEvent("ajieBodyLearned",{actorId:"ajie"});}
-            }else hurtPlayer("被阿杰的剑砍中头部");
+            }else hurtPlayer(n.bandit?"被劫匪砍中头部":"被阿杰的剑砍中头部");
           }
         }else if(n.attackPhaseT<=0&&n.attackPhase==="active"){n.attackPhase="recovery";n.attackPhaseT=.8;}
         else if(n.attackPhaseT<=0&&n.attackPhase==="recovery")n.attackPhase=null;
@@ -2773,7 +2943,9 @@ function updateNPCs(dt){
       else if(Math.random()<dt*.8)ftextThrottledN(n);
     }else n.wasPrison=false;
     if(n.hp<=0&&!n.downed){
-      if(n.storyId==="ajie"&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("actorDowned",{actorId:"ajie"});}
+      if(n.storyProtected){n.hp=1;n.damageable=false;n.interactable=true;n.unconscious=true;n.critical=true;notifyStoryEvent("actorCritical",{actorId:n.storyId,hp:n.hp});}
+      else if(n.storyId==="ajie"&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("actorDowned",{actorId:"ajie"});}
+      else if(n.bandit&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("banditDowned",{actorId:n.storyId});}
       else{dieNPC(n);continue;}
     }
     if(alive&&!panelOpen&&gameState==="play"){
@@ -2837,15 +3009,28 @@ function spawnEnemy(type,ax,ay){
       const a=Math.random()*Math.PI*2,d=5+rnd(4);
       x=Math.round(ax+Math.cos(a)*d);y=Math.round(ay+Math.sin(a)*d);
     }else{x=rnd(CFG.cols);y=rnd(CFG.rows);}
-    if(!inB(x,y)||!reachMask[K(x,y)]||!isFree(x,y))continue;
+    if(!inB(x,y)||!reachMask[K(x,y)]||!isFree(x,y)||enemies.some(other=>Math.hypot(x+.5-other.x,y+.5-other.y)<T.r+other.r+.1))continue;
     const near=nearestPlayer(x+.5,y+.5);if(near&&Math.hypot(x+.5-near.x,y+.5-near.y)<4)continue;
     const e={type,x:x+.5,y:y+.5,flash:0,hitT:0,hp:T.hp,max:T.hp,r:T.r,
       vx:0,vy:0,wanderT:0,squash:rnd(6)};
     if(type==="rat")Object.assign(e,{state:"seek",eatT:0,fleeT:0,carried:0,wt:0,tx:x,ty:y});
-    if(type==="flower")Object.assign(e,{shootT:T.cadence*rnd(2),warned:false});
+    if(T.kind==="ranged")Object.assign(e,{shootT:T.cadence,warned:false});
     if(T.kind==="charger")Object.assign(e,{state:"idle",stT:0});
     if(T.kind==="bomber")Object.assign(e,{state:"seek",stT:0});
     enemies.push(e);return;
+  }
+}
+
+function separateEnemies(){
+  for(let i=0;i<enemies.length;i++)for(let j=i+1;j<enemies.length;j++){
+    const a=enemies[i],b=enemies[j],minimum=a.r+b.r+.04;
+    const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+    if(d>=minimum)continue;
+    const angle=(i*2.399+j)*2.1,ux=d<.001?Math.cos(angle):dx/d,uy=d<.001?Math.sin(angle):dy/d,push=(minimum-d)/2;
+    const ax=a.x-ux*push,ay=a.y-uy*push,bx=b.x+ux*push,by=b.y+uy*push;
+    const movedA=circleVsSolids(ax,ay,a.r)===null;if(movedA){a.x=ax;a.y=ay;}
+    if(circleVsSolids(bx,by,b.r)===null){b.x=bx;b.y=by;}
+    else if(!movedA&&circleVsSolids(b.x+ux*push*2,b.y+uy*push*2,b.r)===null){b.x+=ux*push*2;b.y+=uy*push*2;}
   }
 }
 
@@ -2877,7 +3062,12 @@ function updateEnemies(dt){
       if(touched){e.hp-=RUN.contactDmg*dt;e.hitT=.25;if(Math.random()<dt*3)ftext(e.x,e.y-.7,"-"+RUN.contactDmg,"#ffb3c1");}
     }
     const T=ENEMY_TYPES[e.type];
-    if(T.kind==="chaser"){
+    if(e.approachTarget&&!e.approachDone){
+      const dx=e.approachTarget[0]-e.x,dy=e.approachTarget[1]-e.y,d=Math.hypot(dx,dy);
+      if(d<.18){e.approachDone=true;e.vx=0;e.vy=0;e.shootT=T.cadence||1;}
+      else{steerTo(e,e.approachTarget[0],e.approachTarget[1],T.speed||1);moveActor(e,dt);}
+    }
+    else if(T.kind==="chaser"){
       e.wanderT-=dt;
       if(e.wanderT<=0){
         e.wanderT=.5;
@@ -2997,7 +3187,7 @@ function updateEnemies(dt){
       if(e.type==="flower")flowersKilled++;
       const drop=T.drops+(e.type==="rat"?e.carried:0);
       if(drop>0)burstBeans(Math.floor(e.x),Math.floor(e.y),drop,e.hitDir?e.hitDir.x:undefined,e.hitDir?e.hitDir.y:undefined,.5);
-      if(Math.random()<CFG.nodeDropChance&&(charges<CFG.nodeMax||CoopMode.needsCharge())){
+      if(!e.type.includes("slime")&&Math.random()<CFG.nodeDropChance&&(charges<CFG.nodeMax||CoopMode.needsCharge())){
         const np=findFreeNear(Math.floor(e.x),Math.floor(e.y),1);
         if(np){pickups.push({x:np.x,y:np.y});ftext(np.x+.5,np.y,"节点掉落！","#ffd76e");}
       }
@@ -3006,9 +3196,10 @@ function updateEnemies(dt){
           for(let k=0;k<s.count;k++)spawnEnemy(s.type,Math.floor(e.x),Math.floor(e.y));
       }
       ftext(e.x,e.y-.5,"击杀！","#8fe36b");
-      puff(e.x,e.y,"#fff");enemies.splice(i,1);
+      puff(e.x,e.y,"#fff");if(e.storyId)notifyStoryEvent("storyEnemyDied",{enemyId:e.storyId});enemies.splice(i,1);
     }
   }
+  separateEnemies();
   biteAcc+=dt;
   if(biteAcc>=1){
     biteAcc-=1;
@@ -3068,6 +3259,7 @@ function cutTail(){
 }
 
 function buildFromLevel(L){
+  if(L.cols||L.rows)setWorldSize(L.cols,L.rows);
   if(L.cleanMap){obstacles=new Set();voidCells=new Set();}
   else buildObstacles();
   if(L.solidOutside){
@@ -3080,6 +3272,7 @@ function buildFromLevel(L){
     for(let x=rx;x<rx+rw;x++)for(let y=ry;y<ry+rh;y++)if(inB(x,y))obstacles.add(K(x,y));
   }
   ZONES=(L.zones||[]).map(z=>Object.assign({},z));
+  TERRAINS=(L.terrain||[]).map(t=>Object.assign({},t));
   MECHS=(L.mechs||[]).map(m=>Object.assign({prog:0,done:false},m));
   for(const m of MECHS){
     if(m.kind==="gate"){
@@ -3114,7 +3307,7 @@ function introScene(){
 }
 function startIntro(){
   const sc=introScene();
-  playMode="intro";
+  playMode="intro";setWorldSize();
   resetRun();
   reset(true);
   buildFromLevel({obstacles:sc.corridorRects||[[10,22],[40,23]],waves:[],caps:{slime:0,rat:0,flower:0},beans:0});
@@ -3231,6 +3424,7 @@ function coilPath(){
 function startLevel(){
   const L=LEVELS[levelIdx];
   playMode="campaign";
+  setWorldSize(L.cols,L.rows);
   reset(true);
   buildFromLevel(L);
   snake.len=Math.max(CFG.minLen,Math.min(carry.len,120));
@@ -3325,6 +3519,7 @@ function buildTutArena(){
 }
 function startTutorial(){
   playMode="tutorial";
+  setWorldSize();
   resetRun();
   reset(true);
   tutIdx=-1;
@@ -3338,6 +3533,7 @@ function startTutorial(){
 }
 function restartCurrentTut(){
   playMode="tutorial";
+  setWorldSize();
   resetRun();
   reset(true);
   buildTutArena();
@@ -3436,14 +3632,6 @@ function ensurePanel(){
     "<div id='npcSay'></div><div id='npcOpts'></div>";
   document.body.appendChild(p);
   npcPanelEl=p;return p;
-}
-function settleBeanProjectiles(){
-  for(let i=projs.length-1;i>=0;i--){
-    const p=projs[i];if(p.payloadId)continue;
-    const spot=findFreeNear(Math.floor(snake.fx),Math.floor(snake.fy),6)||findFreeNear(Math.floor(p.x),Math.floor(p.y),20)||{x:Math.floor(snake.fx),y:Math.floor(snake.fy)};
-    groundBeans.push({x:spot.x,y:spot.y,fromProj:true});
-    projs.splice(i,1);
-  }
 }
 function resetPanelDialogue(){const say=document.getElementById("npcSay");if(say)say.innerHTML="";}
 function appendPanelDialogue(text){
@@ -3596,7 +3784,6 @@ function closePanel(){
   panelOpen=false;panelNpc=null;npcNode=null;
   panelInputGate=null;
   freeze=false;moveLock=false;
-  if(!(dir.x===-1&&dir.y===0))dir={x:1,y:0};
 }
 function openCurseCard(card){
   panelOpen=true;freeze=true;
@@ -3643,6 +3830,7 @@ function ensurePrimarySpawnSafe(){
 }
 function startBossFight(){
   playMode="boss";
+  setWorldSize();
   resetRun();
   reset(false);
   enemies.length=0;npcs.length=0;curses.length=0;pickups.length=0;
@@ -4070,7 +4258,7 @@ function showMenu(){
   gameState="menu";
   document.getElementById("ovTitle").textContent="我蛇了 · I SNAKED";
   document.getElementById("ovText").innerHTML=
-    "玩法原型 v0.39 · 本地双人合作 / 重量系统版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
+    "玩法原型 v0.41 · 哥布林洞窟剧情版<br><br>剧情模式：当前仅支持单人，从序章开始体验故事。<br><br>"+
     "WASD / 方向键 移动（8方向即时转向 · 点按转向 · 长按2倍速冲刺 · 不能停）<br>"+
     "长按 "+InputMap.bindingLabel(1,"fire")+" 站桩吐豆 ｜ "+InputMap.bindingLabel(1,"interact")+" 确认对话<br>"+
     InputMap.bindingLabel(1,"prevItem")+" / "+InputMap.bindingLabel(1,"nextItem")+" 切换胃袋主位（豆子或特殊物品）<br>"+
@@ -4094,6 +4282,7 @@ function showMenu(){
 }
 function startGame(){
   playMode="sandbox";
+  setWorldSize();
   resetRun();
   reset(false);
   tutIdx=-1;
@@ -4124,6 +4313,12 @@ function render(){
   for(let x=x0;x<x1;x++)for(let y=y0;y<y1;y++){
     if((x+y)%2===0){ctx.fillStyle="#151627";ctx.fillRect(x*T,y*T,T,T);}
   }
+  const terrainColors={water:"#155f7d",mountain:"#313746",cliff:"#51433e",camp:"#67482f",altar:"#44365d",caveFloor:"#292735",caveEntrance:"#05060a",caveExit:"#05060a",caveVoid:"#080912"};
+  for(const t of TERRAINS){
+    const r=t.rect||[t.x,t.y,t.w,t.h],rx=r[0],ry=r[1],rw=r[2],rh=r[3];
+    ctx.fillStyle=t.color||terrainColors[t.kind]||"#242638";
+    ctx.fillRect(rx*T,ry*T,rw*T,rh*T);
+  }
   ctx.fillStyle="#080912";
   for(const o of voidCells){
     const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
@@ -4134,6 +4329,18 @@ function render(){
     const ox=o%CFG.cols,oy=(o/CFG.cols)|0;
     if(voidCells.has(o))continue;
     if(ox>=x0&&ox<x1&&oy>=y0&&oy<y1)ctx.fillRect(ox*T,oy*T,T,T);
+  }
+  for(const t of TERRAINS){
+    if(t.kind==="caveFloor")continue;
+    const r=t.rect||[t.x,t.y,t.w,t.h];
+    ctx.fillStyle=t.color||terrainColors[t.kind]||"#242638";
+    ctx.fillRect(r[0]*T,r[1]*T,r[2]*T,r[3]*T);
+  }
+  for(const t of TERRAINS){
+    if(t.kind!=="caveEntrance"&&t.kind!=="caveExit")continue;
+    const r=t.rect,cx=(r[0]+r[2]/2)*T,bottom=(r[1]+r[3])*T,w=r[2]*T,h=r[3]*T;
+    ctx.fillStyle="#020309";ctx.beginPath();ctx.ellipse(cx,bottom-h*.48,w*.48,h*.5,0,Math.PI,0);ctx.lineTo(cx+w*.48,bottom);ctx.lineTo(cx-w*.48,bottom);ctx.closePath();ctx.fill();
+    ctx.strokeStyle="#55586b";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(cx,bottom-h*.48,w*.48,h*.5,0,Math.PI,0);ctx.stroke();
   }
   ctx.strokeStyle="#34355a";ctx.lineWidth=4;
   ctx.strokeRect(2,2,CFG.cols*T-4,CFG.rows*T-4);
@@ -4381,6 +4588,13 @@ function render(){
       ctx.fillStyle=warn?"#ff5d5d":"#ffe762";
       ctx.beginPath();ctx.arc(px,py,T*.18,0,7);ctx.fill();
     }
+    if(e.type==="goblin_archer"){
+      const warn=e.warned&&Math.sin(gameTime*18)>0;
+      ctx.fillStyle=warn?"#c7dc7a":ET.body;ctx.beginPath();ctx.arc(px,py-T*.08,T*.38,0,7);ctx.fill();
+      ctx.fillStyle="#26351e";ctx.beginPath();ctx.moveTo(px-T*.38,py-T*.18);ctx.lineTo(px-T*.62,py-T*.08);ctx.lineTo(px-T*.36,py);ctx.fill();ctx.beginPath();ctx.moveTo(px+T*.38,py-T*.18);ctx.lineTo(px+T*.62,py-T*.08);ctx.lineTo(px+T*.36,py);ctx.fill();
+      ctx.fillStyle="#1a2014";ctx.fillRect(px-T*.2,py-T*.18,T*.1,T*.1);ctx.fillRect(px+T*.1,py-T*.18,T*.1,T*.1);
+      ctx.strokeStyle="#b98a55";ctx.lineWidth=2;ctx.beginPath();ctx.arc(px+T*.4,py,T*.34,-Math.PI/2,Math.PI/2);ctx.stroke();ctx.beginPath();ctx.moveTo(px+T*.4,py-T*.34);ctx.lineTo(px+T*.4,py+T*.34);ctx.stroke();
+    }
     if(e.flash>0)ctx.restore();
     if(e.hp<e.max){
       ctx.fillStyle="#20212f";ctx.fillRect(px-T*.4,py-T*.62,T*.8,T*.1);
@@ -4409,6 +4623,11 @@ function render(){
       ctx.beginPath();ctx.arc(nx,ny,T*.7,0,7);ctx.fill();
     }
     const storySprite=typeof IMS_STORY_ART!=="undefined"&&IMS_STORY_ART.sprite(ctx,n.kind,nx,ny,T,n);
+    if(n.bound){
+      ctx.strokeStyle="#b8986d";ctx.lineWidth=Math.max(2,T*.1);
+      ctx.beginPath();ctx.moveTo(nx,Math.max(0,ny-T*2));ctx.lineTo(nx,ny-T*.3);ctx.stroke();
+      ctx.strokeRect(nx-T*.3,ny-T*.05,T*.6,T*.35);
+    }
     if(storySprite){
     }else if(n.kind==="merchant"){
       ctx.fillStyle=fl?"#ff9e9e":"#7a4fa3";
@@ -4495,6 +4714,12 @@ function render(){
     }
   }
 
+  if(rider){
+    const seat=segPos[1]||segPos[0]||{x:snake.fx,y:snake.fy};let rx=seat.x,ry=seat.y;
+    if(rider.mountT>0){const a=1-rider.mountT/1.2;rx=rider.startX+(seat.x-rider.startX)*a;ry=rider.startY+(seat.y-rider.startY)*a;rider.mountT=Math.max(0,rider.mountT-1/60);}
+    if(typeof IMS_STORY_ART!=="undefined")IMS_STORY_ART.sprite(ctx,rider.actorId,rx*T,ry*T-T*.35,T,{riding:true});
+  }
+
   CoopMode.draw(ctx,T);
 
   for(const s of seeds){
@@ -4572,6 +4797,7 @@ function updateHud(){
   document.getElementById("p1Tag").textContent=coop.enabled?"P1":"";
   document.getElementById("hearts").textContent=primaryDown?"倒下":"❤".repeat(Math.max(0,hearts));
   document.getElementById("len").textContent=snake.len;
+  const storyApiNow=storyApi();document.getElementById("gold").textContent=playMode==="story"&&storyApiNow&&storyApiNow.storyGold?storyApiNow.storyGold():0;
   const weightEl=document.getElementById("weight");weightEl.textContent=stomachWeight()+"/"+CFG.carryCapacity;weightEl.style.color=isOverweight()?"#ff5d5d":"";
   document.getElementById("dmg").textContent=beanDamage(1);
   document.getElementById("coopHud").style.display=coop.enabled?"inline":"none";
@@ -4631,6 +4857,7 @@ function loop(now){
     }
     CoopMode.update(dt);
     updateMapNodes(dt);
+    computeEnclosure();
     updateMechs(dt);
     updateNPCs(dt);
     updateBoss(dt);
@@ -4638,7 +4865,6 @@ function loop(now){
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
     if(typeof window!=="undefined"&&typeof window.storyControllerTick==="function")window.storyControllerTick();
     if(playMode==="sandbox"||playMode==="campaign"||playMode==="story")updateSpawner(dt);
-    computeEnclosure();
     storyCheckProgress();
     if(playMode==="campaign"&&curGoal&&alive){
       const g=curGoal,t=gameTime-levelStartT;
@@ -4658,14 +4884,15 @@ function loop(now){
 
 buildPanel();GameSettings.init();reset(false);showMenu();requestAnimationFrame(loop);
 const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debugRoot.__IMS={
+  get world(){return{cols:CFG.cols,rows:CFG.rows};},get config(){return CFG;},
   get npcs(){return npcs;},get snake(){return snake;},get panelOpen(){return panelOpen;},
   get gameState(){return gameState;},get paused(){return paused;},
   get freeze(){return freeze;},set freeze(v){freeze=v;},
   get alive(){return alive;},get moveLock(){return moveLock;},
-  get mechs(){return MECHS;},get enemies(){return enemies;},get boss(){return boss;},get bossStakes(){return bossStakes;},
-  get groundBeans(){return groundBeans;},get voidCells(){return voidCells;},
+  get mechs(){return MECHS;},get terrain(){return TERRAINS;},get charges(){return charges;},get enemies(){return enemies;},get boss(){return boss;},get bossStakes(){return bossStakes;},
+  get groundBeans(){return groundBeans;},get pickups(){return pickups;},get voidCells(){return voidCells;},
   get stomach(){return stomach.status();},get stomachPickups(){return stomachPickups;},get projs(){return projs;},
-  openPanel,closePanel,openCurseCard,CURSED_POOL
+  openPanel,closePanel,openCurseCard,CURSED_POOL,setWorldSize,openMechanicGate,collectStoryRing,consumeStoryItem,mountStoryActor,restoreStoryRider
 };
 </script>
 <script>
@@ -4682,7 +4909,7 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   const Story=root.IMS_STORY_DATA.PROLOGUE;
   const T=Events.TYPES,B=Events.bus,TM=Maps.TYPES.TUTORIAL,WM=Maps.TYPES.WILDERNESS,MS=Maps.STORY_MAPS;
 
-  let director=null,lastMap=null,gateSent=false,exitSent=false,observedEnemies=0;
+  let director=null,lastMap=null,gateSent=false,exitSent=false,observedEnemies=0,campInside=false;
   let exitTimeoutHandle=null,exitTimeoutPending=false;
   let ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};
   const saveStore=SaveApi?new SaveApi.StorySaveStore():null;
@@ -4695,7 +4922,7 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   const updateState=(mutator,reason)=>director&&director.runtime.state.update(mutator,reason);
   const hint=action=>Dialogue.actionHint?Dialogue.actionHint(action,1):"";
   const movementHint=()=>["up","left","down","right"].map(action=>root.InputMap&&root.InputMap.bindingLabel(1,action)).filter(Boolean).join("/");
-  const withHints=text=>String(text||"").replace(/\{fire\}/g,hint("fire")).replace(/\{interact\}/g,hint("interact")).replace(/\{move\}/g,"["+movementHint()+"]");
+  const withHints=text=>String(text||"").replace(/\{fire\}/g,hint("fire")).replace(/\{interact\}/g,hint("interact")).replace(/\{node\}/g,hint("node")).replace(/\{move\}/g,"["+movementHint()+"]");
 
   function closeDialogue(){
     if(typeof root.closePanel==="function")root.closePanel();
@@ -4722,16 +4949,19 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   }
 
   function levelFromMap(map){
+    const flags=snapshot()&&snapshot().flags||{};
     return {
-      cleanMap:!!map.cleanMap,solidOutside:map.solidOutside||null,obstacles:map.obstacles||[],
-      mechs:(map.gates||[]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})),
+      cols:map.cols,rows:map.rows,cleanMap:!!map.cleanMap,solidOutside:map.solidOutside||null,obstacles:map.obstacles||[],terrain:map.terrain||[],
+      mechs:(map.gates||[]).filter(g=>!g.openFlag||!flags[g.openFlag]).map(g=>({kind:"gate",id:g.id,x:g.x,y:g.y,w:g.w,h:g.h,need:g.need||3,reward:null})).concat((map.mechs||[]).filter(m=>!m.doneFlag||!flags[m.doneFlag])),
       waves:[],caps:{slime:0,rat:0,flower:0},beans:0,npcs:[]
     };
   }
 
   function enemyAt(spec){
     const type=ENEMY_TYPES[spec.type];if(!type)return;
-    enemies.push({type:spec.type,x:spec.x,y:spec.y,flash:0,hitT:0,hp:type.hp,max:type.hp,r:type.r,vx:0,vy:0,wanderT:0,squash:rnd(6)});
+    const enemy={type:spec.type,storyId:spec.storyId||null,x:spec.x,y:spec.y,flash:0,hitT:0,hp:Number.isFinite(spec.hp)?spec.hp:type.hp,max:type.hp,r:type.r,vx:0,vy:0,wanderT:0,squash:rnd(6),approachTarget:spec.approachTarget||null,approachDone:!!spec.approachDone};
+    if(type.kind==="ranged"){enemy.shootT=type.cadence;enemy.warned=false;}
+    enemies.push(enemy);return enemy;
   }
 
   function rememberCheckpoint(nodeId){
@@ -4744,36 +4974,46 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
 
   function saveCurrent(){
     if(!director||!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
-    const state=director.runtime.state.snapshot();
-    Object.entries(director.actors||{}).forEach(([actorId,actor])=>{if(actor){const saved=state.actors[actorId]||(state.actors[actorId]={});saved.x=actor.x;saved.y=actor.y;if(actor.downed)saved.status="downed";else if(actor.unconscious)saved.status="unconscious";}});
+    const state=director.runtime.state.snapshot();state.player.nodeCharges=charges;
+    Object.entries(director.actors||{}).forEach(([actorId,actor])=>{if(actor){const saved=state.actors[actorId]||(state.actors[actorId]={});saved.x=actor.x;saved.y=actor.y;saved.hp=actor.hp;if(actor.critical)saved.status="critical";else if(actor.downed)saved.status="downed";else if(actor.unconscious&&!String(saved.status).startsWith("bound_"))saved.status="unconscious";}});
+    if(lastMap===Maps.TYPES.CHAPTER1_CAVE&&state.flags.goblinFightStarted&&!state.flags.goblinsDefeated){state.encounters.caveGoblins=enemies.filter(enemy=>enemy.storyId&&enemy.storyId.startsWith("cave_goblin_")).map(enemy=>({storyId:enemy.storyId,type:enemy.type,x:enemy.x,y:enemy.y,hp:enemy.hp,approachTarget:enemy.approachTarget,approachDone:enemy.approachDone}));}
     const sword=stomachPickups.find(item=>item.id==="ironSword");if(sword)state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:sword.x,y:sword.y};
+    director.runtime.state.replace(state,"world_snapshot");
     return saveStore.save(director.slot,state,{currentNode:state.currentNode,currentMap:lastMap,completed:state.flags&&state.flags.storyCompleted});
   }
 
   function loadMap(args){
     const id=args.mapId,map=MS[id];if(!map)throw new Error("Unknown story map: "+id);
-    const previousMap=lastMap;lastMap=id;setOwnership(map);gateSent=false;exitSent=false;boss=null;bossStakes=[];
-    updateState(state=>{if(previousMap&&previousMap!==id)Object.keys(state.actors||{}).forEach(actorId=>{const actor=state.actors[actorId];if(actor.status==="unconscious"&&actor.location===previousMap&&!String(previousMap).includes("camp")){actor.status="dead";actor.location=null;}});if(map.chapter&&state.chapter!==map.chapter){state.chapter=map.chapter;state.counters.chapterBeansEaten=0;state.counters.chapterBeansSpit=0;state.flags.chapter1HungerSeen=false;state.flags.chapter1HungerPending=false;}state.currentMap=id;},"map_selected");
-    playMode="story";storyStage=id===TM?0:id===WM?5:8;reset(true);buildFromLevel(levelFromMap(map));
+    const previousMap=lastMap;lastMap=id;setOwnership(map);gateSent=false;exitSent=false;campInside=false;boss=null;bossStakes=[];
+    updateState(state=>{if(previousMap&&previousMap!==id)Object.keys(state.actors||{}).forEach(actorId=>{const actor=state.actors[actorId];if(actorId!=="ajian"&&actor.status==="unconscious"&&actor.location===previousMap&&!String(previousMap).includes("camp")){actor.status="dead";actor.location=null;}if(actor.status==="riding")actor.location=id;});if(map.chapter&&state.chapter!==map.chapter){state.chapter=map.chapter;state.counters.chapterBeansEaten=0;state.counters.chapterBeansSpit=0;state.flags.chapter1HungerSeen=false;state.flags.chapter1HungerPending=false;}state.currentMap=id;},"map_selected");
+    if(previousMap===Maps.TYPES.CHAPTER1_CAVE&&id===Maps.TYPES.CHAPTER1_FOREST)updateState(state=>{
+      [["ajie",71.5,45.5],["lisi",74.5,45.5]].forEach(([actorId,x,y])=>{const actor=state.actors[actorId];if(actor&&!['dead','eaten','swallowed','bones','left'].includes(actor.status)){actor.status="alive";actor.location=id;actor.x=x;actor.y=y;}});
+    },"party_returned_to_camp");
+    playMode="story";storyStage=id===TM?0:id===WM?5:8;if(typeof root.setWorldSize==="function")root.setWorldSize(map.cols,map.rows);reset(true);buildFromLevel(levelFromMap(map));
+    charges=snapshot().flags.chapter1RingTaken?Math.max(0,Math.min(CFG.nodeMax,Number(snapshot().player.nodeCharges)||0)):0;
     groundBeans.length=0;(map.beans||[]).forEach(point=>groundBeans.push({x:point[0],y:point[1]}));
     enemies.length=0;npcs.length=0;director.actors={};director.items={};
     const spawn=(args.entry&&map.entryPoints&&map.entryPoints[args.entry])||map.spawn;
     snake.fx=spawn.x;snake.fy=spawn.y;dir=spawn.dir;
     if(typeof root.restoreStomachInventory==="function")root.restoreStomachInventory(snapshot().inventory);
+    if(snapshot().player.rider&&typeof root.restoreStoryRider==="function")root.restoreStoryRider(snapshot().player.rider);
     snake.len=Math.max(CFG.initLen,Number(snapshot().player.bodyLength)||CFG.initLen,CFG.minLen+(typeof stomach!=="undefined"?stomach.getLengthContribution():0));
     coilPath();computeSegs();computeEnclosure();
     const rules=map.rules||{};curBeanTarget=Number(rules.beanTarget)||0;beanT=Number(rules.beanRespawn)||CFG.beanRespawn;
     for(let i=0;i<(Number(rules.initialRandomBeans)||0);i++)spawnBean();
     (map.enemySpawns||[]).forEach(enemyAt);
-    (map.items||[]).forEach(spec=>{const storyId=spec.storyId||spec.id,saved=snapshot().worldItems&&snapshot().worldItems[storyId];if(saved&&saved.status==="stomach")return;const item={storyId,id:spec.id,x:saved&&saved.status==="ground"?saved.x:spec.x,y:saved&&saved.status==="ground"?saved.y:spec.y,interactive:saved&&saved.status==="ground"?false:!!spec.interactive,inside:false};stomachPickups.push(item);director.items[item.storyId]=item;});
+    if(id===Maps.TYPES.CHAPTER1_CAVE&&snapshot().flags.goblinFightStarted&&!snapshot().flags.goblinsDefeated)spawnGoblinEncounter(true);
+    (map.items||[]).forEach(spec=>{const storyId=spec.storyId||spec.id,saved=snapshot().worldItems&&snapshot().worldItems[storyId];if(saved&&["stomach","consumed"].includes(saved.status))return;const item={storyId,id:spec.id,x:saved&&saved.status==="ground"?saved.x:spec.x,y:saved&&saved.status==="ground"?saved.y:spec.y,interactive:saved&&saved.status==="ground"?false:!!spec.interactive,inside:false};stomachPickups.push(item);director.items[item.storyId]=item;});
     (map.npcs||[]).forEach(spec=>{
       const actorId=spec.id||spec.kind,type=NPC_TYPES[spec.kind],actor=snapshot().actors[actorId];
-      if(!type||actor&&["dead","eaten","swallowed","bones","left"].includes(actor.status))return;
-      const status=actor&&actor.status||"unknown",inactive=status==="unconscious",downed=status==="downed";
-      const npc={storyId:actorId,actorId,kind:spec.kind,x:Number.isFinite(actor&&actor.x)?actor.x:spec.x,y:Number.isFinite(actor&&actor.y)?actor.y:spec.y,r:type.r,hp:downed?0:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false,unconscious:inactive,downed,damageable:inactive||downed?false:spec.damageable!==false,interactable:inactive?false:spec.interactable!==false,speed:Number(spec.speed)||0,patrol:inactive||downed?null:spec.patrol||null,patrolIndex:0};
+      if(!type||actor&&["dead","eaten","swallowed","riding","bones","left"].includes(actor.status))return;
+      const status=actor&&actor.status!=="unknown"?actor.status:(spec.initialStatus||"alive"),inactive=["unconscious","bound_unconscious","critical"].includes(status),downed=status==="downed",camped=id===Maps.TYPES.CHAPTER1_FOREST&&["ajie","lisi"].includes(actorId)&&actor&&actor.x>=68&&actor.y>=41;
+      const npc={storyId:actorId,actorId,kind:spec.kind,x:Number.isFinite(actor&&actor.x)?actor.x:spec.x,y:Number.isFinite(actor&&actor.y)?actor.y:spec.y,r:type.r,hp:Number.isFinite(actor&&actor.hp)?actor.hp:(downed?0:type.hp),maxHp:type.hp,flash:0,inside:false,crying:false,bandit:!!spec.bandit,unconscious:inactive,critical:status==="critical",bound:String(status).startsWith("bound_"),storyProtected:!!spec.storyProtected,damageable:inactive||downed?false:spec.damageable!==false,interactable:inactive&&!spec.interactiveWhenUnconscious?false:spec.interactable!==false,speed:camped?0:Number(spec.speed)||0,patrol:inactive||downed||camped?null:spec.patrol||null,patrolIndex:0};
       npcs.push(npc);director.actors[actorId]=npc;if(actorId==="keti")director.keti=npc;
-      updateState(state=>{StateApi.ensureActor(state,actorId,{status:status==="unknown"?"alive":status,location:id,x:npc.x,y:npc.y});},actorId+"_spawn");
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status,location:id,x:npc.x,y:npc.y,hp:npc.hp});},actorId+"_spawn");
     });
+    if(id===Maps.TYPES.CHAPTER1_FOREST&&snapshot().flags.banditCombatStarted&&!snapshot().flags.banditResolved)["buck","miro"].forEach(actorId=>{const actor=director.actors[actorId];if(actor&&!actor.downed){actor.hostile=true;actor.damageable=true;actor.interactable=false;actor.attackTarget="body";actor.bodyHits=0;actor.chaseElapsed=0;}});
+    if(id===Maps.TYPES.CHAPTER1_CAVE&&snapshot().flags.goblinFightStarted&&!snapshot().flags.goblinsDefeated&&director.actors.ajian){director.actors.ajian.damageable=true;director.actors.ajian.interactable=false;}
     observedEnemies=enemies.length;gameState="play";paused=false;freeze=false;firing=false;fireKey=false;
     heldKeys.clear();dirQueue.length=0;moveLock=false;
     document.getElementById("overlay").classList.remove("show");
@@ -4782,19 +5022,18 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
     document.getElementById("pickList").innerHTML="";
     ensurePrimarySpawnSafe();
     emit("MAP_LOADED",{mapId:id,spawnId:args.entry||null,clearForwardSeconds:3});
-    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":id===WM?"地图 2 · 荒野：寻找哭声":"第一章 · 森林：自由探索");
+    banner(id===TM?"序章 · 教学地图：用 ["+movementHint()+"] 沿走廊前进":id===WM?"地图 2 · 荒野：寻找哭声":"第一章 · "+map.name);
     rememberCheckpoint(args.checkpoint||(id===TM?"prologue_start":id===WM?"wilderness_start":"chapter1_start"));
   }
 
   function dialogue(args){
     const data=Dialogue.normalize(args),pages=data.pages.map(withHints);
-    if(currentNode()==="dialogue_2"&&typeof root.settleBeanProjectiles==="function")root.settleBeanProjectiles();
     const continuing=panelOpen;let pageIndex=0;
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;panelNpc=null;npcNode=null;
     if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
     const panel=ensurePanel(),say=document.getElementById("npcSay"),options=document.getElementById("npcOpts");
     panel.style.display="grid";
-    document.getElementById("npcName").textContent=data.speaker||"我";
+    document.getElementById("npcName").textContent=displaySpeaker(data.speaker||"我");
     document.getElementById("npcSub").textContent=data.sub||"序章";
     drawPortraitInto(document.getElementById("npcPortrait"),data.portrait||portraitId(data.speaker),!!data.crying);
     if(!continuing&&typeof root.resetPanelDialogue==="function")root.resetPanelDialogue();
@@ -4802,7 +5041,7 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
     const render=()=>{
       if(typeof root.armPanelInputGate==="function")root.armPanelInputGate();
       const page=speakerPage(pages[pageIndex],data.speaker||"我");
-      document.getElementById("npcName").textContent=page.speaker;
+      document.getElementById("npcName").textContent=displaySpeaker(page.speaker);
       drawPortraitInto(document.getElementById("npcPortrait"),portraitId(page.speaker,data.portrait),!!data.crying);
       if(typeof root.focusDialogueActor==="function")root.focusDialogueActor(portraitId(page.speaker));
       if(typeof root.appendPanelDialogue==="function")root.appendPanelDialogue(page.text);else say.textContent=page.text;
@@ -4825,8 +5064,9 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
     render();requestAnimationFrame(()=>panel.classList.add("open"));
   }
 
-  function portraitId(speaker,fallback){return ({"我":"snake_self","可蒂":"keti","阿杰":"ajie","丽丝":"lisi"})[speaker]||fallback||"snake_self";}
-  function speakerPage(text,fallback){const value=String(text||""),match=value.match(/^(可蒂|阿杰|丽丝|我)[：:]\s*(.*)$/s);return match?{speaker:match[1],text:match[2]}:{speaker:fallback,text:value};}
+  function portraitId(speaker,fallback){return ({"我":"snake_self","玩家":"snake_self","旁白":"snake_self","教学":"snake_self","可蒂":"keti","阿杰":"ajie","丽丝":"lisi","阿见":"ajian","少女":"ajian","巴克":"buck","米罗":"miro"})[speaker]||fallback||"snake_self";}
+  function displaySpeaker(speaker){return ["我","玩家"].includes(speaker)?snapshot().player.name||"我":speaker;}
+  function speakerPage(text,fallback){const value=String(text||""),match=value.match(/^(可蒂|阿杰|丽丝|阿见|少女|巴克|米罗|旁白|教学|玩家|我)[：:]\s*(.*)$/s);return match?{speaker:match[1],text:match[2]}:{speaker:fallback,text:value};}
 
   function nameInput(args){
     panelOpen=true;freeze=true;heldKeys.clear();fireKey=false;dirQueue.length=0;
@@ -4888,8 +5128,17 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
     if(snapshot().flags.chapter1HungerPending&&!snapshot().flags.chapter1HungerSeen){director.runtime.follow("chapter1_hunger");return;}
     director.runtime.waitFor({events:[eventType("CHAPTER1_HUNGER_READY"),eventType("ITEM_INTERACTED"),eventType("ACTOR_INTERACTED")],target:event=>{
       if(event.type===eventType("CHAPTER1_HUNGER_READY"))return"chapter1_hunger";
-      if(event.type===eventType("ITEM_INTERACTED"))return"chapter1_sword";
-      const state=snapshot(),ajie=state.actors.ajie.status==="alive",lisi=state.actors.lisi.status==="alive";
+      if(event.type===eventType("ITEM_INTERACTED"))return event.payload&&event.payload.itemId==="cave_ring"?"chapter1_ring":"chapter1_sword";
+      const state=snapshot(),actorId=event.payload&&event.payload.actorId,actor=state.actors[actorId]||{};
+      if(actorId==="ajian"&&state.flags.campSettlementSeen)return actor.status==="unconscious"?"camp_ajian_unconscious":"camp_ajian_resting";
+      if(actorId==="buck"||actorId==="miro"){
+        if(state.flags.banditResolved)return actorId==="buck"?"bandit_resolved_buck":"bandit_resolved_miro";
+        if(state.flags.banditCombatStarted&&actor.status==="downed"&&state.actors.buck.status==="downed"&&state.actors.miro.status==="downed")return"bandit_search";
+        return"bandit_intro";
+      }
+      if(actor.status==="unconscious"&&actorId==="ajie")return"chapter1_ajie_unconscious";
+      if(actor.status==="unconscious"&&actorId==="lisi")return"chapter1_lisi_unconscious";
+      const ajie=state.actors.ajie.status==="alive",lisi=state.actors.lisi.status==="alive";
       if(state.flags.findAjianAccepted){banner("任务进行中：寻找阿见");return"chapter1_explore";}
       if(state.flags.chapter1SwordRecognizedPending){updateState(next=>{next.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_notice_consumed");return ajie&&lisi?"chapter1_sword_recognized":ajie?"chapter1_sword_recognized_ajie":lisi?"chapter1_sword_recognized_lisi":"chapter1_explore";}
       if(state.flags.findAjianDeclined)return ajie?"chapter1_quest_request_ajie":lisi?"chapter1_quest_request":"chapter1_explore";
@@ -4897,9 +5146,67 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
       return ajie&&lisi?"chapter1_meeting":lisi?"chapter1_lisi_only":ajie?"chapter1_ajie_only":"chapter1_explore";
     }});
   }
+  const gold=()=>Math.max(0,Number(snapshot()&&snapshot().player&&snapshot().player.gold)||0);
+  function resolveBandit(outcome){updateState(state=>{state.flags.banditResolved=true;state.flags.banditClueKnown=true;state.flags.banditOutcome=outcome||state.flags.banditOutcome||"resolved";},"bandit_resolved");saveCurrent();}
+  function payBandits(){if(gold()<3)return false;updateState(state=>{state.player.gold=Math.max(0,(Number(state.player.gold)||0)-3);state.flags.banditResolved=true;state.flags.banditClueKnown=true;state.flags.banditOutcome="paid";},"bandit_paid");saveCurrent();return true;}
+  function tradeSword(){if(!root.consumeStoryItem("ironSword"))return false;updateState(state=>{state.flags.banditResolved=true;state.flags.banditClueKnown=true;state.flags.banditOutcome="sword";state.worldItems.forest_sword={status:"consumed",mapId:lastMap};},"bandit_sword_paid");saveCurrent();return true;}
+  function claimBanditCombatReward(){const state=snapshot();if(state.flags.banditRewardClaimed)return;updateState(next=>{next.player.gold=(Number(next.player.gold)||0)+6;next.flags.banditRewardClaimed=true;next.flags.banditResolved=true;next.flags.banditClueKnown=true;next.flags.banditOutcome="combat";},"bandit_combat_reward");saveCurrent();}
+  function reverseBanditRobbery(){const state=snapshot();if(!state.flags.banditRewardClaimed){updateState(next=>{next.player.gold=(Number(next.player.gold)||0)+6;next.flags.banditRewardClaimed=true;next.flags.banditResolved=true;next.flags.banditClueKnown=true;next.flags.banditOutcome="robbed";},"bandit_reverse_robbery");}else resolveBandit("robbed");saveCurrent();}
+  function swallowBandit(actorId){const actor=director.actors[actorId];if(actor&&root.swallowStoryNPC(actor)){director.actors[actorId]=null;updateState(state=>{StateApi.ensureActor(state,actorId,{status:"swallowed",location:"stomach"});state.flags.banditClueKnown=true;},"bandit_swallowed");}}
+  function releaseBandit(actorId){const actor=snapshot().actors[actorId]||{};if(root.releaseStoryActor(actorId,actor.x,actor.y,actor.hp))updateState(state=>{StateApi.ensureActor(state,actorId,{status:"unconscious",location:lastMap});},"bandit_released");}
+  function resolveBanditThreat(){resolveBandit("threat");}
+  function startBanditCombat(){const state=snapshot();updateState(next=>{next.flags.banditCombatStarted=true;},"bandit_combat_started");["buck","miro"].forEach(id=>{const actor=director.actors[id];if(actor&&actor.hp>0){actor.hostile=true;actor.damageable=true;actor.interactable=false;actor.attackTarget="body";actor.bodyHits=0;actor.attackPhase=null;actor.chaseElapsed=0;}});}
+  function waitBanditCombat(){closeDialogue();const neutralized=()=>["buck","miro"].every(id=>["downed","swallowed"].includes(snapshot().actors[id].status));if(neutralized()){director.runtime.follow("bandit_search");return;}director.runtime.waitFor({events:[eventType("BANDIT_DOWNED")],predicate:neutralized,target:"bandit_search"});}
+  function settleAjian(){const before=snapshot();if(before.flags.campSettlementSeen)return before.flags.campArrivalMethod||"rider";const carried=hasItem(before,"ajian"),arrival=carried||before.actors.ajian.status==="unconscious"?"stomach":"rider";if(carried)root.consumeStoryItem("ajian");updateState(state=>{state.flags.campSettlementSeen=true;state.flags.campArrivalMethod=arrival;state.flags.findAjianAccepted=false;state.quests.findAjian={status:"completed",title:"把阿见带到河边营地",priority:10};state.player.rider=null;StateApi.ensureActor(state,"ajian",{status:arrival==="stomach"?"unconscious":"alive",location:lastMap,x:73,y:47});},"ajian_camp_settled");director.actors.ajian=root.placeStoryActor?root.placeStoryActor("ajian",73,47,arrival==="stomach"):director.actors.ajian;rider=null;saveCurrent();return arrival;}
+  function claimCampReward(){const state=snapshot();if(state.flags.campRewardClaimed)return;settleAjian();updateState(next=>{next.player.gold=(Number(next.player.gold)||0)+10;next.flags.campRewardClaimed=true;next.flags.campRewardKind="gold";},"camp_reward");saveCurrent();}
+  function claimCampLick(){if(snapshot().flags.campRewardClaimed)return;updateState(state=>{state.flags.campRewardClaimed=true;state.flags.campRewardKind="lick";},"camp_lick_reward");saveCurrent();}
+  function claimCampEat(actorId){if(snapshot().flags.campRewardClaimed)return;swallowActor(actorId);updateState(state=>{state.flags.campRewardClaimed=true;state.flags.campRewardKind="eat";state.flags.campRewardActor=actorId;},"camp_eat_reward");saveCurrent();}
+  function caveExplore(){
+    closeDialogue();
+    director.runtime.waitFor({events:[eventType("ITEM_INTERACTED"),eventType("ACTOR_INTERACTED")],target:event=>{
+      if(event.type===eventType("ITEM_INTERACTED")){
+        const id=event.payload&&event.payload.itemId;
+        if(id==="cave_soup")return snapshot().flags.caveSoupDrunk?"cave_soup_empty":"cave_soup";
+        if(id==="cave_potion")return"cave_potion";
+        if(id==="cave_ring")return"chapter1_ring";
+      }
+      const actor=snapshot().actors.ajian||{},status=actor.status;
+      if(status==="bound_unconscious")return"cave_ajian_found";
+      if(status==="bound_awake")return"cave_ajian_untie_return";
+      if(status==="critical")return"cave_ajian_critical";
+      if(status==="unconscious")return"cave_ajian_rewake";
+      if(snapshot().flags.goblinsDefeated)return snapshot().flags.ajianIdentityKnown?"cave_ajian_destination":"cave_ajian_rescued";
+      return"cave_explore";
+    }});
+  }
+  function ajianNpc(){return director&&director.actors&&director.actors.ajian;}
+  function drinkSoup(){api.heal(1);updateState(state=>{state.flags.caveSoupDrunk=true;state.worldItems.cave_soup={status:"used",mapId:lastMap};},"cave_soup_drunk");}
+  function takePotion(){const item=director.items.cave_potion;if(item&&root.collectStoryItem(item))updateState(state=>{state.flags.cavePotionTaken=true;state.worldItems.cave_potion={status:"stomach",mapId:lastMap};},"cave_potion_taken");}
+  function wakeAjian(method){const actor=ajianNpc();if(actor){actor.unconscious=false;actor.bound=true;actor.interactable=true;}updateState(state=>{state.flags.lickWakeLearned=true;state.flags.ajianFound=true;state.flags.ajianAwake=true;state.flags.ajianFirstWakeMethod=method;if(method==="face")state.flags.ajianFaceLicked=true;else state.flags.ajianFootLicked=true;StateApi.ensureActor(state,"ajian",{status:"bound_awake",location:lastMap,hp:actor?actor.hp:8,met:true});},"ajian_wake_"+method);}
+  function wakeReleasedActor(actorId,method){const actor=director.actors[actorId]||npcs.find(npc=>targetId(npc)===actorId);if(actor){actor.unconscious=false;actor.interactable=true;actor.inside=true;director.actors[actorId]=actor;}updateState(state=>{StateApi.ensureActor(state,actorId,{status:"alive",location:lastMap,met:true});},actorId+"_woken_by_"+method);}
+  function cutAjianRope(){const actor=ajianNpc();if(actor){actor.bound=false;actor.unconscious=false;actor.damageable=false;}updateState(state=>{state.flags.ajianUntied=true;StateApi.ensureActor(state,"ajian",{status:"alive",location:lastMap});},"ajian_untied");}
+  function spawnGoblinEncounter(restore){
+    if(enemies.some(enemy=>enemy.storyId&&enemy.storyId.startsWith("cave_goblin_")))return;
+    const saved=restore&&snapshot().encounters&&snapshot().encounters.caveGoblins;
+    if(saved&&saved.length)saved.forEach(enemyAt);
+    else{const encounter=(MS[Maps.TYPES.CHAPTER1_CAVE].encounters||[])[0];(encounter.origin||[]).forEach((point,index)=>enemyAt({type:"goblin_archer",storyId:"cave_goblin_"+(index+1),x:point[0],y:point[1],approachTarget:encounter.approach[index]}));}
+    const actor=ajianNpc();if(actor){actor.damageable=true;actor.storyProtected=true;actor.interactable=false;}
+    observedEnemies=enemies.length;
+    director.spawned=true;if(!restore)updateState(state=>{state.flags.goblinFightStarted=true;state.encounters.caveGoblins=[];},"cave_goblins_started");
+  }
+  function waitCaveCombat(){closeDialogue();director.runtime.waitFor({events:[eventType("ENEMIES_DEFEATED")],predicate:()=>director.spawned&&observedEnemies>0&&enemies.length===0,target:caveCombatOutcome});}
+  function caveCombatOutcome(){const actor=ajianNpc(),critical=!!(actor&&actor.critical)||snapshot().flags.ajianCritical;updateState(state=>{state.flags.goblinsDefeated=true;state.flags.ajianCritical=critical;state.encounters.caveGoblins=[];StateApi.ensureActor(state,"ajian",{status:critical?"critical":"alive",location:lastMap,hp:actor?actor.hp:1});},"cave_goblins_defeated");if(actor){actor.damageable=false;actor.interactable=true;actor.inside=true;}banner("哥布林都倒下了。去看看阿见。");return"cave_explore";}
+  function swallowAjian(){const actor=ajianNpc();if(!actor)return;updateState(state=>{StateApi.ensureActor(state,"ajian",{hp:actor.hp});state.flags.ajianSwallowedOnce=true;},"ajian_swallowing");swallowActor("ajian");}
+  function healAjian(){if(!root.consumeStoryItem("healingPotion"))return;const actor=ajianNpc();if(actor){actor.hp=Math.max(1,actor.hp);actor.critical=false;actor.unconscious=false;actor.damageable=false;}updateState(state=>{state.flags.ajianCritical=false;StateApi.ensureActor(state,"ajian",{status:"alive",hp:1,location:lastMap});},"ajian_healed");}
+  function rewakeAjian(method){const actor=ajianNpc(),before=snapshot(),critical=before.flags.ajianCritical||before.actors.ajian.status==="critical",first=before.flags.ajianFirstWakeMethod||method,reaction=(first===method?"same_":"switch_")+method;if(actor&&!critical){actor.unconscious=false;actor.critical=false;actor.interactable=true;}updateState(state=>{state.flags.ajianRewakeReaction=reaction;if(method==="face")state.flags.ajianFaceLicked=true;else state.flags.ajianFootLicked=true;StateApi.ensureActor(state,"ajian",{status:critical?"critical":"alive",location:lastMap});},"ajian_rewake_"+method);}
+  function resolveAjianRewake(){const state=snapshot();director.runtime.follow(state.flags.ajianCritical?"cave_ajian_critical_brief":"cave_ajian_rewake_"+(state.flags.ajianRewakeReaction||"same_face"));}
+  function lickRescuedAjian(){updateState(state=>{state.flags.ajianRescueFootLicked=true;},"ajian_rescue_foot_licked");}
+  function revealAjian(){updateState(state=>{state.flags.ajianIdentityKnown=true;state.quests.findAjian={status:"active",title:"带阿见回河边营地",priority:10};},"ajian_identity_revealed");const state=snapshot();if(state.flags.chapter1MeetingSeen||state.flags.findAjianAccepted)director.runtime.follow("cave_ajian_reveal_known");else director.runtime.follow("cave_ajian_reveal_unknown");}
+  function mountAjian(){const actor=ajianNpc();if(!actor||!root.mountStoryActor(actor)){banner("负重过高，阿见现在无法骑上来。");return;}director.actors.ajian=null;updateState(state=>{state.player.rider="ajian";StateApi.ensureActor(state,"ajian",{status:"riding",location:lastMap});state.quests.findAjian={status:"active",title:"把阿见带到河边营地",priority:10};},"ajian_mounted");}
   function takeSword(){const item=director.items.forest_sword;if(item&&root.collectStoryItem(item)){updateState(state=>{state.flags.chapter1SwordTaken=true;state.worldItems.forest_sword={status:"stomach",mapId:lastMap};},"chapter1_sword_taken");}}
+  function takeRing(){const item=director.items.cave_ring;if(item&&root.collectStoryRing(item))updateState(state=>{state.flags.chapter1RingTaken=true;state.player.nodeCharges=charges;state.worldItems.cave_ring={status:"consumed",mapId:lastMap};},"chapter1_ring_taken");}
   function swallowActor(actorId){const actor=director.actors[actorId];if(actor&&root.swallowStoryNPC(actor))director.actors[actorId]=null;}
-  function releaseActor(actorId){const actor=snapshot().actors[actorId]||{};if(root.releaseStoryActor(actorId,actor.x,actor.y))director.actors[actorId]=npcs.find(n=>targetId(n)===actorId)||null;}
+  function releaseActor(actorId){const actor=snapshot().actors[actorId]||{};if(root.releaseStoryActor(actorId,actor.x,actor.y,actor.hp))director.actors[actorId]=npcs.find(n=>targetId(n)===actorId)||null;}
   function dropSword(){const item=root.dropStoryItem("ironSword");if(item)updateState(state=>{state.worldItems.forest_sword={status:"ground",mapId:lastMap,x:item.x,y:item.y};state.flags.chapter1SwordRecognizedPending=false;},"chapter1_sword_dropped");}
   function startAjieCombat(){const actor=director.actors.ajie;if(actor){actor.hostile=true;actor.damageable=true;actor.interactable=false;actor.attackTarget="body";actor.bodyHits=0;actor.attackPhase=null;actor.chaseElapsed=0;}}
   function waitAjieCombat(){closeDialogue();director.runtime.waitFor({events:[eventType("AJIE_DOWNED"),eventType("AJIE_LEFT")],target:event=>event.type===eventType("AJIE_DOWNED")?"chapter1_ajie_downed_wait":"chapter1_explore"});}
@@ -4914,12 +5221,13 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   };
   const targetResolvers={
     ketiFirstContact:event=>event.type===eventType("ACTOR_INTERACTED")?"keti_question":event.type===eventType("ACTOR_EATEN")?"eaten_slimes":"keti_dead",
-    ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead"
+    ketiOutcome:()=>snapshot().actors.keti.status==="alive"?"keti_saved":"keti_dead",
+    caveCombatOutcome
   };
-  const choiceActions={waitForWall:wallWait,waitForExit:exitWait,takeSword,swallowAjie:()=>swallowActor("ajie"),swallowLisi:()=>swallowActor("lisi"),releaseAjie:()=>releaseActor("ajie"),releaseLisi:()=>releaseActor("lisi"),dropSword,startAjieCombat};
+  const choiceActions={waitForWall:wallWait,waitForExit:exitWait,takeSword,takeRing,drinkSoup,takePotion,wakeAjianFace:()=>wakeAjian("face"),wakeAjianFoot:()=>wakeAjian("foot"),rewakeAjianFace:()=>rewakeAjian("face"),rewakeAjianFoot:()=>rewakeAjian("foot"),wakeAjieFace:()=>wakeReleasedActor("ajie","face"),wakeAjieFoot:()=>wakeReleasedActor("ajie","foot"),wakeLisiFace:()=>wakeReleasedActor("lisi","face"),wakeLisiFoot:()=>wakeReleasedActor("lisi","foot"),cutAjianRope,spawnGoblinEncounter:()=>spawnGoblinEncounter(false),swallowAjian,healAjian,lickRescuedAjian,revealAjian,mountAjian,swallowAjie:()=>swallowActor("ajie"),swallowLisi:()=>swallowActor("lisi"),releaseAjie:()=>releaseActor("ajie"),releaseLisi:()=>releaseActor("lisi"),releaseAjian:()=>releaseActor("ajian"),dropSword,startAjieCombat,payBandits,tradeSword,swallowBuck:()=>swallowBandit("buck"),swallowMiro:()=>swallowBandit("miro"),releaseBuck:()=>releaseBandit("buck"),releaseMiro:()=>releaseBandit("miro"),reverseBanditRobbery,startBanditCombat,waitBanditCombat,claimBanditCombatReward,resolveBanditThreat,claimCampReward,claimCampLick,claimCampEatAjie:()=>claimCampEat("ajie"),claimCampEatLisi:()=>claimCampEat("lisi")};
 
   const hasItem=(state,id)=>!!(state.inventory&&state.inventory.slots||[]).find(slot=>slot.id===id&&slot.count>0);
-  const choiceConditions={hasSword:state=>hasItem(state,"ironSword"),hasAjie:state=>hasItem(state,"ajie"),hasLisi:state=>hasItem(state,"lisi"),ajieAlive:state=>state.actors.ajie.status==="alive",lisiAlive:state=>state.actors.lisi.status==="alive"};
+  const choiceConditions={hasSword:state=>hasItem(state,"ironSword"),hasPotion:state=>hasItem(state,"healingPotion"),hasAjie:state=>hasItem(state,"ajie"),hasLisi:state=>hasItem(state,"lisi"),hasAjian:state=>hasItem(state,"ajian"),hasBuck:state=>hasItem(state,"buck"),hasMiro:state=>hasItem(state,"miro"),hasGold3:state=>(Number(state.player&&state.player.gold)||0)>=3,buckAlive:state=>state.actors.buck.status==="alive",miroAlive:state=>state.actors.miro.status==="alive",lickWakeLearned:state=>!!state.flags.lickWakeLearned,ajieAlive:state=>state.actors.ajie.status==="alive",lisiAlive:state=>state.actors.lisi.status==="alive",ajianFootAvailable:state=>!state.flags.ajianRescueFootLicked,canMountAjian:()=>!rider&&stomachWeight()+3<=CFG.carryCapacity};
   function compileChoice(choice){const compiled=Object.assign({},choice);if(typeof choice.when==="string"){compiled.when=choiceConditions[choice.when];if(typeof compiled.when!=="function")throw new Error("Unknown story choice condition: "+choice.when);}if(choice.action){compiled.run=choiceActions[choice.action];if(typeof compiled.run!=="function")throw new Error("Unknown story choice action: "+choice.action);delete compiled.action;}return compiled;}
   function compileNode(node){
     const compiled={id:node.id,goal:node.goal,progress:node.progress};
@@ -4934,6 +5242,7 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
   function routeInteraction(kind,target,payload){
     if(!director||!storyActive||playMode!=="story"||!owns(kind,target))return false;
     if(kind==="actor"){
+      director.actors[targetId(target)]=target;
       target.inside=true;
       if(typeof root.focusDialogueTarget==="function")root.focusDialogueTarget(target);
       if(currentNode()==="wilderness_keti_wait"){
@@ -4941,12 +5250,13 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
       }
       else if(currentNode()==="chapter1_explore")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
       else if(currentNode()==="chapter1_ajie_downed_wait")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
+      else if(currentNode()==="cave_explore")emit("ACTOR_INTERACTED",{actorId:targetId(target)});
       return true;
     }
     if(kind==="item"){
       target.inside=true;
       if(typeof root.focusDialogueTarget==="function")root.focusDialogueTarget(target);
-      if(currentNode()==="chapter1_explore")emit("ITEM_INTERACTED",{itemId:targetId(target)});
+      if(currentNode()==="chapter1_explore"||currentNode()==="cave_explore")emit("ITEM_INTERACTED",{itemId:targetId(target)});
       return true;
     }
     if(payload&&typeof payload.apply==="function")payload.apply();
@@ -4965,14 +5275,26 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
       updateState(state=>{StateApi.ensureActor(state,actorId,{status:eaten?(actorId==="keti"?"eaten":"swallowed"):"dead",location:eaten?"stomach":lastMap,corpsePresent:!eaten});},eaten?actorId+"_eaten":actorId+"_dead");emit(eaten?"ACTOR_EATEN":"ACTOR_DIED",{actorId});
     }else if(name==="actorReleased"){
       const actorId=payload&&payload.actorId;if(!actorId)return;
-      updateState(state=>{StateApi.ensureActor(state,actorId,{status:"unconscious",location:lastMap,x:payload.x,y:payload.y});},actorId+"_released");
+      const released=npcs.find(npc=>targetId(npc)===actorId);if(released)director.actors[actorId]=released;
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:actorId==="ajian"&&state.flags.ajianCritical?"critical":"unconscious",location:lastMap,x:payload.x,y:payload.y,hp:payload.hp});},actorId+"_released");
       if(actorId==="lisi"&&director.actors.ajie&&director.actors.ajie.hostile){director.actors.ajie.hostile=false;director.actors.ajie.damageable=false;director.actors.ajie.interactable=false;director.actors.ajie.resting=6;director.runtime.follow("chapter1_lisi_released");}
+    }else if(name==="actorCritical"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;updateState(state=>{if(actorId==="ajian")state.flags.ajianCritical=true;StateApi.ensureActor(state,actorId,{status:"critical",hp:payload.hp,location:lastMap});},actorId+"_critical");
+    }else if(name==="actorHealed"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;updateState(state=>{if(actorId==="ajian")state.flags.ajianCritical=false;StateApi.ensureActor(state,actorId,{status:"alive",hp:payload.hp,location:lastMap});},actorId+"_healed");
+    }else if(name==="riderMounted"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;updateState(state=>{state.player.rider=actorId;StateApi.ensureActor(state,actorId,{status:"riding",location:lastMap});},actorId+"_mounted");
     }else if(name==="actorDowned"){
       const actorId=payload&&payload.actorId;if(!actorId)return;
       updateState(state=>{StateApi.ensureActor(state,actorId,{status:"downed",location:lastMap});},actorId+"_downed");emit("AJIE_DOWNED",{actorId});
+    }else if(name==="banditDowned"){
+      const actorId=payload&&payload.actorId;if(!actorId)return;
+      updateState(state=>{StateApi.ensureActor(state,actorId,{status:"downed",location:lastMap});},actorId+"_downed");emit("BANDIT_DOWNED",{actorId});
     }else if(name==="actorLeft"){
       const actorId=payload&&payload.actorId;if(!actorId)return;
       updateState(state=>{StateApi.ensureActor(state,actorId,{status:"left",location:null});},actorId+"_left");emit("AJIE_LEFT",{actorId});
+    }else if(name==="nodeChargesChanged"){
+      updateState(state=>{state.player.nodeCharges=Math.max(0,Number(payload&&payload.charges)||0);},"node_charges_changed");
     }else if(name==="worldItemDropped"){
       if(payload&&payload.id==="ironSword"){
         const noticed=!payload.noticedBefore&&Object.values(director.actors||{}).some(actor=>actor&&!actor.unconscious&&!actor.hostile&&Math.hypot(actor.x-payload.x,actor.y-payload.y)<=2);
@@ -4988,6 +5310,8 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
       if(currentNode()==="chapter1_combat_pending")director.runtime.follow("chapter1_ajie_body_learned");
     }else if(name==="inventoryChanged"){
       updateState(state=>{state.inventory=payload.inventory;state.player.bodyLength=payload.bodyLength||snake.len;if((payload.inventory.slots||[]).some(slot=>slot.id==="ironSword"&&slot.count>0))state.worldItems.forest_sword={status:"stomach",mapId:lastMap};},payload.reason||"inventory_changed");saveCurrent();
+    }else if(name==="mechanicCompleted"&&payload&&payload.id==="bridge_pillar"){
+      updateState(state=>{state.flags.bridgeLowered=true;state.quests.lowerBridge={status:"completed",title:"放下吊桥",priority:20};},"bridge_lowered");saveCurrent();banner("桥桩充能完成，吊桥已经放下！");
     }
     const state=snapshot();
     if(state&&state.chapter==="chapter1"&&!state.flags.chapter1HungerSeen&&!state.flags.chapter1HungerPending&&(state.counters.chapterBeansEaten>=10||state.counters.chapterBeansSpit>=10)){
@@ -5006,16 +5330,28 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
       updateState(state=>{state.flags.tutorialTimeoutSeen=true;},"tutorial_timeout");
       director.runtime.follow("dialogue_4");
     }
-    if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
+    const map=MS[lastMap];
+    if(lastMap!==TM&&!exitSent&&map)for(const exit of map.exits||[]){const r=exit.rect;if(r&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]){exitSent=true;saveCurrent();const state=snapshot(),targetNode=exit.targetMap===Maps.TYPES.CHAPTER1_CAVE?(!state.flags.caveEntered?"cave_intro":state.flags.goblinFightStarted&&!state.flags.goblinsDefeated?"cave_goblin_combat":"cave_explore"):"chapter1_explore";loadMap({mapId:exit.targetMap,entry:exit.targetEntry,checkpoint:targetNode});director.runtime.follow(targetNode);break;}}
+    if(lastMap===Maps.TYPES.CHAPTER1_FOREST){
+      const state=snapshot(),camp=(map.triggers||[]).find(trigger=>trigger.id==="camp_settlement"),r=camp&&camp.rect,inside=!!(r&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]);
+      const ajian=state.actors.ajian||{},hasAjianHere=state.player.rider==="ajian"||hasItem(state,"ajian")||ajian.location===lastMap&&ajian.x>=68&&ajian.y>=41;
+      const hasHost=state.actors.ajie.status==="alive"||state.actors.lisi.status==="alive";
+      if(inside&&!campInside&&!state.flags.campRewardClaimed&&hasAjianHere&&hasHost){const arrival=settleAjian(),now=snapshot(),hosts=now.actors.ajie.status==="alive"&&now.actors.lisi.status==="alive"?"both":now.actors.lisi.status==="alive"?"lisi":"ajie";director.runtime.follow("camp_settlement_"+arrival+"_"+hosts);}
+      campInside=inside;
+    }
+    if(map&&!snapshot().flags.bridgeSeen)for(const trigger of map.triggers||[]){const r=trigger.rect;if(trigger.id==="bridge_approach"&&snake.fx>=r[0]&&snake.fx<=r[0]+r[2]&&snake.fy>=r[1]&&snake.fy<=r[1]+r[3]){updateState(state=>{state.flags.bridgeSeen=true;state.quests.lowerBridge={status:"active",title:"给桥桩充能，放下吊桥",priority:20,target:6,progress:0};},"bridge_seen");banner("吊桥被收起了。围住桥桩并持续充能。更深处也许能找到环形节点。");saveCurrent();break;}}
+    if(currentNode()==="cave_goblin_combat"&&snapshot().flags.goblinFightStarted&&observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
+    else if(observedEnemies>0&&enemies.length===0)emit("ENEMIES_DEFEATED",{remaining:0,total:kills});
     observedEnemies=enemies.length;
   }
 
   function goalText(){if(snapshot()&&snapshot().flags.findAjianAccepted&&currentNode()==="chapter1_explore")return"寻找阿见";const goal=director&&director.runtime.node&&director.runtime.node.goal;if(!goal)return"按剧情继续";const suffix=goal.inputHint?" "+(goal.inputHint==="move"?"["+movementHint()+"]":hint(goal.inputHint)):"";if(goal.kind==="counter")return goal.label+" "+Math.min(goal.target,count(goal.counter))+"/"+goal.target+suffix;return (goal.text||"按剧情继续")+suffix;}
-  function questText(){const state=snapshot();return state&&state.flags.findAjianAccepted?"主线任务\n寻找阿见":"";}
+  function questList(){const state=snapshot();if(!state)return[];const quests=Object.assign({},state.quests||{});if(state.flags.findAjianAccepted&&!quests.findAjian)quests.findAjian={status:"active",title:"寻找阿见",priority:10};const bridge=typeof MECHS!=="undefined"&&MECHS.find(mech=>mech.id==="bridge_pillar");if(quests.lowerBridge&&bridge&&!bridge.done)quests.lowerBridge=Object.assign({},quests.lowerBridge,{progress:Math.floor(bridge.prog*10)/10,target:bridge.charge});return Object.keys(quests).map(id=>Object.assign({id},quests[id])).filter(quest=>quest.status==="active").sort((a,b)=>(Number(a.priority)||0)-(Number(b.priority)||0));}
+  function questText(){const quests=questList();return quests.length?"任务目标\n"+quests.map(quest=>"• "+quest.title+(Number.isFinite(quest.progress)&&Number.isFinite(quest.target)?" "+Math.min(quest.progress,quest.target)+"/"+quest.target:"")).join("\n"):"";}
   function progressText(){const progress=director&&director.runtime.node&&director.runtime.node.progress;return progress?progress.chapter+" "+progress.step+"/"+progress.total:"剧情模式";}
 
   function createDirector(state,slot){
-    return {slot,spawned:false,keti:null,actors:{},items:{},checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,waitForMemoryBlur,memoryBlur,nameInput,storyEnd,chapterExplore,waitAjieCombat,waitDownedInteraction}})};
+    return {slot,spawned:false,keti:null,actors:{},items:{},checkpoint:null,runtime:new RuntimeApi.StoryRuntime({graph:compileGraph(Story.nodes),state,bus:B,adapters:{loadMap,dialog:dialogue,banner:args=>banner(args.text),eatKeti,eatCorpse,spawnSlimes,waitForMemoryBlur,memoryBlur,nameInput,storyEnd,chapterExplore,caveExplore,waitCaveCombat,waitBanditCombat,revealAjian,resolveAjianRewake,waitAjieCombat,waitDownedInteraction}})};
   }
 
   function start(slot){
@@ -5025,20 +5361,27 @@ const debugRoot=typeof window!=="undefined"?window:globalThis;if(debugRoot)debug
     director.runtime.start(Story.start);
     return {ok:true,slot:director.slot};
   }
+  function chapterResumeNode(state,preferredNode){
+    const candidate=preferredNode||state.currentNode;
+    if(state.currentMap===Maps.TYPES.CHAPTER1_CAVE){if(state.flags.chapter1RingTaken&&["chapter1_ring","chapter1_ring_tutorial"].includes(candidate))return"cave_explore";return candidate&&Story.nodes[candidate]&&(candidate.startsWith("cave_")||["chapter1_ring","chapter1_ring_tutorial"].includes(candidate))?candidate:(state.flags.goblinFightStarted&&!state.flags.goblinsDefeated?"cave_goblin_combat":"cave_explore");}
+    if(state.flags.banditCombatStarted&&!state.flags.banditResolved&&["buck","miro"].every(id=>["downed","swallowed"].includes(state.actors[id]&&state.actors[id].status)))return"bandit_search";
+    return candidate&&Story.nodes[candidate]&&!candidate.startsWith("cave_")?candidate:"chapter1_explore";
+  }
   function resume(slot){
     if(!saveStore)return {ok:false,error:{code:"SAVE_UNAVAILABLE",message:"存档系统不可用"}};
     const loaded=saveStore.load(slot);if(!loaded.ok)return loaded;if(loaded.empty)return start(slot);
     stop();storyActive=true;storyStage=0;storyTransitioning=false;playMode="story";
     const state=new StateApi.StoryStateStore(loaded.data),checkpoint=loaded.data.checkpoint;
     director=createDirector(state,Number(slot)||1);
+    if([Maps.TYPES.CHAPTER1_FOREST,Maps.TYPES.CHAPTER1_CAVE].includes(loaded.data.currentMap)){const nodeId=chapterResumeNode(loaded.data);loadMap({mapId:loaded.data.currentMap,entry:loaded.data.currentMap===Maps.TYPES.CHAPTER1_CAVE?"cave_entrance":"forest_cave_return",checkpoint:nodeId});director.runtime.start(nodeId);return {ok:true,slot:director.slot,resumed:true,legacy:!!loaded.legacy};}
     const nodeId=checkpoint&&checkpoint.nodeId||(loaded.data.currentMap===WM?"wilderness_start":Story.start);
     director.runtime.start(nodeId);
     return {ok:true,slot:director.slot,resumed:true,legacy:!!loaded.legacy};
   }
-  function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");director.runtime.start(checkpoint.nodeId);}
-  function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;}
+  function retry(){if(!director){start(1);return;}if(!director.checkpoint){start(director.slot);return;}const checkpoint=JSON.parse(JSON.stringify(director.checkpoint));director.runtime.stop();director.runtime.state.replace(checkpoint.state,"checkpoint_restore");if([Maps.TYPES.CHAPTER1_FOREST,Maps.TYPES.CHAPTER1_CAVE].includes(checkpoint.state.currentMap)){const nodeId=chapterResumeNode(checkpoint.state,checkpoint.nodeId);loadMap({mapId:checkpoint.state.currentMap,entry:checkpoint.state.currentMap===Maps.TYPES.CHAPTER1_CAVE?"cave_entrance":"forest_cave_return",checkpoint:nodeId});director.runtime.start(nodeId);}else director.runtime.start(checkpoint.nodeId);}
+  function stop(){if(director)director.runtime.stop();if(exitTimeoutHandle)clearTimeout(exitTimeoutHandle);exitTimeoutHandle=null;exitTimeoutPending=false;director=null;ownership={actors:new Set(),mechanics:new Set(),exits:new Set(),items:new Set()};boss=null;bossStakes=[];storyActive=false;storyStage=-1;lastMap=null;observedEnemies=0;campInside=false;}
 
-  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,questText,progressText,routeInteraction,owns,engineEvent,director:()=>director};
+  root.IMS_STORY_API={start,resume,retry,stop,save:saveCurrent,listSaves:()=>saveStore?saveStore.list():[],deleteSave:slot=>saveStore?saveStore.delete(slot):{ok:false},currentSlot:()=>director&&director.slot,tick:update,goalText,questList,questText,progressText,storyGold:gold,routeInteraction,owns,engineEvent,director:()=>director};
   root.storyControllerInteraction=routeInteraction;
   root.storyControllerOwns=owns;
   root.storyControllerInteract=target=>routeInteraction("actor",target);

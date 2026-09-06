@@ -16,6 +16,8 @@
     ajie: { id: "ajie", name: "昏迷的阿杰", shortName: "阿杰", maxStack: 1, length: 1, weight: 3, actorId: "ajie", releaseActor: true, color: "#6d83b3" },
     lisi: { id: "lisi", name: "昏迷的丽丝", shortName: "丽丝", maxStack: 1, length: 1, weight: 3, actorId: "lisi", releaseActor: true, color: "#d68aa8" },
     ajian: { id: "ajian", name: "昏迷的阿见", shortName: "阿见", maxStack: 1, length: 1, weight: 3, actorId: "ajian", releaseActor: true, color: "#d7a6c7" },
+    buck: { id: "buck", name: "昏迷的巴克", shortName: "巴克", maxStack: 1, length: 1, weight: 3, actorId: "buck", releaseActor: true, color: "#a9705d" },
+    miro: { id: "miro", name: "昏迷的米罗", shortName: "米罗", maxStack: 1, length: 1, weight: 3, actorId: "miro", releaseActor: true, color: "#6e99b2" },
     healingPotion: { id: "healingPotion", name: "回复药水", shortName: "药水", maxStack: 99, length: 1, weight: 1, healing:1, consumableOnImpact:true, color: "#62d98b" },
     ajieBones: { id: "ajieBones", name: "阿杰的骨头", shortName: "阿杰骨头", maxStack: 1, length: 1, weight: 1, damage: 2, actorId: "ajie", color: "#e8e2cf" },
     lisiBones: { id: "lisiBones", name: "丽丝的骨头", shortName: "丽丝骨头", maxStack: 1, length: 1, weight: 1, damage: 2, actorId: "lisi", color: "#e8e2cf" }

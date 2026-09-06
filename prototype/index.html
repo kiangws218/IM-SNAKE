@@ -138,6 +138,7 @@
 <div id="hud">
   <span class="chip"><b id="p1Tag"></b> ❤ <span id="hearts"></span></span>
   <span class="chip">身长 <b id="len"></b></span>
+  <span class="chip">金币 <b id="gold" style="color:#ffd76e"></b></span>
   <span class="chip">负重 <b id="weight"></b></span>
   <span class="chip">豆伤 <b id="dmg" style="color:#ffd76e"></b></span>
   <span class="chip">火力 <span class="bar"><i id="cdSpit" style="background:#ff8f5e"></i></span></span>
@@ -271,7 +272,7 @@ function updateMechs(dt){
     if(m.done||m.kind!=="pillar")continue;
     const region=prisonMask[K(m.x,m.y)],enc=region>=0&&prisonRegionBody[region]&&(!m.requiresNode||prisonRegionNode[region]);
     if(enc)m.prog+=dt;
-    else m.prog=Math.max(0,m.prog-dt*.5);
+    else m.prog=Math.max(0,m.prog-dt*.2);
     if(m.prog>=m.charge){
       m.done=true;
       grantReward(m.reward);
@@ -522,7 +523,7 @@ function computeEnclosure(){
   for(let id=0;id<prisonRegions.length;id++){
     for(const i of prisonRegions[id]){
       const x=i%CFG.cols,y=(i/CFG.cols)|0;
-      let isNode=false;
+      let isNode=nodeKeys.has(i);
       for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
         if(nodeKeys.has(K(x+dx,y+dy))){isNode=true;break;}
       }
@@ -660,6 +661,12 @@ function mountStoryActor(n){
   notifyStoryEvent("riderMounted",{actorId:rider.actorId});return true;
 }
 function restoreStoryRider(actorId){if(!actorId)return false;rider={actorId,startX:snake.fx,startY:snake.fy,mountT:0};return true;}
+function placeStoryActor(actorId,x,y,unconscious){
+  const existing=npcs.find(n=>(n.storyId||n.actorId||n.kind)===actorId);if(existing){rider=null;return existing;}
+  const type=NPC_TYPES[actorId];if(!type)return null;
+  const n={storyId:actorId,actorId,kind:actorId,x,y,r:type.r,hp:type.hp,maxHp:type.hp,flash:0,inside:false,crying:false,unconscious:!!unconscious,critical:false,bound:false,storyProtected:true,damageable:false,interactable:true,speed:0,patrol:null,patrolIndex:0};
+  npcs.push(n);rider=null;return n;
+}
 function swallowStoryNPC(n){
   if(!n||!npcs.includes(n))return false;
   const actorId=n.storyId||n.actorId||n.kind,added=addStomachItem(actorId,1,"actor_swallowed");
@@ -1098,7 +1105,7 @@ function updateNPCs(dt){
             if(n.attackTarget==="body"){
               n.bodyHits=(n.bodyHits||0)+1;
               if(n.bodyHits>=2){n.attackTarget="head";notifyStoryEvent("ajieBodyLearned",{actorId:"ajie"});}
-            }else hurtPlayer("被阿杰的剑砍中头部");
+            }else hurtPlayer(n.bandit?"被劫匪砍中头部":"被阿杰的剑砍中头部");
           }
         }else if(n.attackPhaseT<=0&&n.attackPhase==="active"){n.attackPhase="recovery";n.attackPhaseT=.8;}
         else if(n.attackPhaseT<=0&&n.attackPhase==="recovery")n.attackPhase=null;
@@ -1124,6 +1131,7 @@ function updateNPCs(dt){
     if(n.hp<=0&&!n.downed){
       if(n.storyProtected){n.hp=1;n.damageable=false;n.interactable=true;n.unconscious=true;n.critical=true;notifyStoryEvent("actorCritical",{actorId:n.storyId,hp:n.hp});}
       else if(n.storyId==="ajie"&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("actorDowned",{actorId:"ajie"});}
+      else if(n.bandit&&n.hostile){n.hp=0;n.hostile=false;n.damageable=false;n.interactable=true;n.downed=true;notifyStoryEvent("banditDowned",{actorId:n.storyId});}
       else{dieNPC(n);continue;}
     }
     if(alive&&!panelOpen&&gameState==="play"){
@@ -2975,6 +2983,7 @@ function updateHud(){
   document.getElementById("p1Tag").textContent=coop.enabled?"P1":"";
   document.getElementById("hearts").textContent=primaryDown?"倒下":"❤".repeat(Math.max(0,hearts));
   document.getElementById("len").textContent=snake.len;
+  const storyApiNow=storyApi();document.getElementById("gold").textContent=playMode==="story"&&storyApiNow&&storyApiNow.storyGold?storyApiNow.storyGold():0;
   const weightEl=document.getElementById("weight");weightEl.textContent=stomachWeight()+"/"+CFG.carryCapacity;weightEl.style.color=isOverweight()?"#ff5d5d":"";
   document.getElementById("dmg").textContent=beanDamage(1);
   document.getElementById("coopHud").style.display=coop.enabled?"inline":"none";
@@ -3034,6 +3043,7 @@ function loop(now){
     }
     CoopMode.update(dt);
     updateMapNodes(dt);
+    computeEnclosure();
     updateMechs(dt);
     updateNPCs(dt);
     updateBoss(dt);
@@ -3041,7 +3051,6 @@ function loop(now){
     updateProjs(dt);updateSeeds(dt);updateEnemies(dt);
     if(typeof window!=="undefined"&&typeof window.storyControllerTick==="function")window.storyControllerTick();
     if(playMode==="sandbox"||playMode==="campaign"||playMode==="story")updateSpawner(dt);
-    computeEnclosure();
     storyCheckProgress();
     if(playMode==="campaign"&&curGoal&&alive){
       const g=curGoal,t=gameTime-levelStartT;

@@ -132,6 +132,34 @@ async function testRuntimeFlow() {
   assert.throws(() => runtime.choose("missing"), /No choices available/);
 }
 
+function testBanditBranchesClose() {
+  const nodes=global.IMS_STORY_DATA.PROLOGUE.nodes;
+  const banditIds=Object.keys(nodes).filter(id=>id.startsWith("bandit_"));
+  const exits=id=>{
+    if(id==="bandit_combat")return["bandit_search"];
+    const node=nodes[id],targets=[];
+    if(node.next)targets.push(node.next);
+    if(node.wait&&typeof node.wait.target==="string")targets.push(node.wait.target);
+    for(const choice of node.dialogue&&node.dialogue.choices||[])if(choice.next)targets.push(choice.next);
+    return targets;
+  };
+  for(const start of banditIds){
+    const queue=[start],seen=new Set();let closes=false;
+    while(queue.length&&!closes){const id=queue.shift();if(id==="chapter1_explore"){closes=true;break;}if(seen.has(id)||!nodes[id])continue;seen.add(id);queue.push(...exits(id));}
+    assert(closes,`劫匪分支没有回到自由探索: ${start}`);
+  }
+}
+
+function testChapterOneChoiceRules() {
+  const nodes=global.IMS_STORY_DATA.PROLOGUE.nodes,choices=id=>nodes[id].dialogue.choices;
+  assert(!choices("chapter1_ajie_swallowed").some(choice=>choice.id==="sword"),"阿杰被吞后不应再从丽丝分支吐剑");
+  assert(!choices("chapter1_lisi_only").some(choice=>choice.id==="sword"),"只剩丽丝时不应出现吐剑选项");
+  for(const id of["chapter1_sword_recognized","chapter1_sword_recognized_lisi","chapter1_sword_recognized_ajie"])
+    assert.deepStrictEqual(choices(id).map(choice=>choice.id),["found"],id+" 应直接衔接寻人请求");
+  for(const id of["bandit_intro","bandit_threat","bandit_reverse_challenge","bandit_hostage_threat","bandit_buck_swallowed"])
+    assert(!choices(id).some(choice=>choice.id==="leave"),id+" 不应允许中途主动脱离");
+}
+
 function testChoiceConditionsAreCheckedTwice() {
   const state = new StoryStateStore();
   state.update(s => { s.testAllowed = false; }, "choice-test");
@@ -200,6 +228,8 @@ async function testStopDetachesWait() {
   testDialoguePageSplitting();
   testDialogueInputGate();
   testStoryDataReferences();
+  testBanditBranchesClose();
+  testChapterOneChoiceRules();
   testChoiceConditionsAreCheckedTwice();
   await testRuntimeFlow();
   await testPredicateAndTimerCleanup();

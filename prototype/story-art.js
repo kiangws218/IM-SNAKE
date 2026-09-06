@@ -5,7 +5,9 @@
     keti:{hair:"#704b3b",skin:"#ffd3b5",cloth:"#f0d7e2",accent:"#82c8df"},
     ajie:{hair:"#253653",skin:"#f1bd98",cloth:"#536b9d",accent:"#d8e5ff"},
     lisi:{hair:"#8a435d",skin:"#ffd0ae",cloth:"#b85f83",accent:"#ffd2e1"},
-    ajian:{hair:"#5d344f",skin:"#ffd0ae",cloth:"#73558f",accent:"#ffe08a"}
+    ajian:{hair:"#5d344f",skin:"#ffd0ae",cloth:"#73558f",accent:"#ffe08a"},
+    buck:{hair:"#3b2a25",skin:"#c58b6d",cloth:"#765047",accent:"#e2b36c"},
+    miro:{hair:"#202b37",skin:"#d49b78",cloth:"#49627a",accent:"#a7d7e8"}
   };
   function palette(id){return palettes[id]||null;}
   function portrait(ctx,id,crying){

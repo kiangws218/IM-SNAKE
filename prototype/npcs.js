@@ -31,6 +31,8 @@ const NPC_TYPES={
   ajie:{actorId:"ajie",name:"阿杰",sub:"寻找弟弟的冒险者",hp:8,r:.46,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
   lisi:{actorId:"lisi",name:"丽丝",sub:"阿杰的同伴",hp:8,r:.44,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
   ajian:{actorId:"ajian",name:"阿见",sub:"被哥布林诅咒的冒险者",hp:8,r:.44,foodValue:1,greet:"……",options:[{label:"离开",action:"leave"}],drops:[]},
+  buck:{actorId:"buck",name:"巴克",sub:"吊桥前的劫匪",hp:10,r:.48,foodValue:1,greet:"站住！过桥费三枚金币，或者把那把铁剑留下。",options:[{label:"离开",action:"leave"}],drops:[]},
+  miro:{actorId:"miro",name:"米罗",sub:"吊桥前的劫匪",hp:10,r:.46,foodValue:1,greet:"别耍花样，我们看见你从洞窟出来了。",options:[{label:"离开",action:"leave"}],drops:[]},
 };
 
 const DIALOG_TREES={
